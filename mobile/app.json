@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "Adani Workforce",
+    "slug": "adani-workforce-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#1E63F0",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.adani.workforce.smartmeter",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Allow Adani Workforce app to access high-accuracy GPS coordinates for substation geofence verification.",
+        "NSCameraUsageDescription": "Allow Adani Workforce app to capture mandatory biometric verification selfies during shift punch-in."
+      }
+    },
+    "android": {
+      "package": "com.adani.workforce.smartmeter",
+      "adaptiveIcon": {
+        "backgroundColor": "#1E63F0",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Adani Workforce to verify your presence within the substation geofence."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Adani Workforce to capture biometric verification photos."
+        }
+      ],
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-sharing"
+    ]
+  }
+}
