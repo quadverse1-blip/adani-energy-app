@@ -540,9 +540,6 @@ export const AttendanceLogsScreen: React.FC = () => {
 
         <View style={{ flex: 1, marginHorizontal: 10 }}>
           <Text style={styles.screenTitle}>Attendance Logs & Shifts</Text>
-          <Text style={styles.screenSubtitle}>
-            Centralized shift check-in and check-out ledger across all technicians
-          </Text>
         </View>
 
         <TouchableOpacity

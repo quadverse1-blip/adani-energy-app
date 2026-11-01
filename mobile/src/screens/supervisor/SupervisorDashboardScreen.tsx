@@ -48,6 +48,7 @@ import { dashboardService, AdminNotification } from '../../services/dashboardSer
 import { SupervisorDrawerModal } from '../../components/navigation/SupervisorDrawerModal';
 import { AttendanceRecord, Substation } from '../../types';
 import { AppButton } from '../../components/common/AppButton';
+import { ConfirmationModal } from '../../components/common/ConfirmationModal';
 import { getShiftInfo } from '../../utils/shiftUtils';
 
 interface StaffAttendanceItem {
@@ -70,6 +71,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [checkingIn, setCheckingIn] = useState<boolean>(false);
   const [checkingOut, setCheckingOut] = useState<boolean>(false);
+  const [showCheckOutConfirm, setShowCheckOutConfirm] = useState(false);
 
   // Notifications state
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
@@ -295,8 +297,13 @@ export const SupervisorDashboardScreen: React.FC = () => {
     }
   };
 
-  // Normal Check-Out Handler
-  const handleNormalCheckOut = async () => {
+  // Normal Check-Out Trigger: Open confirmation popup modal
+  const handleNormalCheckOut = () => {
+    setShowCheckOutConfirm(true);
+  };
+
+  // Conclude Supervisor Check-Out
+  const executeSupervisorCheckOut = async () => {
     setCheckingOut(true);
     try {
       await attendanceService.checkOut({
@@ -306,6 +313,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
         remarks: 'Supervisor Normal Check-Out',
       });
 
+      setShowCheckOutConfirm(false);
       Alert.alert(
         'Shift Concluded',
         'Shift successfully checked out and archived. Your attendance ledger has been recorded.',
@@ -1167,6 +1175,38 @@ export const SupervisorDashboardScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* CHECK-OUT CONFIRMATION MODAL */}
+      <ConfirmationModal
+        visible={showCheckOutConfirm}
+        title="Confirm Check-Out"
+        message="Are you sure you want to conclude your shift and punch out for today?"
+        confirmTitle="Confirm Check-Out"
+        cancelTitle="Cancel"
+        variant="danger"
+        loading={checkingOut}
+        onConfirm={executeSupervisorCheckOut}
+        onCancel={() => {
+          if (!checkingOut) setShowCheckOutConfirm(false);
+        }}
+      >
+        <View style={styles.checkoutModalSummary}>
+          <View style={styles.checkoutModalRow}>
+            <Text style={styles.checkoutModalLabel}>Current Time (IST):</Text>
+            <Text style={styles.checkoutModalVal}>{shiftInfo.formattedTimeIST}</Text>
+          </View>
+          <View style={styles.checkoutModalRow}>
+            <Text style={styles.checkoutModalLabel}>Checked In At:</Text>
+            <Text style={styles.checkoutModalVal}>{checkInTimeString}</Text>
+          </View>
+          {todayData?.record?.workingHoursFormatted ? (
+            <View style={styles.checkoutModalRow}>
+              <Text style={styles.checkoutModalLabel}>Duration Logged:</Text>
+              <Text style={styles.checkoutModalVal}>{todayData.record.workingHoursFormatted}</Text>
+            </View>
+          ) : null}
+        </View>
+      </ConfirmationModal>
 
       {/* Global Supervisor Drawer Modal */}
       <SupervisorDrawerModal />
@@ -2174,6 +2214,31 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#334155',
+  },
+  checkoutModalSummary: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  checkoutModalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  checkoutModalLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  checkoutModalVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   notifSiteText: {
     fontSize: 11,

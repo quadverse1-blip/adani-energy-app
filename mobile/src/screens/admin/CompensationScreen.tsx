@@ -174,9 +174,6 @@ export const CompensationScreen: React.FC = () => {
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>Workforce Compensation</Text>
-            <Text style={styles.headerSubtitle} numberOfLines={1}>
-              Payroll, Shift Wages & Signed Payslip Archiving
-            </Text>
           </View>
         </View>
 

@@ -53,12 +53,8 @@ export const HistoryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { openDrawer } = useTechnicianDrawerStore();
 
-  // Active anchor date (Default: 2026-10-22 or current date)
-  const [currentDate, setCurrentDate] = useState(() => {
-    const now = new Date();
-    // Default to October 2026 if year is far off, else now
-    return new Date(2026, 9, 22);
-  });
+  // Active anchor date (Default: current date)
+  const [currentDate, setCurrentDate] = useState(() => new Date());
 
   const [filterMode, setFilterMode] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
   const [allMonthRecords, setAllMonthRecords] = useState<AttendanceRecord[]>([]);
@@ -150,7 +146,7 @@ export const HistoryScreen: React.FC = () => {
   };
 
   const handleJumpToToday = () => {
-    setCurrentDate(new Date(2026, 9, 22));
+    setCurrentDate(new Date());
   };
 
   // Filter records based on active mode (monthly, weekly, daily)
@@ -159,7 +155,9 @@ export const HistoryScreen: React.FC = () => {
 
     if (filterMode === 'monthly') {
       const prefix = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
-      return allMonthRecords.filter((r) => r.date && r.date.startsWith(prefix));
+      const matched = allMonthRecords.filter((r) => r.date && r.date.startsWith(prefix));
+      if (matched.length > 0) return matched;
+      return allMonthRecords;
     }
 
     if (filterMode === 'weekly') {

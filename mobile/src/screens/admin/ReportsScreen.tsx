@@ -347,9 +347,6 @@ export const ReportsScreen: React.FC = () => {
 
           <View style={{ marginLeft: 8, flex: 1, paddingRight: 40 }}>
             <Text style={styles.mainTitle} numberOfLines={1}>Reports & Muster Roll</Text>
-            <Text style={styles.mainSubtitle} numberOfLines={1}>
-              Monthly Attendance Register • October 2026
-            </Text>
           </View>
         </View>
 

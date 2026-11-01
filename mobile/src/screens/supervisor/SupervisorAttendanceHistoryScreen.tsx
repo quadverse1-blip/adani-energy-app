@@ -297,9 +297,6 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
 
         <View style={styles.headerTitleWrap}>
           <Text style={styles.screenTitle} numberOfLines={1}>My Attendance History</Text>
-          <Text style={styles.screenSubtitle} numberOfLines={1}>
-            {user?.name || 'Suresh Patil'} • Shift punch ledger & punctuality status
-          </Text>
         </View>
 
         <TouchableOpacity

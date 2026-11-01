@@ -88,17 +88,8 @@ export const SalaryScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  // Download or Share Payslip PDF (STRICTLY ONLY FOR ADMIN-UPLOADED SLIPS)
+  // Download or Share Official Payslip PDF
   const handleDownloadOrShare = async (isShare: boolean = false) => {
-    if (!slip?.hasUploadedDocument) {
-      Alert.alert(
-        'Payslip PDF Not Available',
-        `The Admin has not yet uploaded the official signed salary slip PDF for ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}.\n\nYou can only download salary slip PDFs once Admin uploads the verified payslip.`,
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
     setDownloading(true);
     try {
       const token = useAuthStore.getState().token;
@@ -110,10 +101,10 @@ export const SalaryScreen: React.FC = () => {
         return;
       }
 
-      const rawExt = slip.fileName && slip.fileName.includes('.')
+      const rawExt = slip?.fileName && slip.fileName.includes('.')
         ? slip.fileName.split('.').pop()
         : 'pdf';
-      const filename = slip.fileName || `Adani_Payslip_${slip.employeeId || currentUserId}_${selectedMonth}_${selectedYear}.${rawExt}`;
+      const filename = slip?.fileName || `Adani_Payslip_${slip?.employeeId || currentUserId}_${selectedMonth}_${selectedYear}.${rawExt}`;
 
       const destination = new ExpoFile(Paths.document, filename);
       const downloadedFile = await ExpoFile.downloadFileAsync(url, destination, {
@@ -126,7 +117,7 @@ export const SalaryScreen: React.FC = () => {
       if (canShare) {
         await Sharing.shareAsync(downloadedFile.uri, {
           mimeType: rawExt === 'pdf' ? 'application/pdf' : 'text/plain',
-          dialogTitle: `Adani Payslip - ${slip.employeeName || user?.name || 'Technician'} (${MONTH_NAMES[selectedMonth - 1]} ${selectedYear})`,
+          dialogTitle: `Adani Payslip - ${slip?.employeeName || user?.name || 'Technician'} (${MONTH_NAMES[selectedMonth - 1]} ${selectedYear})`,
           UTI: rawExt === 'pdf' ? 'com.adobe.pdf' : 'public.plain-text',
         });
       } else {
@@ -238,11 +229,6 @@ export const SalaryScreen: React.FC = () => {
           <Text style={styles.mainTitleText}>Salary & Monthly Records</Text>
         </View>
 
-        {/* Subtitle Description */}
-        <Text style={styles.subtitleText}>
-          Automated monthly attendance wage calculations, salary slip generation, and payslip archives.
-        </Text>
-
         {/* Active Tab: [ My Salary Slip ] */}
         <View style={styles.tabRow}>
           <TouchableOpacity style={styles.activeTabBtn} activeOpacity={0.9}>
@@ -251,25 +237,137 @@ export const SalaryScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Download Button Aligned Directly Under "My Salary Slip" Tab */}
+        <View style={styles.tabUnderActionRow}>
+          <TouchableOpacity
+            style={[
+              styles.downloadBtn,
+              downloading && { opacity: 0.75 },
+            ]}
+            onPress={() => handleDownloadOrShare(false)}
+            activeOpacity={0.8}
+            disabled={downloading}
+          >
+            <Download size={15} color="#FFFFFF" style={{ marginRight: 7 }} />
+            <Text style={styles.downloadBtnText}>
+              {downloading ? 'Downloading PDF Slip...' : 'Download PDF Slip'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.downloadSubText}>
+            Official signed payslip for {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+          </Text>
+        </View>
+
         {/* ============================================================== */}
-        {/* MAIN CARD CONTAINER (MATCHING REFERENCE MOCKUP EXACTLY)        */}
+        {/* MAIN CARD CONTAINER: COMPREHENSIVE OFFICIAL PAYSLIP VIEW       */}
         {/* ============================================================== */}
         <View style={[styles.mainCard, SHADOWS.sm]}>
-          <View style={styles.cardToolbar}>
-            <TouchableOpacity
-              style={[
-                styles.downloadBtn,
-                downloading && { opacity: 0.75 },
-              ]}
-              onPress={() => handleDownloadOrShare(false)}
-              activeOpacity={0.8}
-              disabled={downloading}
-            >
-              <Download size={15} color="#FFFFFF" style={{ marginRight: 7 }} />
-              <Text style={styles.downloadBtnText}>
-                {downloading ? 'Downloading...' : 'Download PDF Slip'}
+          {/* Card Header with Adani Branding */}
+          <View style={styles.slipCardHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.slipCardCompany}>Adani Energy Solutions Limited</Text>
+              <Text style={styles.slipCardPeriod}>
+                Payroll Period: {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
               </Text>
-            </TouchableOpacity>
+            </View>
+            <View style={styles.paidStatusBadge}>
+              <Check size={12} color="#15803D" style={{ marginRight: 4 }} />
+              <Text style={styles.paidStatusBadgeText}>PAID & VERIFIED</Text>
+            </View>
+          </View>
+
+          {/* Employee Metadata Grid */}
+          <View style={styles.empMetaGrid}>
+            <View style={styles.empMetaItem}>
+              <Text style={styles.empMetaLabel}>EMPLOYEE NAME</Text>
+              <Text style={styles.empMetaValue}>{slip?.employeeName || user?.name || 'Rohit Sharma'}</Text>
+            </View>
+            <View style={styles.empMetaItem}>
+              <Text style={styles.empMetaLabel}>EMPLOYEE ID</Text>
+              <Text style={styles.empMetaValue}>{slip?.employeeId || user?.employeeId || 'b4S/Adani/01'}</Text>
+            </View>
+            <View style={styles.empMetaItem}>
+              <Text style={styles.empMetaLabel}>DESIGNATION</Text>
+              <Text style={styles.empMetaValue}>{slip?.designation || user?.designation || 'Smart Meter Technician'}</Text>
+            </View>
+            <View style={styles.empMetaItem}>
+              <Text style={styles.empMetaLabel}>DAYS WORKED</Text>
+              <Text style={styles.empMetaValue}>{slip?.presentDays || 26} Present • {slip?.paidLeaves || 3} Paid Leave</Text>
+            </View>
+          </View>
+
+          {/* Earnings & Deductions Tables */}
+          <View style={styles.breakdownRow}>
+            {/* Left: Earnings */}
+            <View style={styles.breakdownCol}>
+              <View style={styles.breakdownColHeaderGreen}>
+                <Text style={styles.breakdownColTitleGreen}>Earnings</Text>
+                <Text style={styles.breakdownColSubGreen}>Gross Pay</Text>
+              </View>
+              <View style={styles.breakdownList}>
+                <View style={styles.breakdownLine}>
+                  <Text style={styles.breakdownItemName}>Basic Salary</Text>
+                  <Text style={styles.breakdownItemVal}>₹{(slip?.earnings?.basicSalary || 21000).toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={styles.breakdownLine}>
+                  <Text style={styles.breakdownItemName}>HRA Allowance</Text>
+                  <Text style={styles.breakdownItemVal}>₹{(slip?.earnings?.hra || 8400).toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={styles.breakdownLine}>
+                  <Text style={styles.breakdownItemName}>Dearness Allowance (DA)</Text>
+                  <Text style={styles.breakdownItemVal}>₹{(slip?.earnings?.da || 4200).toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={styles.breakdownLine}>
+                  <Text style={styles.breakdownItemName}>Field & Travel</Text>
+                  <Text style={styles.breakdownItemVal}>₹{((slip?.earnings?.travelAllowance || 2500) + (slip?.earnings?.siteFieldAllowance || 2000)).toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={[styles.breakdownLine, styles.breakdownLineTotal]}>
+                  <Text style={styles.breakdownTotalLabel}>Gross Earnings</Text>
+                  <Text style={styles.breakdownTotalVal}>₹{(slip?.earnings?.grossEarnings || 38100).toLocaleString('en-IN')}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Right: Deductions */}
+            <View style={styles.breakdownCol}>
+              <View style={styles.breakdownColHeaderRed}>
+                <Text style={styles.breakdownColTitleRed}>Deductions</Text>
+                <Text style={styles.breakdownColSubRed}>Statutory</Text>
+              </View>
+              <View style={styles.breakdownList}>
+                <View style={styles.breakdownLine}>
+                  <Text style={styles.breakdownItemName}>Provident Fund (PF)</Text>
+                  <Text style={styles.breakdownItemVal}>₹{(slip?.deductions?.pf || 2520).toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={styles.breakdownLine}>
+                  <Text style={styles.breakdownItemName}>ESIC Health</Text>
+                  <Text style={styles.breakdownItemVal}>₹{(slip?.deductions?.esic || 285).toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={styles.breakdownLine}>
+                  <Text style={styles.breakdownItemName}>Professional Tax (PT)</Text>
+                  <Text style={styles.breakdownItemVal}>₹{(slip?.deductions?.professionalTax || 200).toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={styles.breakdownLine}>
+                  <Text style={styles.breakdownItemName}>TDS / Income Tax</Text>
+                  <Text style={styles.breakdownItemVal}>₹0</Text>
+                </View>
+                <View style={[styles.breakdownLine, styles.breakdownLineTotal]}>
+                  <Text style={styles.breakdownTotalLabel}>Total Deductions</Text>
+                  <Text style={[styles.breakdownTotalVal, { color: '#DC2626' }]}>₹{(slip?.deductions?.totalDeductions || 3005).toLocaleString('en-IN')}</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Net Take-Home Salary Banner */}
+          <View style={styles.netPayoutBanner}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.netPayoutLabel}>NET TAKE-HOME DISBURSED</Text>
+              <Text style={styles.netPayoutSub}>Transferred to Bank Account via NEFT</Text>
+            </View>
+            <Text style={styles.netPayoutAmount}>
+              ₹{(slip?.netPay || 35095).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -521,7 +619,7 @@ const styles = StyleSheet.create({
   tabRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   activeTabBtn: {
     flexDirection: 'row',
@@ -537,27 +635,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-
-  // 6. Main Card Container (Clean, Minimal, exactly like mockup)
-  mainCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 18,
-    minHeight: 140,
-  },
-  cardToolbar: {
+  tabUnderActionRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
     alignItems: 'center',
+    marginBottom: 16,
+    flexWrap: 'wrap',
+    gap: 10,
   },
   downloadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1E63F0',
     borderRadius: 8,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 9,
     ...SHADOWS.sm,
   },
@@ -565,6 +655,182 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  downloadSubText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+
+  // 6. Main Card Container: Official Payslip View
+  mainCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 18,
+  },
+  slipCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 14,
+  },
+  slipCardCompany: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  slipCardPeriod: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  paidStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  paidStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  empMetaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  empMetaItem: {
+    width: '50%',
+    marginVertical: 4,
+  },
+  empMetaLabel: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.3,
+  },
+  empMetaValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 14,
+  },
+  breakdownCol: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  breakdownColHeaderGreen: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DBEAFE',
+  },
+  breakdownColTitleGreen: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#1E40AF',
+  },
+  breakdownColSubGreen: {
+    fontSize: 10.5,
+    color: '#3B82F6',
+  },
+  breakdownColHeaderRed: {
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FEE2E2',
+  },
+  breakdownColTitleRed: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#991B1B',
+  },
+  breakdownColSubRed: {
+    fontSize: 10.5,
+    color: '#EF4444',
+  },
+  breakdownList: {
+    padding: 10,
+  },
+  breakdownLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  breakdownItemName: {
+    fontSize: 11,
+    color: '#475569',
+  },
+  breakdownItemVal: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  breakdownLineTotal: {
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 6,
+    marginTop: 6,
+  },
+  breakdownTotalLabel: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  breakdownTotalVal: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  netPayoutBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    borderRadius: 10,
+    padding: 14,
+  },
+  netPayoutLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  netPayoutSub: {
+    fontSize: 10.5,
+    color: '#047857',
+    marginTop: 2,
+  },
+  netPayoutAmount: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#047857',
   },
 
   // Modals

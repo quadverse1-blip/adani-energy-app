@@ -52,6 +52,7 @@ import { dashboardService, AdminNotification } from '../../services/dashboardSer
 import { Substation } from '../../types';
 import { COLORS } from '../../constants/theme';
 import { AppCard } from '../../components/common/AppCard';
+import { ConfirmationModal } from '../../components/common/ConfirmationModal';
 import { getShiftInfo, formatTimeIST } from '../../utils/shiftUtils';
 import { TechnicianDrawerModal } from '../../components/navigation/TechnicianDrawerModal';
 
@@ -114,6 +115,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
   const [substation, setSubstation] = useState<Substation | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showCheckOutConfirm, setShowCheckOutConfirm] = useState(false);
 
   // Analytics tab toggle: 'daily' | 'distribution'
   const [analyticsTab, setAnalyticsTab] = useState<'daily' | 'distribution'>('daily');
@@ -349,43 +351,37 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
     }
   };
 
-  // Manual Check Out Handler
-  const handleCheckOut = async () => {
-    Alert.alert(
-      'Confirm Check-Out',
-      'Are you sure you want to conclude your shift and punch out for today?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Conclude Shift',
-          style: 'destructive',
-          onPress: async () => {
-            setActionLoading(true);
-            try {
-              const record = await attendanceService.checkOut({
-                latitude: deviceCoords.latitude,
-                longitude: deviceCoords.longitude,
-                accuracy: 10,
-                remarks: 'Field Technician Check-Out',
-              });
-              setShiftCompleted(record);
-              Alert.alert(
-                'Shift Concluded',
-                'Your checkout punch has been recorded successfully. Work hours telemetry saved.',
-                [{ text: 'OK', onPress: () => fetchTodayAttendance() }]
-              );
-            } catch (err: any) {
-              Alert.alert(
-                'Check-Out Notice',
-                err.response?.data?.detail || err.message || 'Check-out failed. Please try again.'
-              );
-            } finally {
-              setActionLoading(false);
-            }
-          },
-        },
-      ]
-    );
+  // Manual Check Out Trigger: Open confirmation popup modal
+  const handleCheckOut = () => {
+    setShowCheckOutConfirm(true);
+  };
+
+  // Conclude Shift Check-Out
+  const executeCheckOut = async () => {
+    setActionLoading(true);
+    try {
+      const record = await attendanceService.checkOut({
+        latitude: deviceCoords.latitude,
+        longitude: deviceCoords.longitude,
+        accuracy: 10,
+        remarks: 'Field Technician Check-Out',
+      });
+      setShiftCompleted(record);
+      setShowCheckOutConfirm(false);
+      triggerHaptic('success');
+      Alert.alert(
+        'Shift Concluded',
+        'Your checkout punch has been recorded successfully. Work hours telemetry saved.',
+        [{ text: 'OK', onPress: () => fetchTodayAttendance() }]
+      );
+    } catch (err: any) {
+      Alert.alert(
+        'Check-Out Notice',
+        err.response?.data?.detail || err.message || 'Check-out failed. Please try again.'
+      );
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   // Format elapsed seconds to 'Xh Ym' based on real check-in / check-out data
@@ -1510,6 +1506,40 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
       {/* ============================================================== */}
       {/* 8. TECHNICIAN SIDE DRAWER MODAL                                */}
       {/* ============================================================== */}
+      {/* CHECK-OUT CONFIRMATION MODAL */}
+      <ConfirmationModal
+        visible={showCheckOutConfirm}
+        title="Confirm Check-Out"
+        message="Are you sure you want to conclude your shift and punch out for today?"
+        confirmTitle="Confirm Check-Out"
+        cancelTitle="Cancel"
+        variant="danger"
+        loading={actionLoading}
+        onConfirm={executeCheckOut}
+        onCancel={() => {
+          if (!actionLoading) setShowCheckOutConfirm(false);
+        }}
+      >
+        <View style={styles.checkoutModalSummary}>
+          <View style={styles.checkoutModalRow}>
+            <Text style={styles.checkoutModalLabel}>Current Time (IST):</Text>
+            <Text style={styles.checkoutModalVal}>{shiftInfo.formattedTimeIST}</Text>
+          </View>
+          <View style={styles.checkoutModalRow}>
+            <Text style={styles.checkoutModalLabel}>Substation / Location:</Text>
+            <Text style={styles.checkoutModalVal}>{substation?.name || 'st. joseph university'}</Text>
+          </View>
+          {todayRecord?.checkIn?.time ? (
+            <View style={styles.checkoutModalRow}>
+              <Text style={styles.checkoutModalLabel}>Checked In At:</Text>
+              <Text style={styles.checkoutModalVal}>
+                {(todayRecord?.checkIn as any)?.timeIST || formatTimeIST(todayRecord.checkIn.time)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </ConfirmationModal>
+
       <TechnicianDrawerModal />
     </View>
   );
@@ -2722,6 +2752,31 @@ const styles = StyleSheet.create({
   cancelCheckInBtn: {
     paddingVertical: 10,
     alignItems: 'center',
+  },
+  checkoutModalSummary: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  checkoutModalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  checkoutModalLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  checkoutModalVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   cancelCheckInBtnText: {
     fontSize: 12,

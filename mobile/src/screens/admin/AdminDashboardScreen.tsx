@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -29,6 +29,7 @@ import {
   CheckCheck,
   AlertTriangle,
   Clock,
+  Calendar,
   Filter,
   BarChart3,
   PieChart,
@@ -44,6 +45,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/useAuthStore';
 import { resolvePhotoUrl } from '../../utils/imageUrl';
+import { getStorageItem, setStorageItem } from '../../services/api';
 import {
   dashboardService,
   AdminStats,
@@ -78,7 +80,24 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
   const [notifFilter, setNotifFilter] = useState<'all' | 'late' | 'geofence'>('all');
 
   // Recent attendance filtering & detail modal
-  const [attendanceFilter, setAttendanceFilter] = useState<'all' | 'present' | 'late' | 'outside'>('all');
+  const [attendanceFilter, setAttendanceFilter] = useState<'all' | 'present' | 'late' | 'half_day' | 'leave' | 'outside'>('all');
+  const [markedAllRead, setMarkedAllRead] = useState(false);
+  const [readNotifIds, setReadNotifIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const stored = await getStorageItem('admin_read_notif_ids');
+      if (stored) {
+        try {
+          setReadNotifIds(JSON.parse(stored));
+        } catch {}
+      }
+      const storedAll = await getStorageItem('admin_marked_all_read');
+      if (storedAll === 'true') {
+        setMarkedAllRead(true);
+      }
+    })();
+  }, []);
   const [selectedRecord, setSelectedRecord] = useState<RecentAttendanceItem | null>(null);
   const [mapModalRecord, setMapModalRecord] = useState<RecentAttendanceItem | null>(null);
 
@@ -115,6 +134,11 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
 
   const handleMarkAllRead = async () => {
     try {
+      setMarkedAllRead(true);
+      await setStorageItem('admin_marked_all_read', 'true');
+      const allIds = (stats?.notifications || []).map((n) => n.id);
+      setReadNotifIds(allIds);
+      await setStorageItem('admin_read_notif_ids', JSON.stringify(allIds));
       await dashboardService.markNotificationsRead();
       if (stats) {
         const updated = stats.notifications.map((n) => ({ ...n, isRead: true }));
@@ -141,6 +165,20 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
     setRefreshing(false);
   };
 
+  // Notification items & live unread badge (hooks called unconditionally at top level)
+  const notifications = useMemo(() => {
+    const list = stats?.notifications || [];
+    return list.map((n: AdminNotification) => ({
+      ...n,
+      isRead: markedAllRead || readNotifIds.includes(n.id) || n.isRead,
+    }));
+  }, [stats?.notifications, markedAllRead, readNotifIds]);
+
+  const unreadCount = useMemo(() => {
+    if (markedAllRead) return 0;
+    return notifications.filter((n: AdminNotification) => !n.isRead).length;
+  }, [notifications, markedAllRead]);
+
   if (loading && !stats) {
     return <LoadingSpinner message="Aggregating workforce telemetry..." />;
   }
@@ -156,6 +194,8 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
   const filteredAttendance = recentAttendance.filter((rec) => {
     if (attendanceFilter === 'present') return rec.status === 'present' || rec.status === 'completed';
     if (attendanceFilter === 'late') return rec.status === 'late';
+    if (attendanceFilter === 'half_day') return rec.status === 'half_day' || rec.status === 'half-day';
+    if (attendanceFilter === 'leave') return rec.status === 'leave' || rec.status === 'absent';
     if (attendanceFilter === 'outside') return !rec.isInsideGeofence;
     return true;
   });
@@ -171,10 +211,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
     percentages: { onTime: 69, late: 12, completed: 8, absent: 11 },
   };
 
-  // Notification items & unread badge
-  const notifications = stats?.notifications || [];
-  const unreadCount = stats?.unreadNotificationsCount ?? notifications.filter((n) => !n.isRead).length;
-  const filteredNotifications = notifications.filter((item) => {
+  const filteredNotifications = notifications.filter((item: AdminNotification) => {
     if (notifFilter === 'late') return item.type === 'warning' || item.category.toLowerCase().includes('late');
     if (notifFilter === 'geofence') return item.type === 'danger' || item.category.toLowerCase().includes('geofence');
     return true;
@@ -239,8 +276,9 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
               style={styles.bellCardBtn}
               onPress={() => setShowNotificationsModal(true)}
               activeOpacity={0.8}
+              accessibilityLabel="Admin Notifications"
             >
-              <Bell size={22} color="#1E293B" />
+              <Bell size={20} color="#1E293B" />
               {unreadCount > 0 && (
                 <View style={styles.bellBadge}>
                   <Text style={styles.bellBadgeText}>
@@ -248,15 +286,6 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                   </Text>
                 </View>
               )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.adminLogoutBtn}
-              onPress={handleLogout}
-              activeOpacity={0.7}
-            >
-              <LogOut size={12} color="#DC2626" />
-              <Text style={styles.adminLogoutText}>Sign Out</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -586,7 +615,6 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
         <View style={styles.recentAttendanceHeaderRow}>
           <View>
             <Text style={styles.recentAttendanceTitle}>Recent Attendance</Text>
-            <Text style={styles.recentAttendanceSubtitle}>Live check-in stream across Smart Meter sites</Text>
           </View>
           <TouchableOpacity
             onPress={() => setAttendanceFilter('all')}
@@ -599,7 +627,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
         </View>
 
         {/* Filter Pills for Recent Attendance */}
-        <View style={styles.attendanceFilterRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.attendanceFilterRow}>
           <TouchableOpacity
             style={[styles.attFilterPill, attendanceFilter === 'all' && styles.attFilterPillActive]}
             onPress={() => setAttendanceFilter('all')}
@@ -625,6 +653,22 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.attFilterPill, attendanceFilter === 'half_day' && styles.attFilterPillActivePurple]}
+            onPress={() => setAttendanceFilter('half_day')}
+          >
+            <Text style={[styles.attFilterText, attendanceFilter === 'half_day' && styles.attFilterTextActivePurple]}>
+              Half-Day ⏱️
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.attFilterPill, attendanceFilter === 'leave' && styles.attFilterPillActiveBlue]}
+            onPress={() => setAttendanceFilter('leave')}
+          >
+            <Text style={[styles.attFilterText, attendanceFilter === 'leave' && styles.attFilterTextActiveBlue]}>
+              Leave / Absent
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.attFilterPill, attendanceFilter === 'outside' && styles.attFilterPillActiveRed]}
             onPress={() => setAttendanceFilter('outside')}
           >
@@ -632,7 +676,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
               Outside Geofence 🚨
             </Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
 
         {/* The Exact Photo 2 Table with Horizontal Scroll */}
         <AppCard style={styles.tableCardContainer}>
@@ -660,6 +704,8 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                   const isLate = rec.status === 'late';
                   const isCompleted = rec.status === 'completed';
                   const isAbsent = rec.status === 'absent';
+                  const isHalfDay = rec.status === 'half_day' || rec.status === 'half-day';
+                  const isLeave = rec.status === 'leave';
 
                   return (
                     <View
@@ -722,6 +768,16 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                           <View style={styles.statusPillLate}>
                             <AlertCircle size={13} color="#D97706" />
                             <Text style={styles.statusPillLateText}>Late</Text>
+                          </View>
+                        ) : isHalfDay ? (
+                          <View style={styles.statusPillHalfDay}>
+                            <Clock size={13} color="#7C3AED" />
+                            <Text style={styles.statusPillHalfDayText}>Half-Day</Text>
+                          </View>
+                        ) : isLeave ? (
+                          <View style={styles.statusPillLeave}>
+                            <Calendar size={13} color="#0284C7" />
+                            <Text style={styles.statusPillLeaveText}>Leave</Text>
                           </View>
                         ) : isAbsent ? (
                           <View style={styles.statusPillAbsent}>
@@ -1108,7 +1164,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                   </Text>
                 </View>
               ) : (
-                filteredNotifications.map((item) => {
+                filteredNotifications.map((item: AdminNotification) => {
                   const isLate = item.type === 'warning';
                   const isGeo = item.type === 'danger';
                   const isEarly = item.type === 'info';
@@ -1200,12 +1256,12 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   menuBtn: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
+    borderWidth: 1.2,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -1237,19 +1293,19 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   bellCardBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
+    borderWidth: 1.2,
     borderColor: '#E2E8F0',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
     elevation: 2,
   },
   bellBadge: {
@@ -2187,6 +2243,56 @@ const styles = StyleSheet.create({
   },
 
   // Photo 2: Status Pills
+  statusPillHalfDay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADII.pill,
+    alignSelf: 'flex-start',
+  },
+  statusPillHalfDayText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7C3AED',
+  },
+  statusPillLeave: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADII.pill,
+    alignSelf: 'flex-start',
+  },
+  statusPillLeaveText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  attFilterPillActivePurple: {
+    backgroundColor: '#7C3AED',
+    borderColor: '#7C3AED',
+  },
+  attFilterTextActivePurple: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  attFilterPillActiveBlue: {
+    backgroundColor: '#0284C7',
+    borderColor: '#0284C7',
+  },
+  attFilterTextActiveBlue: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
   statusPillLate: {
     flexDirection: 'row',
     alignItems: 'center',

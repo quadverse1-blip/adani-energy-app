@@ -528,9 +528,6 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
 
         <View style={styles.headerTitleWrap}>
           <Text style={styles.screenTitle} numberOfLines={1}>Site Allocation Management</Text>
-          <Text style={styles.screenSubtitle} numberOfLines={1}>
-            Assign staff substations, geofence permissions & transfer work zones
-          </Text>
         </View>
 
         <TouchableOpacity

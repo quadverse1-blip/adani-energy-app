@@ -85,7 +85,7 @@ export const TrackingScreen: React.FC = () => {
   const [viewMode, setViewMode] = useState<'single' | 'all'>('single');
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [copyFeedback, setCopyFeedback] = useState(false);
-  const [mobileTab, setMobileTab] = useState<'map' | 'roster' | 'overview'>('map');
+  const [mobileTab, setMobileTab] = useState<'map' | 'roster'>('map');
 
   const isWide = width >= 860;
 
@@ -895,9 +895,6 @@ export const TrackingScreen: React.FC = () => {
                   </Text>
                 </View>
               </View>
-              <Text style={styles.headerSub}>
-                Real-time GPS telemetry and breadcrumbs monitoring for Adani Smart Metering operations.
-              </Text>
             </View>
           </View>
 
@@ -950,9 +947,6 @@ export const TrackingScreen: React.FC = () => {
             <View style={styles.mobileTitleBlock}>
               <Text style={styles.mobileTitleText} numberOfLines={1}>
                 Field Force Live Telemetry
-              </Text>
-              <Text style={styles.mobileSubText} numberOfLines={1}>
-                Adani Smart Metering Operations
               </Text>
             </View>
 
@@ -1040,20 +1034,7 @@ export const TrackingScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.mobileTabBtn, mobileTab === 'overview' && styles.mobileTabBtnActive]}
-              onPress={() => setMobileTab('overview')}
-            >
-              <Layers size={14} color={mobileTab === 'overview' ? '#1E63F0' : '#64748B'} />
-              <Text
-                style={[
-                  styles.mobileTabBtnText,
-                  mobileTab === 'overview' && styles.mobileTabBtnTextActive,
-                ]}
-              >
-                Overview
-              </Text>
-            </TouchableOpacity>
+
           </View>
         </View>
       )}
@@ -1074,12 +1055,6 @@ export const TrackingScreen: React.FC = () => {
         >
           {mobileTab === 'map' && renderMapAndTelemetry()}
           {mobileTab === 'roster' && renderRoster()}
-          {mobileTab === 'overview' && (
-            <>
-              {renderMapAndTelemetry()}
-              <View style={{ marginTop: 14 }}>{renderRoster()}</View>
-            </>
-          )}
         </ScrollView>
       )}
 

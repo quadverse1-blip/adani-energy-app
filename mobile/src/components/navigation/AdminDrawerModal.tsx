@@ -281,7 +281,7 @@ export const AdminDrawerModal: React.FC = () => {
               activeOpacity={0.8}
             >
               <LogOut size={18} color="#EF4444" />
-              <Text style={styles.logoutText}>Sign Out of Admin</Text>
+              <Text style={styles.logoutText}>Sign Out</Text>
             </TouchableOpacity>
 
             <View style={styles.versionRow}>

@@ -83,6 +83,36 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
   const [sites, setSites] = useState<Substation[]>([]);
   const [selectedSite, setSelectedSite] = useState<Substation | null>(null);
 
+  // Filtered sites: when checked in, only show the site where user checked in
+  const checkedInSiteName = todayRecord?.siteName || (todayRecord?.checkIn as any)?.siteName || selectedSite?.name;
+  const checkedInSiteId = todayRecord?.siteId;
+
+  const displayedSites = useMemo(() => {
+    if (isAlreadyCheckedIn && sites.length > 0) {
+      const match = sites.filter(s =>
+        (checkedInSiteId && s.id === checkedInSiteId) ||
+        (checkedInSiteName && s.name.toLowerCase() === checkedInSiteName.toLowerCase()) ||
+        (selectedSite && s.id === selectedSite.id)
+      );
+      if (match.length > 0) return match;
+      if (selectedSite) return [selectedSite];
+      return [sites[0]];
+    }
+    return sites;
+  }, [isAlreadyCheckedIn, sites, checkedInSiteId, checkedInSiteName, selectedSite]);
+
+  useEffect(() => {
+    if (isAlreadyCheckedIn && sites.length > 0) {
+      const match = sites.find(s =>
+        (checkedInSiteId && s.id === checkedInSiteId) ||
+        (checkedInSiteName && s.name.toLowerCase() === checkedInSiteName.toLowerCase())
+      );
+      if (match && selectedSite?.id !== match.id) {
+        setSelectedSite(match);
+      }
+    }
+  }, [isAlreadyCheckedIn, sites, checkedInSiteId, checkedInSiteName]);
+
   // GPS State (Defaults to St. Joseph's University device coordinates: 12.962506, 77.593736)
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
@@ -403,9 +433,6 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
           </TouchableOpacity>
           <View>
             <Text style={styles.screenTitle}>Field Shift Check-In</Text>
-            <Text style={styles.screenSubtitle}>
-              Verify live GPS position at your current field work location
-            </Text>
           </View>
         </View>
 
@@ -448,14 +475,18 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
         {/* ============================================================== */}
         <View style={styles.substationSelectorCard}>
           <View style={styles.substationSelectorHeader}>
-            <View style={styles.buildingIconWrap}>
+            <View style={[styles.buildingIconWrap, isAlreadyCheckedIn && { backgroundColor: '#10B981' }]}>
               <Building2 size={18} color="#FFFFFF" />
             </View>
             <Text style={styles.substationSelectorTitle}>
-              Assigned Substations ({sites.length})
+              {isAlreadyCheckedIn
+                ? `Checked-In Site: ${displayedSites[0]?.name || checkedInSiteName || 'Active Site'}`
+                : `Assigned Substations (${sites.length})`}
             </Text>
-            <View style={styles.selectPunchPill}>
-              <Text style={styles.selectPunchPillText}>Select Punch-In Site</Text>
+            <View style={[styles.selectPunchPill, isAlreadyCheckedIn && { backgroundColor: '#DCFCE7' }]}>
+              <Text style={[styles.selectPunchPillText, isAlreadyCheckedIn && { color: '#15803D' }]}>
+                {isAlreadyCheckedIn ? '✓ Active Check-In Site' : 'Select Punch-In Site'}
+              </Text>
             </View>
           </View>
 
@@ -465,8 +496,8 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chipsScroll}
           >
-            {sites.map((site) => {
-              const isSelected = selectedSite?.id === site.id;
+            {displayedSites.map((site) => {
+              const isSelected = selectedSite?.id === site.id || isAlreadyCheckedIn;
               const dist = calculateHaversineDistance(
                 latitude,
                 longitude,
@@ -484,15 +515,17 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                     isSelected && styles.substationChipActive,
                   ]}
                   onPress={() => {
-                    setSelectedSite(site);
-                    triggerHaptic('light');
+                    if (!isAlreadyCheckedIn) {
+                      setSelectedSite(site);
+                      triggerHaptic('light');
+                    }
                   }}
-                  activeOpacity={0.8}
+                  activeOpacity={isAlreadyCheckedIn ? 1 : 0.8}
                 >
                   <View
                     style={[
                       styles.chipDot,
-                      { backgroundColor: chipInside ? '#10B981' : isSelected ? '#FFFFFF' : '#EF4444' },
+                      { backgroundColor: isAlreadyCheckedIn ? '#10B981' : chipInside ? '#10B981' : isSelected ? '#FFFFFF' : '#EF4444' },
                     ]}
                   />
                   <Text
@@ -524,7 +557,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                       isSelected && styles.chipDistanceTextActive,
                     ]}
                   >
-                    ({chipDistStr})
+                    {isAlreadyCheckedIn ? '(Checked In)' : `(${chipDistStr})`}
                   </Text>
                 </TouchableOpacity>
               );
@@ -682,13 +715,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                 </TouchableOpacity>
               </View>
 
-              {/* Map Engine Badge */}
-              <View style={styles.mapEngineBadge}>
-                <View style={styles.engineGreenDot} />
-                <Text style={styles.mapEngineText}>
-                  Map Engine: React Native Maps
-                </Text>
-              </View>
+
             </View>
 
             {/* 3 Telemetry Metrics below Map */}
@@ -756,58 +783,90 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
               <MapPin size={28} color="#FFFFFF" />
             </View>
 
-            <Text style={styles.actionCardTitle}>Check In for New Shift</Text>
+            <Text style={styles.actionCardTitle}>
+              {isAlreadyCheckedIn ? 'Shift Check-In Recorded' : 'Check In for New Shift'}
+            </Text>
             <Text style={styles.actionCardSubtitle}>
-              You have checked out of your previous shift. Check-in is available when within the site geofence.
+              {isAlreadyCheckedIn
+                ? 'Your shift check-in has been successfully recorded and locked for today.'
+                : 'You have checked out of your previous shift. Check-in is available when within the site geofence.'}
             </Text>
 
-            {/* Shift Status Notice */}
+            {/* Substation Assignment vs Check-In Location Breakdown */}
+            <View style={styles.substationSummaryBox}>
+              <View style={styles.substationSummaryRow}>
+                <Text style={styles.substationSummaryLabel}>Assigned Substation:</Text>
+                <Text style={styles.substationSummaryValue}>
+                  {(user as any)?.assignedSiteName || sites.find(s => s.id === user?.assignedSiteId)?.name || 'Surat ST-1'}
+                </Text>
+              </View>
+              <View style={styles.substationSummaryRow}>
+                <Text style={styles.substationSummaryLabel}>Checked In From:</Text>
+                <Text style={[styles.substationSummaryValue, { color: isAlreadyCheckedIn ? '#059669' : '#1E63F0' }]}>
+                  {isAlreadyCheckedIn
+                    ? (todayRecord?.siteName || (todayRecord?.checkIn as any)?.siteName || selectedSite?.name || 'st. joseph university')
+                    : (selectedSite?.name || 'Select a site')}
+                </Text>
+              </View>
+              {isAlreadyCheckedIn && todayRecord?.checkIn?.time && (
+                <View style={styles.substationSummaryRow}>
+                  <Text style={styles.substationSummaryLabel}>Check-In Time:</Text>
+                  <Text style={styles.substationSummaryValue}>
+                    {formatTimeIST(todayRecord.checkIn.time)} IST
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Shift Status Notice: "Shift currently active" Box with clean alignment & spacing */}
             {isAlreadyCheckedIn && todayRecord?.checkOut ? (
-              <View style={styles.prevShiftBox}>
-                <CheckCircle2 size={14} color="#2563EB" style={{ marginRight: 6 }} />
-                <Text style={styles.prevShiftText}>
+              <View style={[styles.prevShiftBox, styles.prevShiftBoxCompleted]}>
+                <CheckCircle2 size={16} color="#2563EB" style={{ marginRight: 8 }} />
+                <Text style={[styles.prevShiftText, { color: '#1D4ED8' }]}>
                   Shift concluded today at {formatTimeIST(todayRecord.checkOut.time)} (Worked: {todayRecord.workingHoursFormatted || `${todayRecord.workingMinutes || 0}m`}).
                 </Text>
               </View>
             ) : isAlreadyCheckedIn ? (
-              <View style={styles.prevShiftBox}>
-                <CheckCircle2 size={14} color="#16A34A" style={{ marginRight: 6 }} />
+              <View style={[styles.prevShiftBox, styles.prevShiftBoxActive]}>
+                <CheckCircle2 size={16} color="#15803D" style={{ marginRight: 8 }} />
                 <Text style={[styles.prevShiftText, { color: '#15803D' }]}>
-                  Shift currently active • Checked in at {formatTimeIST(todayRecord?.checkIn?.time)}.
+                  Shift currently active • Checked in at {formatTimeIST(todayRecord?.checkIn?.time)} IST.
                 </Text>
               </View>
             ) : null}
 
             {/* Geofence Notice Banner: Locked vs In-Range */}
-            {!isInside ? (
-              /* OUTSIDE GEOFENCE: CHECK-IN STRICTLY LOCKED */
-              <View style={styles.lockedNoticeBox}>
-                <View style={styles.lockedNoticeHeader}>
-                  <AlertTriangle size={16} color="#DC2626" style={{ marginRight: 6 }} />
-                  <Text style={styles.lockedNoticeTitle}>
-                    Check-In Locked: Outside Geofence Area
+            {!isAlreadyCheckedIn && (
+              !isInside ? (
+                /* OUTSIDE GEOFENCE: CHECK-IN STRICTLY LOCKED */
+                <View style={styles.lockedNoticeBox}>
+                  <View style={styles.lockedNoticeHeader}>
+                    <AlertTriangle size={16} color="#DC2626" style={{ marginRight: 6 }} />
+                    <Text style={styles.lockedNoticeTitle}>
+                      Check-In Locked: Outside Geofence Area
+                    </Text>
+                  </View>
+                  <Text style={styles.lockedNoticeBody}>
+                    You are currently <Text style={{ fontWeight: '800' }}>{distanceFormatted}</Text> away from{' '}
+                    <Text style={{ fontWeight: '800' }}>{selectedSite?.name || 'the substation'}</Text>. Attendance
+                    check-in is strictly locked until you arrive within 500 meters of the assigned substation.
                   </Text>
                 </View>
-                <Text style={styles.lockedNoticeBody}>
-                  You are currently <Text style={{ fontWeight: '800' }}>{distanceFormatted}</Text> away from{' '}
-                  <Text style={{ fontWeight: '800' }}>{selectedSite?.name || 'the substation'}</Text>. Attendance
-                  check-in is strictly locked until you arrive within 500 meters of the assigned substation.
-                </Text>
-              </View>
-            ) : (
-              /* INSIDE GEOFENCE: CHECK-IN AUTHORIZED */
-              <View style={styles.inRangeNoticeBox}>
-                <View style={styles.inRangeNoticeHeader}>
-                  <CheckCircle2 size={16} color="#059669" style={{ marginRight: 6 }} />
-                  <Text style={styles.inRangeNoticeTitle}>
-                    Geofence Verified: You are within 500m
+              ) : (
+                /* INSIDE GEOFENCE: CHECK-IN AUTHORIZED */
+                <View style={styles.inRangeNoticeBox}>
+                  <View style={styles.inRangeNoticeHeader}>
+                    <CheckCircle2 size={16} color="#059669" style={{ marginRight: 6 }} />
+                    <Text style={styles.inRangeNoticeTitle}>
+                      Geofence Verified: You are within 500m
+                    </Text>
+                  </View>
+                  <Text style={styles.inRangeNoticeBody}>
+                    You are currently <Text style={{ fontWeight: '800' }}>{distanceFormatted}</Text> from{' '}
+                    <Text style={{ fontWeight: '800' }}>{selectedSite?.name}</Text>. You are authorized to check in for your shift.
                   </Text>
                 </View>
-                <Text style={styles.inRangeNoticeBody}>
-                  You are currently <Text style={{ fontWeight: '800' }}>{distanceFormatted}</Text> from{' '}
-                  <Text style={{ fontWeight: '800' }}>{selectedSite?.name}</Text>. You are authorized to check in for your shift.
-                </Text>
-              </View>
+              )
             )}
 
             {/* Check-In CTA Button */}
@@ -815,23 +874,26 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
               /* ALREADY CHECKED IN: RE-CHECK IN NOT ALLOWED */
               <View style={styles.alreadyCheckedInBox}>
                 <View style={styles.alreadyCheckedInBadge}>
-                  <CheckCircle2 size={18} color="#15803D" style={{ marginRight: 6 }} />
+                  <CheckCircle2 size={16} color="#15803D" style={{ marginRight: 6 }} />
                   <Text style={styles.alreadyCheckedInTitle}>Shift Check-In Recorded</Text>
                 </View>
                 <Text style={styles.alreadyCheckedInSub}>
-                  You have already checked in for today. Re-check in is not allowed for this shift date.
+                  You have already checked in for today at{' '}
+                  <Text style={{ fontWeight: '700', color: '#15803D' }}>
+                    {todayRecord?.siteName || (todayRecord?.checkIn as any)?.siteName || selectedSite?.name}
+                  </Text>. Re-check in is disabled for this shift.
                 </Text>
                 <TouchableOpacity
                   style={styles.lockedCheckInBtn}
                   onPress={() =>
                     Alert.alert(
-                      'Already Checked In',
-                      'You have already checked in for today. Re-check in is not permitted.'
+                      'Shift Check-In Active',
+                      `You are already checked in at ${todayRecord?.siteName || selectedSite?.name} for today.\n\nAssigned Substation: ${(user as any)?.assignedSiteName || sites.find(s => s.id === user?.assignedSiteId)?.name || 'Surat ST-1'}\nChecked-In From: ${todayRecord?.siteName || selectedSite?.name}`
                     )
                   }
                   activeOpacity={0.7}
                 >
-                  <Lock size={16} color="#64748B" style={{ marginRight: 8 }} />
+                  <Lock size={15} color="#64748B" style={{ marginRight: 6 }} />
                   <Text style={styles.lockedCheckInBtnText}>
                     Check-In Completed (Re-check in Disabled)
                   </Text>
@@ -1730,20 +1792,28 @@ const styles = StyleSheet.create({
   prevShiftBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#DBEAFE',
-    marginTop: 14,
+    marginTop: 2,
+    marginBottom: 14,
     width: '100%',
   },
+  prevShiftBoxActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  prevShiftBoxCompleted: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
   prevShiftText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#1E40AF',
+    color: '#15803D',
     flex: 1,
+    lineHeight: 18,
   },
 
   // Notice Banners
@@ -1810,9 +1880,11 @@ const styles = StyleSheet.create({
     borderColor: '#CBD5E1',
   },
   lockedCheckInBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#64748B',
+    textAlign: 'center',
+    flexShrink: 1,
   },
   activeCheckInBtn: {
     flexDirection: 'row',
@@ -2359,6 +2431,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 6,
+  },
+  substationSummaryBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    width: '100%',
+  },
+  substationSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 3,
+  },
+  substationSummaryLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  substationSummaryValue: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   alreadyCheckedInTitle: {
     fontSize: 14,

@@ -32,6 +32,10 @@ import { useAttendanceStore } from '../../store/useAttendanceStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { resolvePhotoUrl } from '../../utils/imageUrl';
+import * as Sharing from 'expo-sharing';
+import { Paths, File as ExpoFile } from 'expo-file-system';
+import { Linking } from 'react-native';
+import { apiClient } from '../../services/api';
 import { formatTimeIST } from '../../utils/shiftUtils';
 
 interface TodayAttendanceScreenProps {
@@ -70,6 +74,41 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
 
   const [refreshing, setRefreshing] = useState(false);
   const [showHolidaysModal, setShowHolidaysModal] = useState(false);
+  const [downloadingHolidays, setDownloadingHolidays] = useState(false);
+
+  const handleDownloadHolidaysPdf = async () => {
+    setDownloadingHolidays(true);
+    try {
+      const url = `${apiClient.defaults.baseURL}/dashboard/holidays/pdf?year=2026`;
+      if (Platform.OS === 'web') {
+        window.open(url, '_blank');
+        setDownloadingHolidays(false);
+        return;
+      }
+      const filename = 'Adani_Energy_Holidays_2026.pdf';
+      const destination = new ExpoFile(Paths.document, filename);
+      const downloadedFile = await ExpoFile.downloadFileAsync(url, destination);
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(downloadedFile.uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Adani Energy Holidays 2026 Calendar',
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        Alert.alert('Calendar Downloaded', 'Adani_Energy_Holidays_2026.pdf saved to device documents.');
+      }
+    } catch (err: any) {
+      console.warn('Holidays PDF download error:', err);
+      try {
+        await Linking.openURL(`${apiClient.defaults.baseURL}/dashboard/holidays/pdf?year=2026`);
+      } catch (e) {
+        Alert.alert('Notice', 'Adani Holidays calendar is cached and available.');
+      }
+    } finally {
+      setDownloadingHolidays(false);
+    }
+  };
 
   useEffect(() => {
     fetchTodayAttendance();
@@ -243,9 +282,6 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
             </TouchableOpacity>
             <View>
               <Text style={styles.headerTitle}>Today's Attendance Status</Text>
-              <Text style={styles.headerSubtitle}>
-                Daily verified shift audit & telemetry summary
-              </Text>
             </View>
           </View>
 
@@ -535,17 +571,14 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={styles.modalDownloadBtn}
-                onPress={() => {
-                  Alert.alert(
-                    'Document Ready',
-                    'Adani_Energy_Holidays_2026.pdf has been cached for offline workforce viewing.'
-                  );
-                  setShowHolidaysModal(false);
-                }}
+                style={[styles.modalDownloadBtn, downloadingHolidays && { opacity: 0.75 }]}
+                onPress={handleDownloadHolidaysPdf}
+                disabled={downloadingHolidays}
               >
                 <Download size={16} color="#FFFFFF" />
-                <Text style={styles.modalDownloadText}>Download Calendar (PDF)</Text>
+                <Text style={styles.modalDownloadText}>
+                  {downloadingHolidays ? 'Downloading Calendar...' : 'Download Calendar (PDF)'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

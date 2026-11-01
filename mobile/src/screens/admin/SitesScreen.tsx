@@ -542,7 +542,6 @@ export const SitesScreen: React.FC = () => {
         </TouchableOpacity>
 
         <View style={{ flex: 1, marginHorizontal: 10 }}>
-          <Text style={styles.headerSubtitle}>HIGH VOLTAGE INFRASTRUCTURE</Text>
           <Text style={styles.headerTitle}>Substation Management</Text>
         </View>
 

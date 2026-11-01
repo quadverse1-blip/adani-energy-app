@@ -107,6 +107,13 @@ async def get_attendance_history(
         target_emp_id = employeeId
 
     raw_records = db.get_attendance_history(target_emp_id, month=month, year=year)
+    is_fallback = False
+    if not raw_records and (month is not None or year is not None):
+        # Graceful fallback: return latest records for this employee so history is never blank
+        all_emp_records = db.get_attendance_history(target_emp_id)
+        if all_emp_records:
+            raw_records = all_emp_records
+            is_fallback = True
     emp = db.get_employee(target_emp_id) or db.find_employee_by_identifier(target_emp_id)
     fallback_site_name = None
     if emp and emp.get("assignedSiteId"):

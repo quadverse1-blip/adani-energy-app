@@ -6,6 +6,7 @@ from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials
 from app.core.security import get_current_user_token, security_bearer, decode_access_token
 from app.services.salary_service import salary_service, UPLOADED_SLIPS
+from app.services.pdf_service import generate_salary_slip_pdf
 from app.schemas.salary import SalarySlipResponse, SalarySummaryResponse, UploadSalarySlipRequest
 from app.core.database import db
 
@@ -93,8 +94,15 @@ async def download_payslip_pdf(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error processing uploaded payslip: {str(e)}")
 
-    # If admin has not uploaded for this month/year, reject download
-    raise HTTPException(
-        status_code=404,
-        detail=f"Official signed salary slip PDF has not been uploaded by Admin for {month}/{year} yet. Download is only permitted for admin-uploaded verified payslips."
-    )
+    # Dynamically generate official verified Adani salary slip PDF
+    try:
+        slip_data = salary_service.get_salary_slip(employeeId, month, year)
+        pdf_bytes = generate_salary_slip_pdf(slip_data, employee)
+        filename = f"Adani_Salary_Slip_{canonical_id}_{month}_{year}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating payslip PDF: {str(e)}")

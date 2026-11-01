@@ -1,3 +1,5 @@
+from fastapi.responses import Response
+from app.services.pdf_service import generate_holidays_pdf
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends
@@ -9,6 +11,7 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 # In-memory store for read notifications
 read_notification_ids = set()
+mark_all_read_active = False
 
 @router.get("/stats")
 async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)):
@@ -139,9 +142,50 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
             except Exception:
                 duration_str = "In Progress"
 
-        status_val = r.get("status", "present")
-        if status_val == "half-day":
-            status_val = "half_day"
+        # Calculate dynamic shift status based strictly on check-in time and shift rules:
+        # - Leave / Holiday: if marked as leave
+        # - Absent: no check-in logged
+        # - On-Time / Present: checked in on or before 09:15 AM IST (standard 9:00 AM shift + 15m grace)
+        # - Late: checked in between 09:16 AM and 10:30 AM IST
+        # - Half-Day: checked in after 10:30 AM IST, or total shift duration < 4 hours (240 mins)
+        raw_status = str(r.get("status") or "").lower()
+        if raw_status in ["leave", "on_leave", "holiday"]:
+            status_val = "leave"
+        elif not ci or not in_time_formatted or in_time_formatted == "--:--":
+            status_val = "absent"
+        else:
+            checkin_minutes = None
+            try:
+                t_str = in_time_formatted.strip()
+                if " " in t_str:
+                    time_part, ampm = t_str.split()[:2]
+                    parts = time_part.split(":")
+                    h = int(parts[0])
+                    m = int(parts[1])
+                    if ampm.upper() == "PM" and h != 12:
+                        h += 12
+                    elif ampm.upper() == "AM" and h == 12:
+                        h = 0
+                    checkin_minutes = h * 60 + m
+            except Exception:
+                pass
+
+            if checkin_minutes is not None:
+                # 09:15 AM = 9 * 60 + 15 = 555 mins
+                # 10:30 AM = 10 * 60 + 30 = 630 mins
+                if checkin_minutes <= 555:
+                    status_val = "completed" if (co and out_time_formatted != "--:--") else "present"
+                elif checkin_minutes <= 630:
+                    status_val = "late"
+                else:
+                    status_val = "half_day"
+            else:
+                status_val = "present"
+
+            # If checkout occurred and employee worked < 4 hours (240 mins), classify as half-day
+            wm = r.get("workingMinutes")
+            if co and wm is not None and 0 < wm < 240:
+                status_val = "half_day"
 
         # Calculate actual traveled distance between check-in and check-out
         dist_traveled_str = "0 m"
@@ -201,7 +245,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
                 "employeeName": emp_name,
                 "avatar": emp_avatar,
                 "siteName": site_name,
-                "isRead": notif_id in read_notification_ids
+                "isRead": mark_all_read_active or (notif_id in read_notification_ids)
             })
 
         # 2. Geofence Perimeter Warning
@@ -220,7 +264,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
                 "employeeName": emp_name,
                 "avatar": emp_avatar,
                 "siteName": site_name,
-                "isRead": notif_id in read_notification_ids
+                "isRead": mark_all_read_active or (notif_id in read_notification_ids)
             })
 
         # 3. Early Checkout Warning
@@ -239,7 +283,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
                 "employeeName": emp_name,
                 "avatar": emp_avatar,
                 "siteName": site_name,
-                "isRead": notif_id in read_notification_ids
+                "isRead": mark_all_read_active or (notif_id in read_notification_ids)
             })
 
         # 4. Standard On-Duty Verified
@@ -258,7 +302,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
                 "employeeName": emp_name,
                 "avatar": emp_avatar,
                 "siteName": site_name,
-                "isRead": notif_id in read_notification_ids
+                "isRead": mark_all_read_active or (notif_id in read_notification_ids)
             })
 
     # --- Official Admin Broadcast Notifications ---
@@ -273,7 +317,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
             "message": "Admin circular: On-time check-in before 09:00 AM, half-day after 10:30 AM, and strict 06:00 PM auto check-out with check-in disabled after 06:00 PM IST.",
             "timestamp": "09:00 AM",
             "avatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&q=80",
-            "isRead": "notif_admin_shift_policy" in read_notification_ids
+            "isRead": mark_all_read_active or ("notif_admin_shift_policy" in read_notification_ids)
         },
         {
             "id": "notif_admin_salary_slip",
@@ -285,7 +329,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
             "message": "Verified salary slips for October 2026 have been generated and uploaded. Supervisors and employees can view and download their verified payslips.",
             "timestamp": "10:30 AM",
             "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-            "isRead": "notif_admin_salary_slip" in read_notification_ids
+            "isRead": mark_all_read_active or ("notif_admin_salary_slip" in read_notification_ids)
         },
         {
             "id": "notif_admin_safety_audit",
@@ -297,7 +341,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
             "message": "Safety audit for Pune - Phase 1 Substation passed with 98.4% compliance. Ensure high-voltage protective gear remains verified.",
             "timestamp": "02:15 PM",
             "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
-            "isRead": "notif_admin_safety_audit" in read_notification_ids
+            "isRead": mark_all_read_active or ("notif_admin_safety_audit" in read_notification_ids)
         },
         {
             "id": "notif_admin_smart_meter",
@@ -309,7 +353,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
             "message": "Feeder #SF-33-04 allocated to Pune Phase 1 operations team. Zonal technicians may record inspection logs in Field Operations portal.",
             "timestamp": "04:45 PM",
             "avatar": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=400&q=80",
-            "isRead": "notif_admin_smart_meter" in read_notification_ids
+            "isRead": mark_all_read_active or ("notif_admin_smart_meter" in read_notification_ids)
         }
     ]
     notifications.extend(admin_notifications)
@@ -381,12 +425,39 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
 
 @router.post("/notifications/mark-read")
 async def mark_notifications_read(payload: Dict[str, Any] = {}, token_data: dict = Depends(get_current_user_token)):
+    global mark_all_read_active
     notif_id = payload.get("notificationId")
     if notif_id:
         read_notification_ids.add(notif_id)
     else:
-        # Mark all as read
+        mark_all_read_active = True
+        read_notification_ids.update([
+            "notif_admin_shift_policy",
+            "notif_admin_salary_slip",
+            "notif_admin_safety_audit",
+            "notif_admin_smart_meter",
+            "emp_notif_geo_01",
+            "emp_notif_policy_02",
+            "emp_notif_safety_03"
+        ])
         for item in ["notif_late_", "notif_geo_", "notif_early_", "notif_cin_"]:
-            for i in range(100):
+            for i in range(200):
                 read_notification_ids.add(f"{item}{i}")
-    return {"status": "success", "message": "Notifications marked as read"}
+    return {"status": "success", "message": "All notifications marked as read"}
+
+@router.get("/holidays/pdf")
+async def download_holidays_calendar_pdf(year: int = 2026):
+    """
+    Downloads the official Adani Energy Solutions Limited Gazetted & Field Operations
+    Holiday Calendar as a formatted PDF.
+    """
+    try:
+        pdf_bytes = generate_holidays_pdf(year)
+        filename = f"Adani_Energy_Holidays_{year}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating holidays PDF: {str(e)}")

@@ -50,6 +50,42 @@ export async function clearStoredToken(): Promise<void> {
   }
 }
 
+function sanitizeStorageKey(rawKey: string): string {
+  // Expo SecureStore only allows alphanumeric, '.', '-', and '_'
+  return (rawKey || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+export async function getStorageItem(key: string): Promise<string | null> {
+  const safeKey = sanitizeStorageKey(key);
+  if (Platform.OS === 'web') {
+    try {
+      return localStorage.getItem(safeKey);
+    } catch {
+      return null;
+    }
+  }
+  try {
+    return await SecureStore.getItemAsync(safeKey);
+  } catch {
+    return null;
+  }
+}
+
+export async function setStorageItem(key: string, value: string): Promise<void> {
+  const safeKey = sanitizeStorageKey(key);
+  if (Platform.OS === 'web') {
+    try {
+      localStorage.setItem(safeKey, value);
+    } catch {}
+    return;
+  }
+  try {
+    await SecureStore.setItemAsync(safeKey, value);
+  } catch (e) {
+    console.warn('SecureStore set error:', e);
+  }
+}
+
 // Attach JWT token to all requests
 apiClient.interceptors.request.use(
   async (config) => {
