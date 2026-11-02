@@ -62,7 +62,7 @@ const MENU_ITEMS: NavMenuItem[] = [
   },
   {
     key: 'Sites',
-    label: 'Substations',
+    label: 'Site Management',
     subLabel: 'Grid infrastructure & zones',
     screenName: 'Sites',
     icon: Zap,

@@ -229,6 +229,8 @@ class FirestoreCollectionDictWrapper:
         self.db_manager = db_manager
         self.collection_name = collection_name
         self.fallback_dict = fallback_dict
+        self._last_sync_time: float = 0.0
+        self._sync_ttl: float = 10.0
 
     def __getitem__(self, key: str) -> dict:
         if key in self.fallback_dict:
@@ -267,7 +269,12 @@ class FirestoreCollectionDictWrapper:
             return doc
         return default
 
-    def values(self) -> List[dict]:
+    def values(self, force_refresh: bool = False) -> List[dict]:
+        import time
+        now_ts = time.time()
+        if not force_refresh and (now_ts - self._last_sync_time) < self._sync_ttl and len(self.fallback_dict) > 0:
+            return list(self.fallback_dict.values())
+
         # Merge local in-memory operational records with remote Firestore documents
         merged = dict(self.fallback_dict)
         remote_docs = self.db_manager.list_firestore_collection(self.collection_name)
@@ -285,6 +292,7 @@ class FirestoreCollectionDictWrapper:
                     else:
                         merged[doc_id] = doc
                         self.fallback_dict[doc_id] = doc
+        self._last_sync_time = now_ts
         return list(merged.values())
 
     def keys(self):

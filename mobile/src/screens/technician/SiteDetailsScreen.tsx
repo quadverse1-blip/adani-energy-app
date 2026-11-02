@@ -635,60 +635,70 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
           </AppCard>
         )}
 
-        {/* Substation Manager Profile Card with Real Image */}
-        <AppCard style={styles.card}>
-          <Text style={styles.sectionTitle}>SUBSTATION MANAGER & IN-CHARGE</Text>
-          
-          <View style={styles.managerProfileRow}>
-            <View style={styles.managerPhotoContainer}>
-              <Image
-                source={{ uri: managerPhotoUrl }}
-                style={styles.managerPhoto}
-                resizeMode="cover"
-                onError={() => setMgrImgFailed(true)}
-              />
-              <View style={styles.managerVerifiedDot}>
-                <ShieldCheck size={12} color="#FFFFFF" />
+        {/* Site Manager Profile Card */}
+        {site.manager && (site.manager.name || site.manager.phone) ? (
+          <AppCard style={styles.card}>
+            <Text style={styles.sectionTitle}>SITE MANAGER & IN-CHARGE</Text>
+            
+            <View style={styles.managerProfileRow}>
+              <View style={styles.managerPhotoContainer}>
+                <Image
+                  source={{ uri: managerPhotoUrl }}
+                  style={styles.managerPhoto}
+                  resizeMode="cover"
+                  onError={() => setMgrImgFailed(true)}
+                />
+                <View style={styles.managerVerifiedDot}>
+                  <ShieldCheck size={12} color="#FFFFFF" />
+                </View>
+              </View>
+
+              <View style={styles.managerDetails}>
+                <Text style={styles.managerName}>{site.manager.name || 'Site In-Charge'}</Text>
+                <Text style={styles.managerDesig}>
+                  {site.manager.designation || 'Site Operations Lead'}
+                </Text>
+                
+                {site.manager.phone ? (
+                  <View style={styles.managerContactLine}>
+                    <Phone size={11} color="#64748B" />
+                    <Text style={styles.managerContactText}>{site.manager.phone}</Text>
+                  </View>
+                ) : null}
+
+                {site.manager.email ? (
+                  <View style={styles.managerContactLine}>
+                    <Mail size={11} color="#64748B" />
+                    <Text style={styles.managerContactText}>{site.manager.email}</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
 
-            <View style={styles.managerDetails}>
-              <Text style={styles.managerName}>{site.manager?.name || 'Site In-Charge'}</Text>
-              <Text style={styles.managerDesig}>
-                {site.manager?.designation || 'Zonal Grid Operations Lead'}
-              </Text>
-              
-              <View style={styles.managerContactLine}>
-                <Phone size={11} color="#64748B" />
-                <Text style={styles.managerContactText}>{site.manager?.phone || '+91 98251 98765'}</Text>
-              </View>
-
-              <View style={styles.managerContactLine}>
-                <Mail size={11} color="#64748B" />
-                <Text style={styles.managerContactText}>{site.manager?.email || 'manager@adani.com'}</Text>
-              </View>
+            <View style={styles.contactActionsRow}>
+              {site.manager.phone ? (
+                <AppButton
+                  title="Call Manager"
+                  onPress={handleCall}
+                  variant="secondary"
+                  size="sm"
+                  icon={<Phone size={14} color={COLORS.primary} />}
+                  style={styles.contactBtn}
+                />
+              ) : null}
+              {site.manager.email ? (
+                <AppButton
+                  title="Email Manager"
+                  onPress={handleEmail}
+                  variant="secondary"
+                  size="sm"
+                  icon={<Mail size={14} color={COLORS.primary} />}
+                  style={styles.contactBtn}
+                />
+              ) : null}
             </View>
-          </View>
-
-          <View style={styles.contactActionsRow}>
-            <AppButton
-              title="Call Manager"
-              onPress={handleCall}
-              variant="secondary"
-              size="sm"
-              icon={<Phone size={14} color={COLORS.primary} />}
-              style={styles.contactBtn}
-            />
-            <AppButton
-              title="Email Manager"
-              onPress={handleEmail}
-              variant="secondary"
-              size="sm"
-              icon={<Mail size={14} color={COLORS.primary} />}
-              style={styles.contactBtn}
-            />
-          </View>
-        </AppCard>
+          </AppCard>
+        ) : null}
 
         {/* Interactive Geofence Radar Map */}
         <AppCard style={styles.card}>

@@ -7,6 +7,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.comments import Comment
 from app.core.database import db
+from app.utils.datetime_utils import get_now_ist, get_today_ist_str
 
 class ReportService:
     @staticmethod
@@ -21,7 +22,8 @@ class ReportService:
         Strictly enforces ONLY 4 permitted attendance statuses:
         P = Present, A = Absent, WO = Weekly Off, PH = Public Holiday.
         """
-        now = datetime.now()
+        now = get_now_ist()
+        today_date = now.date()
         month = month if month is not None else now.month
         year = year if year is not None else now.year
 
@@ -44,7 +46,7 @@ class ReportService:
             is_sunday = (dt_obj.weekday() == 6)
             h_obj = holiday_map.get(d_str)
             is_holiday = (h_obj is not None)
-            is_today = (dt_obj == now.date())
+            is_today = (dt_obj == today_date)
 
             days_meta.append({
                 "day": d,
@@ -58,43 +60,71 @@ class ReportService:
             })
 
         # 3. Fetch active employees (or filtered by site)
-        all_employees = db.get_all_employees()
+        # Exclude administrative accounts from field attendance muster roll register
+        all_employees = [
+            e for e in db.get_all_employees()
+            if (e.get("status") or "").lower() != "deleted"
+            and (e.get("role") or "").lower() != "admin"
+            and not str(e.get("_id") or "").startswith("emp_admin")
+        ]
+
         if site_id and site_id != "all":
             site_obj = db.get_site(site_id)
             site_name = (site_obj.get("name", "") if site_obj else "").lower()
             filtered_emps = []
             for e in all_employees:
-                assigned_ids = e.get("assignedSiteIds", [])
-                primary_id = e.get("assignedSiteId", "")
+                assigned_ids = [str(x) for x in (e.get("assignedSiteIds") or [])]
+                primary_id = str(e.get("assignedSiteId") or "")
                 div = (e.get("division") or "").lower()
                 cir = (e.get("circle") or "").lower()
-                if site_id in assigned_ids or primary_id == site_id or (site_name and (site_name in div or site_name in cir)):
+                if (
+                    str(site_id) in assigned_ids
+                    or primary_id == str(site_id)
+                    or (site_name and (site_name in div or site_name in cir))
+                ):
                     filtered_emps.append(e)
-            if filtered_emps:
-                all_employees = filtered_emps
+            all_employees = filtered_emps
 
-        # Ensure employees are sorted by employeeId
-        all_employees.sort(key=lambda x: str(x.get("employeeId") or x.get("_id") or ""))
+        # Ensure employees are sorted by employeeId or name
+        all_employees.sort(key=lambda x: str(x.get("employeeId") or x.get("name") or x.get("_id") or ""))
 
-        # 4. Fetch all attendance records for this month/year
+        # 4. Fetch all attendance records for this month/year in a single batch
+        all_att_list = db.get_attendance_history(month=month, year=year)
+        att_by_id: Dict[str, List[dict]] = {}
+        for att in all_att_list:
+            if not isinstance(att, dict):
+                continue
+            for k in ["employeeId", "technicianCode", "userId"]:
+                val = str(att.get(k) or "").lower().strip()
+                if val:
+                    att_by_id.setdefault(val, []).append(att)
+
         records = []
         sr = 1
 
         for emp in all_employees:
-            emp_id = emp.get("_id") or emp.get("id")
+            emp_id = emp.get("_id") or emp.get("id") or ""
             emp_code = emp.get("employeeId") or emp.get("code") or f"b4S/Adani/{sr:02d}"
             emp_name = emp.get("name", "Field Technician")
             designation = emp.get("designation", "Junior Engineer")
             circle = emp.get("circle") or ""
             division = emp.get("division") or ""
 
-            # Query employee attendance records for this month
-            emp_att_list = db.get_attendance_history(emp_id, month=month, year=year)
+            # Resolve all matching records for this employee
+            emp_keys = set()
+            for k in ["_id", "id", "employeeId", "code", "phone"]:
+                val = str(emp.get(k) or "").lower().strip()
+                if val:
+                    emp_keys.add(val)
+
             emp_att_map: Dict[str, dict] = {}
-            for att in emp_att_list:
-                d_val = str(att.get("date") or "")
-                if d_val:
-                    emp_att_map[d_val] = att
+            for key in emp_keys:
+                for att in att_by_id.get(key, []):
+                    d_val = str(att.get("date") or "")
+                    if d_val:
+                        existing = emp_att_map.get(d_val)
+                        if not existing or (att.get("checkIn") and not existing.get("checkIn")):
+                            emp_att_map[d_val] = att
 
             # Determine status strictly as P, A, WO, PH for each day 1..days_in_month
             days_status: Dict[int, str] = {}
@@ -147,7 +177,7 @@ class ReportService:
                         wo_count += 1
                     # Condition 4: Regular Working Day (Absent vs Future)
                     else:
-                        if dt_obj <= now.date():
+                        if dt_obj <= today_date:
                             status_code = "A"
                             a_count += 1
                         else:
@@ -633,25 +663,46 @@ class ReportService:
         title_font = Font(name="Calibri", size=15, bold=True, color="0F172A")
 
         ws.cell(row=1, column=1, value="b4S SOLUTIONS - SHIFT ACTIVITY AUDIT LOGS").font = title_font
-        ws.cell(row=2, column=1, value=f"Generated on {datetime.now().strftime('%d %B %Y, %I:%M %p')}")
+        now_ist = get_now_ist()
+        ws.cell(row=2, column=1, value=f"Generated on {now_ist.strftime('%d %B %Y, %I:%M %p IST')}")
 
-        headers = ["Log ID", "Employee", "Code", "Site / Substation", "Date", "Check-In", "Check-Out", "Duration", "Status", "Distance"]
+        headers = ["Log ID", "Employee", "Code", "Site / Substation", "Date", "Check-In", "Check-Out", "Duration", "Status", "Distance", "Verification"]
         for col_idx, h in enumerate(headers, 1):
             c = ws.cell(row=4, column=col_idx, value=h)
             c.fill = header_fill
             c.font = header_font
 
         # Write recent logs
-        logs = list(db.attendance.values())
+        raw_logs = list(db.attendance.values())
+
+        if site_id and site_id != "all":
+            raw_logs = [l for l in raw_logs if str(l.get("siteId") or "") == str(site_id)]
+
+        if status_filter and status_filter != "all":
+            sf = str(status_filter).strip().lower().replace("-", "_")
+            raw_logs = [l for l in raw_logs if str(l.get("status") or "").strip().lower().replace("-", "_") == sf]
+
+        # Sort logs by date descending, then checkIn time descending
+        def get_log_sort_key(l):
+            d = str(l.get("date") or "")
+            ci_t = str((l.get("checkIn") or {}).get("time") or "")
+            return (d, ci_t)
+        raw_logs.sort(key=get_log_sort_key, reverse=True)
+
         row = 5
-        for l in logs:
-            emp = db.get_user_by_id(l.get("employeeId", ""))
+        for l in raw_logs:
+            emp_key = str(l.get("employeeId") or "")
+            emp = db.get_user_by_id(emp_key) if emp_key else None
+            emp_name = emp.get("name") if emp else (l.get("employeeName") or l.get("technicianName") or "Technician")
+            emp_code = emp.get("employeeId") if emp else (l.get("technicianCode") or "")
+            site_name = l.get("siteName") or "Site"
+
             c_in = (l.get("checkIn") or {}).get("timeIST") or "--:--"
             c_out = (l.get("checkOut") or {}).get("timeIST") or "--:--"
             ws.cell(row=row, column=1, value=str(l.get("_id", "")))
-            ws.cell(row=row, column=2, value=emp.get("name", "Technician") if emp else "Technician")
-            ws.cell(row=row, column=3, value=emp.get("employeeId", "") if emp else "")
-            ws.cell(row=row, column=4, value=l.get("siteName", "Substation"))
+            ws.cell(row=row, column=2, value=emp_name)
+            ws.cell(row=row, column=3, value=emp_code)
+            ws.cell(row=row, column=4, value=site_name)
             ws.cell(row=row, column=5, value=str(l.get("date", "")))
             ws.cell(row=row, column=6, value=c_in)
             ws.cell(row=row, column=7, value=c_out)
@@ -665,6 +716,9 @@ class ReportService:
             disp_st = "HALF DAY (HD)" if is_hd_log else str(l.get("status", "P")).replace("_", " ").upper()
             ws.cell(row=row, column=9, value=disp_st)
             ws.cell(row=row, column=10, value=l.get("distanceTraveledFormatted", "0 m"))
+            dist_m = (l.get("checkIn") or {}).get("distanceMeters")
+            ver_text = f"Inside Geofence ({dist_m:.0f}m)" if (dist_m is not None and dist_m <= 500) else "Verified GPS"
+            ws.cell(row=row, column=11, value=ver_text)
             row += 1
 
         output = io.BytesIO()

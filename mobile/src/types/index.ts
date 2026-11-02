@@ -26,7 +26,7 @@ export interface User {
 }
 
 export interface ManagerInfo {
-  name: string;
+  name?: string;
   phone?: string;
   email?: string;
   designation?: string;

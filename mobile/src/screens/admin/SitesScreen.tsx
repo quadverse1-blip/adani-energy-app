@@ -60,8 +60,6 @@ const QUICK_PINS = [
     address: 'Ring Road, Textile Market Hub, Surat, Gujarat 395002',
     latitude: 21.1926,
     longitude: 72.7997,
-    managerName: 'Dhaval Patel',
-    workingHours: '09:00 AM - 06:00 PM',
   },
   {
     name: 'Pune Phase 1',
@@ -69,8 +67,6 @@ const QUICK_PINS = [
     address: 'Hinjawadi Phase 1, Near Tata T-Hub, Pune, Maharashtra 411057',
     latitude: 18.5913,
     longitude: 73.7389,
-    managerName: 'Sunil Shinde',
-    workingHours: '09:00 AM - 06:00 PM',
   },
   {
     name: 'BKC Smart Grid',
@@ -78,8 +74,6 @@ const QUICK_PINS = [
     address: 'Bandra Kurla Complex, G Block, Mumbai, Maharashtra 400051',
     latitude: 19.0657,
     longitude: 72.8679,
-    managerName: 'Anand Rao',
-    workingHours: '09:00 AM - 06:00 PM',
   },
   {
     name: 'Ahmedabad Solar',
@@ -87,8 +81,6 @@ const QUICK_PINS = [
     address: 'Adani Shantigram, SG Highway, Ahmedabad, Gujarat 382421',
     latitude: 23.0225,
     longitude: 72.5714,
-    managerName: 'Kirit Patel',
-    workingHours: '09:00 AM - 06:00 PM',
   },
   {
     name: 'Mundra Energy Port',
@@ -96,8 +88,6 @@ const QUICK_PINS = [
     address: 'APSEZ Mundra Port Zone, Kutch, Gujarat 370421',
     latitude: 22.7533,
     longitude: 69.7042,
-    managerName: 'Hitesh Sharma',
-    workingHours: '09:00 AM - 06:00 PM',
   },
   {
     name: 'Bengaluru Tech Grid',
@@ -105,8 +95,6 @@ const QUICK_PINS = [
     address: 'Electronic City Phase 1, Bengaluru, Karnataka 560100',
     latitude: 12.8452,
     longitude: 77.6602,
-    managerName: 'Suresh Gowda',
-    workingHours: '09:00 AM - 06:00 PM',
   },
 ];
 
@@ -190,9 +178,9 @@ export const SitesScreen: React.FC = () => {
     setLongitude('72.7997');
     setRadiusMeters('500');
     setManagerName('');
-    setManagerPhone('+91 98250 00000');
-    setManagerEmail('manager@adani.com');
-    setWorkingHours('09:00 AM - 06:00 PM');
+    setManagerPhone('');
+    setManagerEmail('');
+    setWorkingHours('');
     setStatus('Active');
     setSearchLocation('');
     setSuggestions([]);
@@ -219,7 +207,7 @@ export const SitesScreen: React.FC = () => {
     setManagerName(site.manager?.name || '');
     setManagerPhone(site.manager?.phone || '');
     setManagerEmail(site.manager?.email || '');
-    setWorkingHours(site.workingHours || '09:00 AM - 06:00 PM');
+    setWorkingHours(site.workingHours || '');
     setStatus(site.status === 'inactive' ? 'Inactive' : 'Active');
     setSearchLocation(site.name || site.address || '');
     setSuggestions([]);
@@ -301,7 +289,6 @@ export const SitesScreen: React.FC = () => {
     setAddress(pin.address);
     setLatitude(pin.latitude.toFixed(6));
     setLongitude(pin.longitude.toFixed(6));
-    setManagerName(pin.managerName);
     setSearchLocation(pin.name);
     setShowSuggestions(false);
 
@@ -568,7 +555,7 @@ export const SitesScreen: React.FC = () => {
 
     setSaving(true);
     try {
-      const hasManager = managerName.trim().length > 0;
+      const hasManager = managerName.trim().length > 0 || managerPhone.trim().length > 0;
       const sitePayload = {
         name: name.trim(),
         code: code.trim().toUpperCase(),
@@ -578,9 +565,8 @@ export const SitesScreen: React.FC = () => {
         radiusMeters: rad,
         voltageClass: editingSite?.voltageClass || undefined,
         manager: hasManager ? {
-          name: managerName.trim(),
+          name: managerName.trim() || undefined,
           phone: managerPhone.trim() || undefined,
-          email: managerEmail.trim() || undefined,
           designation: 'Site Manager',
         } : undefined,
         workingHours: workingHours.trim() || undefined,
@@ -597,14 +583,14 @@ export const SitesScreen: React.FC = () => {
       setShowModal(false);
       fetchSites();
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to save substation record.');
+      Alert.alert('Error', err.message || 'Failed to save site record.');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (site: Substation) => {
-    Alert.alert('Delete Substation', `Permanently delete ${site.name}?`, [
+    Alert.alert('Delete Site', `Permanently delete ${site.name}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -646,7 +632,7 @@ export const SitesScreen: React.FC = () => {
         </TouchableOpacity>
 
         <View style={{ flex: 1, marginHorizontal: 10 }}>
-          <Text style={styles.headerTitle}>Substation Management</Text>
+          <Text style={styles.headerTitle}>Site Management</Text>
         </View>
 
         <TouchableOpacity delayPressIn={0} style={styles.addBtn} onPress={handleOpenAdd} activeOpacity={0.8}>
@@ -716,16 +702,23 @@ export const SitesScreen: React.FC = () => {
                 <User size={14} color="#64748B" style={{ marginRight: 6 }} />
                 <Text style={styles.infoLabel}>Manager: </Text>
                 <Text style={styles.infoVal}>
-                  {item.manager?.name || 'Dhaval Patel'}
+                  {item.manager?.name || (item.manager?.phone ? item.manager.phone : 'Not Assigned')}
                 </Text>
               </View>
+              {item.manager?.phone && item.manager?.name ? (
+                <View style={styles.infoRow}>
+                  <Phone size={14} color="#64748B" style={{ marginRight: 6 }} />
+                  <Text style={styles.infoLabel}>Contact: </Text>
+                  <Text style={styles.infoVal}>{item.manager.phone}</Text>
+                </View>
+              ) : null}
 
               {/* Working Hours */}
               <View style={styles.infoRow}>
                 <Clock size={14} color="#64748B" style={{ marginRight: 6 }} />
                 <Text style={styles.infoLabel}>Hours: </Text>
                 <Text style={styles.infoVal}>
-                  {item.workingHours || '09:00 AM - 06:00 PM'}
+                  {item.workingHours || 'Standard Shift'}
                 </Text>
               </View>
 
@@ -1070,13 +1063,13 @@ export const SitesScreen: React.FC = () => {
                 </View>
               </View>
 
-              {/* Row 3: Site Manager & Working Hours */}
+              {/* Row 3: Site Manager & Manager Phone */}
               <View style={styles.formRow}>
                 <View style={styles.colHalf}>
-                  <Text style={styles.fieldLabel}>Site Manager</Text>
+                  <Text style={styles.fieldLabel}>Manager / In-Charge Name</Text>
                   <TextInput
                     style={styles.inputBox}
-                    placeholder="Dhaval Patel"
+                    placeholder="Enter manager name"
                     placeholderTextColor="#94A3B8"
                     value={managerName}
                     onChangeText={setManagerName}
@@ -1084,18 +1077,19 @@ export const SitesScreen: React.FC = () => {
                 </View>
 
                 <View style={styles.colHalf}>
-                  <Text style={styles.fieldLabel}>Working Hours</Text>
+                  <Text style={styles.fieldLabel}>Manager Phone Number</Text>
                   <TextInput
                     style={styles.inputBox}
-                    placeholder="09:00 AM - 06:00 PM"
+                    placeholder="Enter phone number"
                     placeholderTextColor="#94A3B8"
-                    value={workingHours}
-                    onChangeText={setWorkingHours}
+                    value={managerPhone}
+                    onChangeText={setManagerPhone}
+                    keyboardType="phone-pad"
                   />
                 </View>
               </View>
 
-              {/* Row 4: Attendance Radius & Status Picker */}
+              {/* Row 4: Attendance Radius & Working Hours */}
               <View style={styles.formRow}>
                 <View style={styles.colHalf}>
                   <Text style={styles.fieldLabel}>Attendance Radius (meters)</Text>
@@ -1109,6 +1103,20 @@ export const SitesScreen: React.FC = () => {
                   />
                 </View>
 
+                <View style={styles.colHalf}>
+                  <Text style={styles.fieldLabel}>Working Hours</Text>
+                  <TextInput
+                    style={styles.inputBox}
+                    placeholder="e.g. 09:00 AM - 06:00 PM"
+                    placeholderTextColor="#94A3B8"
+                    value={workingHours}
+                    onChangeText={setWorkingHours}
+                  />
+                </View>
+              </View>
+
+              {/* Row 5: Status */}
+              <View style={styles.formRow}>
                 <View style={styles.colHalf}>
                   <Text style={styles.fieldLabel}>Status</Text>
                   <TouchableOpacity delayPressIn={0}
