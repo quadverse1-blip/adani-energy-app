@@ -338,10 +338,14 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
     if (cameraRef.current) {
       try {
         const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.8,
-          skipProcessing: true,
+          quality: 0.7,
+          skipProcessing: false,
+          base64: true,
         });
-        setCapturedPhotoUri(photo.uri);
+        const photoData = photo.base64
+          ? (photo.base64.startsWith('data:') ? photo.base64 : `data:image/jpeg;base64,${photo.base64}`)
+          : photo.uri;
+        setCapturedPhotoUri(photoData);
         triggerHaptic('success');
       } catch (e: any) {
         Alert.alert('Camera Error', e.message || 'Failed to capture photo. Please try again.');

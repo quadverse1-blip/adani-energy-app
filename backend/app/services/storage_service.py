@@ -34,77 +34,123 @@ class StorageService:
         self.last_cleanup_date: Optional[str] = None
         self._cleanup_lock = threading.Lock()
 
-    async def save_file(self, file: UploadFile, subfolder: str = "selfie") -> str:
+    def process_and_save_photo(
+        self,
+        content: bytes,
+        filename: Optional[str] = None,
+        subfolder: str = "selfie"
+    ) -> Dict[str, Any]:
         """
-        Saves check-in / verification photo directly to gs://adani-energy-2f5e0.firebasestorage.app.
+        Processes photo using PIL:
+        1. Auto-orients based on EXIF.
+        2. Converts RGBA/P to RGB.
+        3. Resizes to max 800x800 preserving aspect ratio.
+        4. Compresses as optimized JPEG (quality=75, ~30-45 KB).
+        5. Saves to disk in settings.UPLOAD_DIR (/uploads/<filename>).
+        6. Generates self-contained Base64 data URI (data:image/jpeg;base64,...) for direct
+           display in Firestore database console and mobile application with zero 403/permission issues.
+        7. Attempts Firebase Storage upload if credentials exist.
         """
-        content = await file.read()
-        if len(content) > 10 * 1024 * 1024:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Verification photo exceeds maximum allowable size of 10 MB."
-            )
+        import io
+        import base64
+        from PIL import Image, ImageOps
 
-        ext = os.path.splitext(file.filename or "")[1] or ".jpg"
-        unique_name = f"{subfolder}_{uuid.uuid4().hex[:12]}{ext}"
-        object_path = f"{subfolder}/{unique_name}"
-        content_type = file.content_type or "image/jpeg"
+        if not filename:
+            unique_id = uuid.uuid4().hex[:12]
+            filename = f"{subfolder}_{unique_id}.jpg"
+        elif not filename.lower().endswith(".jpg") and not filename.lower().endswith(".jpeg"):
+            filename = f"{os.path.splitext(filename)[0]}.jpg"
 
-        # -----------------------------------------------------------------
-        # 1. Primary: Upload to Firebase Cloud Storage (Admin SDK)
-        # -----------------------------------------------------------------
+        # 1. Open and optimize with Pillow
         try:
-            import firebase_admin
+            img = Image.open(io.BytesIO(content))
+            img = ImageOps.exif_transpose(img)
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            
+            # Resize if dimensions exceed 800px
+            max_dim = 800
+            if img.width > max_dim or img.height > max_dim:
+                img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=75, optimize=True)
+            compressed_bytes = buf.getvalue()
+        except Exception as pil_err:
+            logger.warning(f"PIL image processing fallback: {pil_err}")
+            compressed_bytes = content
+
+        # 2. Save compressed file to UPLOAD_DIR
+        local_path = os.path.join(self.upload_dir, filename)
+        try:
+            with open(local_path, "wb") as f:
+                f.write(compressed_bytes)
+        except Exception as write_err:
+            logger.warning(f"Failed to write photo locally to {local_path}: {write_err}")
+
+        # 3. Create Base64 data URI (self-contained, works everywhere)
+        b64_str = base64.b64encode(compressed_bytes).decode("utf-8")
+        data_uri = f"data:image/jpeg;base64,{b64_str}"
+
+        # 4. Attempt Firebase Admin SDK upload if configured
+        object_path = f"{subfolder}/{filename}"
+        firebase_url = None
+        try:
             from firebase_admin import storage
             bucket_obj = storage.bucket(self.bucket_name)
             blob = bucket_obj.blob(object_path)
-            blob.upload_from_string(content, content_type=content_type)
+            blob.upload_from_string(compressed_bytes, content_type="image/jpeg")
             try:
                 blob.make_public()
                 firebase_url = blob.public_url
             except Exception:
                 firebase_url = f"https://firebasestorage.googleapis.com/v0/b/{self.bucket_name}/o/{urllib.parse.quote(object_path, safe='')}?alt=media"
-            
-            logger.info(f"[Firebase Storage] Photo uploaded via Admin SDK to {self.gs_bucket_uri}/{object_path}")
-            return firebase_url
-        except Exception as admin_err:
-            logger.debug(f"Firebase Admin SDK upload notice: {admin_err}")
-
-        # -----------------------------------------------------------------
-        # 2. REST API: Upload to Firebase Cloud Storage directly
-        # -----------------------------------------------------------------
-        try:
-            upload_url = f"https://firebasestorage.googleapis.com/v0/b/{self.bucket_name}/o?uploadType=media&name={urllib.parse.quote(object_path, safe='')}"
-            if settings.FIREBASE_API_KEY:
-                upload_url += f"&key={settings.FIREBASE_API_KEY}"
-
-            headers = {"Content-Type": content_type}
-            resp = requests.post(upload_url, data=content, headers=headers, timeout=10)
-            if resp.status_code in [200, 201]:
-                data = resp.json()
-                download_token = data.get("downloadTokens")
-                token_param = f"&token={download_token}" if download_token else ""
-                firebase_url = f"https://firebasestorage.googleapis.com/v0/b/{self.bucket_name}/o/{urllib.parse.quote(object_path, safe='')}?alt=media{token_param}"
-                logger.info(f"[Firebase Storage] Photo uploaded via REST to {self.gs_bucket_uri}/{object_path}")
-                return firebase_url
-            else:
-                logger.warning(f"Firebase Storage REST returned {resp.status_code}: {resp.text[:200]}")
-        except Exception as rest_err:
-            logger.warning(f"Firebase Storage REST upload notice: {rest_err}")
-
-        # -----------------------------------------------------------------
-        # 3. Local Temporary Buffer (always generates standard Firebase Storage URL)
-        # -----------------------------------------------------------------
-        try:
-            local_path = os.path.join(self.upload_dir, unique_name)
-            with open(local_path, "wb") as f:
-                f.write(content)
         except Exception:
             pass
 
-        # Return standardized Firebase Storage public URL
-        standard_firebase_url = f"https://firebasestorage.googleapis.com/v0/b/{self.bucket_name}/o/{urllib.parse.quote(object_path, safe='')}?alt=media"
-        return standard_firebase_url
+        return {
+            "photoUrl": data_uri,
+            "photoPath": f"/uploads/{filename}",
+            "filename": filename,
+            "firebaseUrl": firebase_url,
+            "sizeBytes": len(compressed_bytes)
+        }
+
+    def save_base64_photo(self, b64_input: str, subfolder: str = "selfie") -> Dict[str, Any]:
+        """
+        Decodes a base64 string or data URI and processes it through PIL.
+        """
+        import base64
+        if not b64_input or not isinstance(b64_input, str):
+            raise HTTPException(status_code=400, detail="Invalid base64 image data")
+        
+        # Strip data URL prefix if present
+        if "," in b64_input:
+            b64_data = b64_input.split(",", 1)[1]
+        else:
+            b64_data = b64_input
+
+        try:
+            raw_bytes = base64.b64decode(b64_data)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to decode base64 image: {e}")
+
+        return self.process_and_save_photo(raw_bytes, subfolder=subfolder)
+
+    async def save_file(self, file: UploadFile, subfolder: str = "selfie") -> Dict[str, Any]:
+        """
+        Saves check-in / verification photo, optimizing with PIL and generating data URI.
+        """
+        content = await file.read()
+        if len(content) > 15 * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Verification photo exceeds maximum allowable size of 15 MB."
+            )
+
+        ext = os.path.splitext(file.filename or "")[1] or ".jpg"
+        unique_name = f"{subfolder}_{uuid.uuid4().hex[:12]}{ext}"
+        return self.process_and_save_photo(content, filename=unique_name, subfolder=subfolder)
 
     def delete_file_from_firebase(self, photo_url: str) -> bool:
         """

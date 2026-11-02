@@ -224,7 +224,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
             "siteRadius": radius,
             "outLatitude": co.get("latitude") if co else None,
             "outLongitude": co.get("longitude") if co else None,
-            "photoUrl": ci.get("photoUrl") if ci else None,
+            "photoUrl": (ci.get("photoUrl") if ci else None) or r.get("photoUrl") or None,
             "remarks": ci.get("remarks") if ci else None
         })
 

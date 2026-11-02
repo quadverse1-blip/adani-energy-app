@@ -2,7 +2,10 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Optional, List
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
+import os
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status, Request
+from fastapi.responses import FileResponse
+from app.core.config import settings
 from app.core.security import get_current_user_token, require_roles
 from app.core.database import db
 from app.services.attendance_service import attendance_service
@@ -22,11 +25,61 @@ router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
 @router.post("/upload-photo")
 async def upload_attendance_photo(
-    photo: UploadFile = File(...),
+    request: Request,
     token_data: dict = Depends(get_current_user_token)
 ):
-    url = await storage_service.save_file(photo, subfolder="selfie")
-    return {"photoUrl": url}
+    """
+    Uploads or records check-in selfie photo.
+    Supports:
+    1. application/json with { photoBase64: "data:image/jpeg;base64,..." } (Fast, avoids RN boundary bugs)
+    2. multipart/form-data with photo: UploadFile
+    Returns { photoUrl: "data:image/jpeg;base64,...", photoPath: "/uploads/selfie_xxx.jpg", filename: "selfie_xxx.jpg" }
+    """
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+        b64 = body.get("photoBase64") or body.get("photo") or body.get("photoUrl")
+        if not b64:
+            raise HTTPException(status_code=400, detail="Missing photoBase64 in request body")
+        res = storage_service.save_base64_photo(b64, subfolder="selfie")
+        return res
+    elif "multipart/form-data" in content_type:
+        try:
+            form = await request.form()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to parse multipart form: {e}")
+        file_obj = form.get("photo") or form.get("file")
+        if not file_obj or not hasattr(file_obj, "read"):
+            raise HTTPException(status_code=400, detail="Missing photo file in multipart request")
+        res = await storage_service.save_file(file_obj, subfolder="selfie")
+        return res
+    else:
+        # Fallback: check if JSON body can be read
+        try:
+            body = await request.json()
+            b64 = body.get("photoBase64") or body.get("photo") or body.get("photoUrl")
+            if b64:
+                return storage_service.save_base64_photo(b64, subfolder="selfie")
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported Content-Type. Please send application/json with 'photoBase64' or multipart/form-data with 'photo'"
+        )
+
+@router.get("/photo/{filename:path}")
+async def get_attendance_photo_file(filename: str):
+    """
+    Serves check-in photos directly from the local upload directory.
+    """
+    clean_name = os.path.basename(filename)
+    file_path = os.path.join(settings.UPLOAD_DIR, clean_name)
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type="image/jpeg")
+    raise HTTPException(status_code=404, detail="Photo file not found")
 
 @router.post("/cleanup-photos")
 async def trigger_photos_cleanup(
@@ -237,13 +290,23 @@ async def get_attendance_history(
 
 @router.get("/admin/all-logs")
 async def get_all_attendance_logs(
-    month: Optional[int] = 10,
-    year: Optional[int] = 2026,
+    month: Optional[int] = None,
+    year: Optional[int] = None,
     period: Optional[str] = "monthly",
     employeeId: Optional[str] = None,
     token_data: dict = Depends(get_current_user_token)
 ):
     try:
+        now_dt = datetime.utcnow()
+        if str(period).lower() == "monthly":
+            if month is None:
+                month = now_dt.month
+            if year is None:
+                year = now_dt.year
+        elif str(period).lower() == "all":
+            month = None
+            year = None
+
         all_records = list(db.attendance.values())
         
         # Filter by employee if requested or if caller is a supervisor querying own records

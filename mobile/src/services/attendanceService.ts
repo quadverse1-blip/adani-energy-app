@@ -36,10 +36,22 @@ export interface HistoryResult {
 
 export const attendanceService = {
   async uploadPhoto(photoUri: string): Promise<string> {
+    if (!photoUri) {
+      throw new Error('Photo URI is required');
+    }
+
+    // 1. If it's already a Base64 data URI, send via fast JSON payload
+    if (photoUri.startsWith('data:')) {
+      const response = await apiClient.post<{ photoUrl: string; photoPath?: string }>('/attendance/upload-photo', {
+        photoBase64: photoUri,
+      });
+      return response.data.photoUrl || photoUri;
+    }
+
+    // 2. If it's a file URI, upload via FormData (do NOT set explicit Content-Type header so Axios calculates boundary)
     const formData = new FormData();
-    const filename = photoUri.split('/').pop() || 'selfie.jpg';
+    const filename = photoUri.split('/').pop() || `selfie_${Date.now()}.jpg`;
     
-    // Append file according to React Native FormData convention
     // @ts-ignore
     formData.append('photo', {
       uri: photoUri,
@@ -47,12 +59,8 @@ export const attendanceService = {
       type: 'image/jpeg',
     });
 
-    const response = await apiClient.post<{ photoUrl: string }>('/attendance/upload-photo', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data.photoUrl;
+    const response = await apiClient.post<{ photoUrl: string; photoPath?: string }>('/attendance/upload-photo', formData);
+    return response.data.photoUrl || photoUri;
   },
 
   async checkIn(payload: CheckInPayload): Promise<AttendanceRecord> {
