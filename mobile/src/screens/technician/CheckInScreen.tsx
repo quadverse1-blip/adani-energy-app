@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import {
@@ -52,7 +53,7 @@ import { getShiftInfo, formatTimeIST } from '../../utils/shiftUtils';
 const { width } = Dimensions.get('window');
 const isTablet = width >= 800;
 
-export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const { todayStatus, todayRecord, fetchTodayAttendance } = useAttendanceStore();
@@ -83,35 +84,13 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
   const [sites, setSites] = useState<Substation[]>([]);
   const [selectedSite, setSelectedSite] = useState<Substation | null>(null);
 
-  // Filtered sites: when checked in, only show the site where user checked in
+  // Always show all assigned sites to the employee
   const checkedInSiteName = todayRecord?.siteName || (todayRecord?.checkIn as any)?.siteName || selectedSite?.name;
   const checkedInSiteId = todayRecord?.siteId;
 
   const displayedSites = useMemo(() => {
-    if (isAlreadyCheckedIn && sites.length > 0) {
-      const match = sites.filter(s =>
-        (checkedInSiteId && s.id === checkedInSiteId) ||
-        (checkedInSiteName && s.name.toLowerCase() === checkedInSiteName.toLowerCase()) ||
-        (selectedSite && s.id === selectedSite.id)
-      );
-      if (match.length > 0) return match;
-      if (selectedSite) return [selectedSite];
-      return [sites[0]];
-    }
     return sites;
-  }, [isAlreadyCheckedIn, sites, checkedInSiteId, checkedInSiteName, selectedSite]);
-
-  useEffect(() => {
-    if (isAlreadyCheckedIn && sites.length > 0) {
-      const match = sites.find(s =>
-        (checkedInSiteId && s.id === checkedInSiteId) ||
-        (checkedInSiteName && s.name.toLowerCase() === checkedInSiteName.toLowerCase())
-      );
-      if (match && selectedSite?.id !== match.id) {
-        setSelectedSite(match);
-      }
-    }
-  }, [isAlreadyCheckedIn, sites, checkedInSiteId, checkedInSiteName]);
+  }, [sites]);
 
   // GPS State (Defaults to St. Joseph's University device coordinates: 12.962506, 77.593736)
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -129,25 +108,47 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
   const cameraRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
 
-  // 1. Load Substations assigned strictly to this employee (Backend enforces role-based assignment)
-  useEffect(() => {
-    (async () => {
-      try {
-        const fetchedSites = await siteService.getSites();
-        setSites(fetchedSites);
-        if (fetchedSites.length > 0) {
-          const matchPrimary = user?.assignedSiteId
-            ? fetchedSites.find((s) => s.id === user.assignedSiteId)
-            : null;
-          setSelectedSite(matchPrimary || fetchedSites[0]);
-        } else {
-          setSelectedSite(null);
+  // 1. Load All Substations assigned to this employee (dynamic refresh on focus)
+  const loadSubstations = useCallback(async () => {
+    try {
+      await fetchTodayAttendance();
+      const freshUser = await useAuthStore.getState().refreshProfile();
+      let fetchedSites = await siteService.getSites();
+      if (!fetchedSites || fetchedSites.length === 0) {
+        const storeSites = useAttendanceStore.getState().assignedSites;
+        if (storeSites && storeSites.length > 0) {
+          fetchedSites = storeSites;
         }
-      } catch (e) {
-        console.warn('Failed to load substations:', e);
       }
-    })();
-  }, [user]);
+      setSites(fetchedSites);
+
+      const targetId = route?.params?.targetSiteId;
+      const primaryId = targetId || freshUser?.assignedSiteId || user?.assignedSiteId;
+      if (fetchedSites.length > 0) {
+        setSelectedSite((prev) => {
+          if (targetId) {
+            const matchTarget = fetchedSites.find((s) => s.id === targetId);
+            if (matchTarget) return matchTarget;
+          }
+          if (prev && fetchedSites.some((s) => s.id === prev.id)) {
+            return fetchedSites.find((s) => s.id === prev.id) || prev;
+          }
+          const matchPrimary = primaryId ? fetchedSites.find((s) => s.id === primaryId) : null;
+          return matchPrimary || fetchedSites[0];
+        });
+      } else {
+        setSelectedSite(null);
+      }
+    } catch (e) {
+      console.warn('Failed to load substations:', e);
+    }
+  }, [route?.params?.targetSiteId, user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSubstations();
+    }, [loadSubstations])
+  );
 
   // 2. Fetch Live GPS Telemetry
   const obtainGps = async () => {
@@ -383,7 +384,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
       {/* Top Header Bar */}
       <View style={[styles.topHeaderBar, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
         <View style={styles.headerLeftWrap}>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.backBtn}
             onPress={() => navigation.goBack()}
             activeOpacity={0.7}
@@ -439,9 +440,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
               <Building2 size={18} color="#FFFFFF" />
             </View>
             <Text style={styles.substationSelectorTitle}>
-              {isAlreadyCheckedIn
-                ? `Checked-In Site: ${displayedSites[0]?.name || checkedInSiteName || 'Active Site'}`
-                : `Assigned Substations (${sites.length})`}
+              {`Assigned Substations (${sites.length})`}
             </Text>
             <View style={[styles.selectPunchPill, isAlreadyCheckedIn && { backgroundColor: '#DCFCE7' }]}>
               <Text style={[styles.selectPunchPillText, isAlreadyCheckedIn && { color: '#15803D' }]}>
@@ -468,19 +467,17 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
               const chipInside = dist <= (site.radiusMeters || 500);
 
               return (
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   key={site.id}
                   style={[
                     styles.substationChip,
                     isSelected && styles.substationChipActive,
                   ]}
                   onPress={() => {
-                    if (!isAlreadyCheckedIn) {
-                      setSelectedSite(site);
-                      triggerHaptic('light');
-                    }
+                    setSelectedSite(site);
+                    triggerHaptic('light');
                   }}
-                  activeOpacity={isAlreadyCheckedIn ? 1 : 0.8}
+                  activeOpacity={0.8}
                 >
                   <View
                     style={[
@@ -548,7 +545,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                   <Text style={styles.realDeviceBadgeText}>Real Device GPS</Text>
                 </View>
 
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.refreshGpsBtn}
                   onPress={obtainGps}
                   disabled={gpsLoading}
@@ -659,14 +656,14 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
 
               {/* Zoom Controls */}
               <View style={styles.mapZoomControls}>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.zoomBtn}
                   onPress={() => handleZoom(true)}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.zoomBtnText}>+</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.zoomBtn}
                   onPress={() => handleZoom(false)}
                   activeOpacity={0.8}
@@ -843,7 +840,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                     {todayRecord?.siteName || (todayRecord?.checkIn as any)?.siteName || selectedSite?.name}
                   </Text>. Re-check in is disabled for this shift.
                 </Text>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.lockedCheckInBtn}
                   onPress={() =>
                     Alert.alert(
@@ -861,7 +858,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
               </View>
             ) : !isInside ? (
               /* LOCKED BUTTON */
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.lockedCheckInBtn}
                 onPress={handleOpenCheckIn}
                 activeOpacity={0.7}
@@ -873,7 +870,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
               </TouchableOpacity>
             ) : (
               /* UNLOCKED & ACTIVE BUTTON (PHOTO COMPULSORY) */
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.activeCheckInBtn}
                 onPress={handleOpenCheckIn}
                 activeOpacity={0.85}
@@ -960,7 +957,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                           <Phone size={13} color="#4338CA" />
                           <Text style={styles.managerContactVal}>{String(selectedSite!.manager.phone)}</Text>
                         </View>
-                        <TouchableOpacity
+                        <TouchableOpacity delayPressIn={0}
                           style={styles.managerActionBtn}
                           onPress={() => {
                             if (selectedSite?.manager?.phone) {
@@ -984,7 +981,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                             {String(selectedSite!.manager.email)}
                           </Text>
                         </View>
-                        <TouchableOpacity
+                        <TouchableOpacity delayPressIn={0}
                           style={[styles.managerActionBtn, styles.managerActionBtnSecondary]}
                           onPress={() => {
                             if (selectedSite?.manager?.email) {
@@ -1038,7 +1035,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
               <Text style={styles.permSub}>
                 Camera access is required to take a live check-in photo of the substation, equipment, or technician before recording attendance.
               </Text>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.grantBtn}
                 onPress={requestCameraPermission}
                 activeOpacity={0.85}
@@ -1046,7 +1043,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                 <CameraIcon size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
                 <Text style={styles.grantBtnText}>Grant Camera Access</Text>
               </TouchableOpacity>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.cancelPermBtn}
                 onPress={() => setShowCameraModal(false)}
                 activeOpacity={0.7}
@@ -1074,7 +1071,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                         {selectedSite?.name} • Live Camera Only
                       </Text>
                     </View>
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.cameraCloseBtn}
                       onPress={() => {
                         setShowCameraModal(false);
@@ -1099,7 +1096,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                 {/* Bottom Controls Bar */}
                 <View style={[styles.cameraBottomBar, { paddingBottom: Math.max(insets.bottom, 20) + 16 }]}>
                   {/* Flip Camera */}
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.cameraSideBtn}
                     onPress={() => setCameraFacing((prev) => (prev === 'front' ? 'back' : 'front'))}
                     activeOpacity={0.75}
@@ -1109,7 +1106,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                   </TouchableOpacity>
 
                   {/* Main Shutter Button */}
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.shutterRingBtn}
                     onPress={handleCapturePhoto}
                     activeOpacity={0.8}
@@ -1120,7 +1117,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                   </TouchableOpacity>
 
                   {/* Cancel Button */}
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.cameraSideBtn}
                     onPress={() => {
                       setShowCameraModal(false);
@@ -1144,7 +1141,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                     Photo will be attached to your shift check-in and viewable by Admin
                   </Text>
                 </View>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.previewCloseBtn}
                   onPress={() => {
                     if (!isSubmitting) {
@@ -1193,7 +1190,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
 
               {/* Action Buttons */}
               <View style={styles.previewActionCol}>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[styles.submitPhotoBtn, isSubmitting && { opacity: 0.8 }]}
                   onPress={handleSubmitCheckIn}
                   disabled={isSubmitting}
@@ -1212,7 +1209,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                   )}
                 </TouchableOpacity>
 
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.retakePhotoBtn}
                   onPress={() => setCapturedPhotoUri(null)}
                   disabled={isSubmitting}
@@ -1222,7 +1219,7 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                   <Text style={styles.retakePhotoBtnText}>Retake Photo</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.cancelCheckInBtn}
                   onPress={() => {
                     if (!isSubmitting) {
@@ -1369,6 +1366,18 @@ const styles = StyleSheet.create({
   chipsScroll: {
     gap: 10,
     paddingVertical: 2,
+  },
+  checkedInSiteBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    marginLeft: 4,
+  },
+  checkedInSiteBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#15803D',
   },
   substationChip: {
     flexDirection: 'row',

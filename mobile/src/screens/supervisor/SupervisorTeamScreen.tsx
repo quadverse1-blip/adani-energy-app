@@ -95,7 +95,7 @@ export const SupervisorTeamScreen: React.FC = () => {
         }
       >
         <View style={styles.header}>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.menuBtn}
             onPress={() => openDrawer('SupervisorTeam')}
             activeOpacity={0.7}
@@ -106,7 +106,7 @@ export const SupervisorTeamScreen: React.FC = () => {
             <Text style={styles.headerSub}>ZONAL SUPERVISOR DESK</Text>
             <Text style={styles.headerTitle}>Team & Shift Authorization</Text>
           </View>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.manageSitesBtn}
             onPress={() => navigation.navigate('Sites')}
             activeOpacity={0.7}

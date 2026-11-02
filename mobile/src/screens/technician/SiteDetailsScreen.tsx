@@ -427,7 +427,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
       {/* Top Navigation Bar */}
       <View style={styles.topNavHeader}>
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.navHeaderBtn}
           onPress={() => openDrawer('SiteDetails')}
           activeOpacity={0.7}
@@ -435,7 +435,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
           <Menu size={20} color="#0F172A" />
         </TouchableOpacity>
         <Text style={styles.navHeaderTitle}>Substation Specifications</Text>
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.navHeaderBtn}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
@@ -460,7 +460,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
               const isSelected = site.id === sId || (site as any)._id === sId;
 
               return (
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   key={sId}
                   style={[styles.siteTabCard, isSelected && styles.siteTabCardActive]}
                   onPress={() => setActiveSiteId(sId)}

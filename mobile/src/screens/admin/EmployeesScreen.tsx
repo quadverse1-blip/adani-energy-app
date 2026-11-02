@@ -23,7 +23,20 @@ import {
   ChevronDown,
   ExternalLink,
   Menu,
+  FileSpreadsheet,
+  UploadCloud,
+  Download,
+  CheckCircle2,
+  AlertCircle,
+  ShieldCheck,
+  Smartphone,
+  KeyRound,
+  FileText,
+  Trash2,
 } from 'lucide-react-native';
+import { Platform, ActivityIndicator } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { BulkUploadResponse } from '../../services/employeeService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { employeeService } from '../../services/employeeService';
@@ -84,6 +97,86 @@ export const EmployeesScreen: React.FC = () => {
   );
   const [shiftStatus, setShiftStatus] = useState<string>('Present');
   const [saving, setSaving] = useState(false);
+
+  // Bulk Upload Modal State
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<{
+    uri: string;
+    name: string;
+    size?: number;
+    mimeType?: string;
+    rawFile?: any;
+  } | null>(null);
+  const [bulkDefaultSiteId, setBulkDefaultSiteId] = useState<string>('');
+  const [uploadingBulk, setUploadingBulk] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [bulkResult, setBulkResult] = useState<BulkUploadResponse | null>(null);
+
+  const handlePickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-excel',
+          'text/csv',
+          'application/csv',
+          '*/*',
+        ],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setSelectedFile({
+          uri: asset.uri,
+          name: asset.name,
+          size: asset.size,
+          mimeType: asset.mimeType,
+          rawFile: (asset as any).file,
+        });
+        setBulkResult(null);
+      }
+    } catch (err: any) {
+      Alert.alert('File Selection Failed', err.message || 'Could not select file.');
+    }
+  };
+
+  const handleUploadBulk = async () => {
+    if (!selectedFile) {
+      Alert.alert('File Required', 'Please choose an Excel or CSV file before uploading.');
+      return;
+    }
+
+    setUploadingBulk(true);
+    try {
+      const res = await employeeService.bulkUploadEmployees(
+        selectedFile,
+        bulkDefaultSiteId || undefined
+      );
+      setBulkResult(res);
+      fetchEmployees();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Failed to upload employees.';
+      Alert.alert('Upload Failed', msg);
+    } finally {
+      setUploadingBulk(false);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    setDownloadingTemplate(true);
+    try {
+      await employeeService.downloadTemplate();
+      if (Platform.OS === 'web') {
+        Alert.alert('Download Started', 'Sample template has been saved to your downloads.');
+      }
+    } catch (err: any) {
+      Alert.alert('Download Error', err.message || 'Could not download template.');
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
 
   // Dropdown Picker Modal States
   const [pickerType, setPickerType] = useState<'designation' | 'role' | 'shift' | null>(null);
@@ -318,7 +411,7 @@ export const EmployeesScreen: React.FC = () => {
         ]}
       >
         {/* 3-Line Hamburger Menu Icon Button */}
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.menuBtn}
           onPress={() => openDrawer('Employees')}
           activeOpacity={0.7}
@@ -340,16 +433,55 @@ export const EmployeesScreen: React.FC = () => {
           />
         </View>
 
+        {/* Bulk Excel Upload Button */}
+        <TouchableOpacity
+          delayPressIn={0}
+          style={styles.bulkIconBtn}
+          onPress={() => {
+            setBulkResult(null);
+            setShowBulkModal(true);
+          }}
+          activeOpacity={0.85}
+          accessibilityLabel="Bulk Upload Employees from Excel"
+        >
+          <FileSpreadsheet size={18} color="#FFFFFF" />
+        </TouchableOpacity>
+
         {/* Add Employee Button */}
-        <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd} activeOpacity={0.85}>
+        <TouchableOpacity delayPressIn={0} style={styles.addBtn} onPress={handleOpenAdd} activeOpacity={0.85}>
           <UserPlus size={18} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Bulk Excel Onboarding Quick Action Banner */}
+      <View style={styles.bulkBannerCard}>
+        <View style={styles.bulkBannerLeft}>
+          <View style={styles.bulkIconCircle}>
+            <FileSpreadsheet size={20} color="#059669" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bulkBannerHeading}>Bulk Add Employees</Text>
+            <Text style={styles.bulkBannerSubtext}>Upload Excel (.xlsx) with ID, Mobile & Password</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          delayPressIn={0}
+          style={styles.bulkUploadPillBtn}
+          onPress={() => {
+            setBulkResult(null);
+            setShowBulkModal(true);
+          }}
+          activeOpacity={0.85}
+        >
+          <UploadCloud size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
+          <Text style={styles.bulkUploadPillText}>Import Excel</Text>
         </TouchableOpacity>
       </View>
 
       {/* Filter Chips */}
       <View style={styles.filterRow}>
         {(['All', 'Technician', 'Supervisor', 'Active'] as const).map((filter) => (
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             key={filter}
             style={[styles.filterChip, activeFilter === filter && styles.filterChipActive]}
             onPress={() => setActiveFilter(filter)}
@@ -409,7 +541,7 @@ export const EmployeesScreen: React.FC = () => {
               <Text style={styles.modalTitle}>
                 {editingEmp ? `Edit: ${editingEmp.name}` : 'Add Field Employee'}
               </Text>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 onPress={() => setShowModal(false)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
@@ -474,7 +606,7 @@ export const EmployeesScreen: React.FC = () => {
               <View style={styles.formRow}>
                 <View style={styles.formCol}>
                   <Text style={styles.fieldLabel}>Designation</Text>
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.dropdownBtn}
                     onPress={() => setPickerType('designation')}
                     activeOpacity={0.8}
@@ -488,7 +620,7 @@ export const EmployeesScreen: React.FC = () => {
 
                 <View style={styles.formCol}>
                   <Text style={styles.fieldLabel}>System Role</Text>
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.dropdownBtn}
                     onPress={() => setPickerType('role')}
                     activeOpacity={0.8}
@@ -543,7 +675,7 @@ export const EmployeesScreen: React.FC = () => {
                     <View key={siteId} style={styles.selectedPill}>
                       <Building2 size={12} color="#2563EB" />
                       <Text style={styles.selectedPillText}>{s?.name || siteId}</Text>
-                      <TouchableOpacity
+                      <TouchableOpacity delayPressIn={0}
                         onPress={() => removeSiteAssignment(siteId)}
                         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                       >
@@ -559,7 +691,7 @@ export const EmployeesScreen: React.FC = () => {
                 {sites.map((site) => {
                   const isAssigned = assignedSiteIds.includes(site.id);
                   return (
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       key={site.id}
                       style={[styles.siteCard, isAssigned && styles.siteCardAssigned]}
                       onPress={() => toggleSiteAssignment(site.id)}
@@ -615,7 +747,7 @@ export const EmployeesScreen: React.FC = () => {
 
                   {/* Action Buttons: Sync Site Coords, My GPS, Map Pin */}
                   <View style={styles.coordsActionsRow}>
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.coordActionBtn}
                       onPress={handleSyncSiteCoords}
                       activeOpacity={0.7}
@@ -624,7 +756,7 @@ export const EmployeesScreen: React.FC = () => {
                       <Text style={styles.coordActionBtnText}>Sync Site Coords</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.coordActionBtn}
                       onPress={handleGetMyGPS}
                       activeOpacity={0.7}
@@ -633,7 +765,7 @@ export const EmployeesScreen: React.FC = () => {
                       <Text style={styles.coordActionBtnText}>My GPS</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.coordActionBtn}
                       onPress={handleSyncSiteCoords}
                       activeOpacity={0.7}
@@ -682,7 +814,7 @@ export const EmployeesScreen: React.FC = () => {
 
                 {/* Save Coordinates to Primary Site Button */}
                 <View style={styles.saveToSiteRow}>
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.saveToSiteBtn}
                     onPress={handleSaveCoordsToSite}
                     activeOpacity={0.8}
@@ -705,7 +837,7 @@ export const EmployeesScreen: React.FC = () => {
                     </Text>
                   </View>
 
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.viewMapsLink}
                     onPress={handleOpenGoogleMaps}
                     activeOpacity={0.7}
@@ -720,7 +852,7 @@ export const EmployeesScreen: React.FC = () => {
               {/* SECTION: Shift Status */}
               <View style={{ marginBottom: 14 }}>
                 <Text style={styles.fieldLabel}>Shift Status</Text>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.dropdownBtn}
                   onPress={() => setPickerType('shift')}
                   activeOpacity={0.8}
@@ -733,7 +865,7 @@ export const EmployeesScreen: React.FC = () => {
 
             {/* Modal Bottom Actions: Cancel & Save Changes */}
             <View style={styles.modalBottomActions}>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.cancelBtn}
                 onPress={() => setShowModal(false)}
                 activeOpacity={0.7}
@@ -741,7 +873,7 @@ export const EmployeesScreen: React.FC = () => {
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.saveBtn}
                 onPress={handleSaveEmployee}
                 disabled={saving}
@@ -760,7 +892,7 @@ export const EmployeesScreen: React.FC = () => {
       {/* QUICK PICKER POPUP MODAL (Designation, Role, Shift)          */}
       {/* ============================================================ */}
       <Modal visible={!!pickerType} transparent animationType="fade">
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.pickerBackdrop}
           activeOpacity={1}
           onPress={() => setPickerType(null)}
@@ -776,7 +908,7 @@ export const EmployeesScreen: React.FC = () => {
 
             {pickerType === 'designation' &&
               DESIGNATION_OPTIONS.map((item) => (
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   key={item}
                   style={[styles.pickerOption, designation === item && styles.pickerOptionActive]}
                   onPress={() => {
@@ -798,7 +930,7 @@ export const EmployeesScreen: React.FC = () => {
 
             {pickerType === 'role' &&
               ROLE_OPTIONS.map((item) => (
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   key={item.value}
                   style={[styles.pickerOption, role === item.value && styles.pickerOptionActive]}
                   onPress={() => {
@@ -820,7 +952,7 @@ export const EmployeesScreen: React.FC = () => {
 
             {pickerType === 'shift' &&
               SHIFT_STATUS_OPTIONS.map((item) => (
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   key={item}
                   style={[styles.pickerOption, shiftStatus === item && styles.pickerOptionActive]}
                   onPress={() => {
@@ -841,6 +973,331 @@ export const EmployeesScreen: React.FC = () => {
               ))}
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Bulk Employee Excel Import Modal */}
+      <Modal visible={showBulkModal} animationType="slide" transparent>
+        <View style={styles.bulkModalBackdrop}>
+          <View style={styles.bulkModalContainer}>
+            {/* Modal Header */}
+            <View style={styles.bulkModalHeader}>
+              <View style={{ flex: 1 }}>
+                <View style={styles.bulkModalBadge}>
+                  <Text style={styles.bulkModalBadgeText}>EXCEL BULK ONBOARDING</Text>
+                </View>
+                <Text style={styles.bulkModalTitle}>Import Employees from Excel</Text>
+                <Text style={styles.bulkModalSub}>
+                  Upload .xlsx spreadsheet with ID, Mobile & Password
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.bulkCloseBtn}
+                onPress={() => {
+                  setShowBulkModal(false);
+                  setBulkResult(null);
+                }}
+                activeOpacity={0.7}
+              >
+                <X size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.bulkModalScroll}
+              contentContainerStyle={styles.bulkModalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {bulkResult ? (
+                /* Result View */
+                <View style={styles.bulkResultBox}>
+                  <View style={styles.bulkResultBanner}>
+                    <CheckCircle2 size={32} color="#059669" style={{ marginBottom: 6 }} />
+                    <Text style={styles.bulkResultBannerTitle}>Import Complete!</Text>
+                    <Text style={styles.bulkResultBannerSub}>{bulkResult.message}</Text>
+                    
+                    <View style={styles.bulkStatsRow}>
+                      <View style={styles.bulkStatItem}>
+                        <Text style={styles.bulkStatNumber}>{bulkResult.addedCount}</Text>
+                        <Text style={styles.bulkStatLabel}>New Added</Text>
+                      </View>
+                      <View style={styles.bulkStatDivider} />
+                      <View style={styles.bulkStatItem}>
+                        <Text style={styles.bulkStatNumber}>{bulkResult.updatedCount}</Text>
+                        <Text style={styles.bulkStatLabel}>Updated</Text>
+                      </View>
+                      <View style={styles.bulkStatDivider} />
+                      <View style={styles.bulkStatItem}>
+                        <Text style={[styles.bulkStatNumber, bulkResult.errorCount > 0 && { color: '#DC2626' }]}>
+                          {bulkResult.errorCount}
+                        </Text>
+                        <Text style={styles.bulkStatLabel}>Errors</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Login Notice */}
+                  <View style={styles.loginReadyCard}>
+                    <ShieldCheck size={18} color="#059669" style={{ marginRight: 8, marginTop: 2 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.loginReadyTitle}>Ready for Field Login</Text>
+                      <Text style={styles.loginReadyText}>
+                        Imported employees can now log in using either their Mobile Number or Employee ID with their password.
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* List of processed employees */}
+                  {bulkResult.employees && bulkResult.employees.length > 0 && (
+                    <View style={styles.processedListWrap}>
+                      <Text style={styles.processedListTitle}>
+                        Processed Employees ({bulkResult.employees.length})
+                      </Text>
+                      {bulkResult.employees.map((emp) => (
+                        <View key={emp.id} style={styles.processedEmpRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.processedEmpName}>{emp.name}</Text>
+                            <Text style={styles.processedEmpDetails}>
+                              ID: {emp.employeeId} • Mobile: {emp.phone}
+                            </Text>
+                          </View>
+                          <View
+                            style={[
+                              styles.processedStatusBadge,
+                              emp.status === 'added' ? styles.statusBadgeAdded : styles.statusBadgeUpdated,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.processedStatusText,
+                                emp.status === 'added' ? styles.statusTextAdded : styles.statusTextUpdated,
+                              ]}
+                            >
+                              {emp.status === 'added' ? 'Added' : 'Updated'}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Error breakdown if any */}
+                  {bulkResult.errors && bulkResult.errors.length > 0 && (
+                    <View style={styles.errorListWrap}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <AlertCircle size={16} color="#DC2626" style={{ marginRight: 6 }} />
+                        <Text style={styles.errorListTitle}>Row Validation Errors</Text>
+                      </View>
+                      {bulkResult.errors.map((err, idx) => (
+                        <Text key={idx} style={styles.errorItemText}>• {err}</Text>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Done Button */}
+                  <TouchableOpacity
+                    style={styles.bulkDoneBtn}
+                    onPress={() => {
+                      setShowBulkModal(false);
+                      setBulkResult(null);
+                      setSelectedFile(null);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.bulkDoneBtnText}>Done & Return to Directory</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                /* Form View */
+                <View>
+                  {/* Format Information Card */}
+                  <View style={styles.formatCard}>
+                    <Text style={styles.formatCardTitle}>Required Excel Columns</Text>
+                    <Text style={styles.formatCardSub}>
+                      Your spreadsheet must include the following 3 mandatory columns in the first row:
+                    </Text>
+
+                    <View style={styles.columnsGrid}>
+                      <View style={styles.columnPill}>
+                        <Smartphone size={13} color="#0369A1" style={{ marginRight: 4 }} />
+                        <Text style={styles.columnPillText}>Employee ID</Text>
+                      </View>
+                      <View style={styles.columnPill}>
+                        <Smartphone size={13} color="#0369A1" style={{ marginRight: 4 }} />
+                        <Text style={styles.columnPillText}>Mobile Number</Text>
+                      </View>
+                      <View style={styles.columnPill}>
+                        <KeyRound size={13} color="#0369A1" style={{ marginRight: 4 }} />
+                        <Text style={styles.columnPillText}>Password</Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.optionalNote}>
+                      Optional columns: Name, Role, Designation, Assigned Sites
+                    </Text>
+
+                    <View style={styles.loginExplanationRow}>
+                      <ShieldCheck size={14} color="#059669" style={{ marginRight: 6, marginTop: 1 }} />
+                      <Text style={styles.loginExplanationText}>
+                        Employees can log in with either their Mobile Number or Employee ID using the password from this sheet.
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Template Download Card */}
+                  <View style={styles.templateCard}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.templateCardTitle}>Need Sample Format?</Text>
+                      <Text style={styles.templateCardSub}>
+                        Download formatted template with sample employee rows
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.downloadTemplateBtn}
+                      onPress={handleDownloadTemplate}
+                      disabled={downloadingTemplate}
+                      activeOpacity={0.8}
+                    >
+                      {downloadingTemplate ? (
+                        <ActivityIndicator size="small" color="#1E3A8A" />
+                      ) : (
+                        <>
+                          <Download size={14} color="#1E3A8A" style={{ marginRight: 4 }} />
+                          <Text style={styles.downloadTemplateText}>Download .xlsx</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* File Drop/Picker Zone */}
+                  <Text style={styles.fieldSectionLabel}>Select Spreadsheet File</Text>
+                  {selectedFile ? (
+                    <View style={styles.selectedFileCard}>
+                      <View style={styles.selectedFileIconWrap}>
+                        <FileSpreadsheet size={24} color="#059669" />
+                      </View>
+                      <View style={{ flex: 1, paddingHorizontal: 10 }}>
+                        <Text style={styles.selectedFileName} numberOfLines={1}>
+                          {selectedFile.name}
+                        </Text>
+                        <Text style={styles.selectedFileSize}>
+                          {selectedFile.size
+                            ? `${(selectedFile.size / 1024).toFixed(1)} KB`
+                            : 'Ready to upload'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.removeFileBtn}
+                        onPress={() => setSelectedFile(null)}
+                        activeOpacity={0.7}
+                      >
+                        <Trash2 size={16} color="#DC2626" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.fileDropZone}
+                      onPress={handlePickDocument}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.fileDropIconCircle}>
+                        <UploadCloud size={28} color="#059669" />
+                      </View>
+                      <Text style={styles.fileDropTitle}>Tap to Browse Excel File</Text>
+                      <Text style={styles.fileDropSub}>Supports .xlsx, .xls, and .csv files</Text>
+                      <View style={styles.browsePill}>
+                        <Text style={styles.browsePillText}>Choose from Device</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Default Substation Assignment (Optional) */}
+                  <Text style={[styles.fieldSectionLabel, { marginTop: 16 }]}>
+                    Assign Default Substation (Optional)
+                  </Text>
+                  <Text style={styles.fieldSectionSub}>
+                    Permit imported employees to check in at this substation if not specified in Excel:
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.siteChipsRow}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.siteSelectChip,
+                        !bulkDefaultSiteId && styles.siteSelectChipActive,
+                      ]}
+                      onPress={() => setBulkDefaultSiteId('')}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.siteSelectChipText,
+                          !bulkDefaultSiteId && styles.siteSelectChipTextActive,
+                        ]}
+                      >
+                        None (Unassigned)
+                      </Text>
+                    </TouchableOpacity>
+                    {sites.map((s) => (
+                      <TouchableOpacity
+                        key={s.id}
+                        style={[
+                          styles.siteSelectChip,
+                          bulkDefaultSiteId === s.id && styles.siteSelectChipActive,
+                        ]}
+                        onPress={() => setBulkDefaultSiteId(s.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.siteSelectChipText,
+                            bulkDefaultSiteId === s.id && styles.siteSelectChipTextActive,
+                          ]}
+                        >
+                          {s.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+
+                  {/* Modal Action Buttons */}
+                  <View style={styles.bulkModalActions}>
+                    <TouchableOpacity
+                      style={styles.bulkCancelBtn}
+                      onPress={() => {
+                        setShowBulkModal(false);
+                        setSelectedFile(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.bulkCancelBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.bulkSubmitBtn,
+                        (!selectedFile || uploadingBulk) && styles.bulkSubmitBtnDisabled,
+                      ]}
+                      onPress={handleUploadBulk}
+                      disabled={!selectedFile || uploadingBulk}
+                      activeOpacity={0.85}
+                    >
+                      {uploadingBulk ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <UploadCloud size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                          <Text style={styles.bulkSubmitBtnText}>Upload & Import</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
 
       {/* Admin Navigation Drawer */}
@@ -1331,5 +1788,562 @@ const styles = StyleSheet.create({
   pickerOptionTextActive: {
     fontWeight: '700',
     color: '#2563EB',
+  },
+
+  // Bulk Upload Button & Banner
+  bulkIconBtn: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#059669',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  bulkBannerCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  bulkBannerLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  bulkIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  bulkBannerHeading: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  bulkBannerSubtext: {
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 1,
+  },
+  bulkUploadPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#059669',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  bulkUploadPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  // Bulk Modal Styling
+  bulkModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  bulkModalContainer: {
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '90%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+  },
+  bulkModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  bulkModalBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  bulkModalBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: 0.5,
+  },
+  bulkModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  bulkModalSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  bulkCloseBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  bulkModalScroll: {
+    maxHeight: Dimensions.get('window').height * 0.75,
+  },
+  bulkModalScrollContent: {
+    padding: 20,
+    paddingBottom: 36,
+  },
+
+  // Format Card
+  formatCard: {
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  formatCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0369A1',
+    marginBottom: 2,
+  },
+  formatCardSub: {
+    fontSize: 11,
+    color: '#0284C7',
+    marginBottom: 10,
+  },
+  columnsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  columnPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#7DD3FC',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  columnPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  optionalNote: {
+    fontSize: 10,
+    color: '#0284C7',
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  loginExplanationRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#ECFDF5',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  loginExplanationText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#065F46',
+    lineHeight: 15,
+    fontWeight: '500',
+  },
+
+  // Template Card
+  templateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  templateCardTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  templateCardSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  downloadTemplateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  downloadTemplateText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E3A8A',
+  },
+
+  // File Drop Zone
+  fieldSectionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  fieldSectionSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  fileDropZone: {
+    borderWidth: 2,
+    borderColor: '#A7F3D0',
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    backgroundColor: '#F0FDF4',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fileDropIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  fileDropTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  fileDropSub: {
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 2,
+    marginBottom: 10,
+  },
+  browsePill: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  browsePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  // Selected File
+  selectedFileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+    padding: 12,
+  },
+  selectedFileIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedFileName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  selectedFileSize: {
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 2,
+  },
+  removeFileBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+  },
+
+  // Site Chips Row
+  siteChipsRow: {
+    gap: 8,
+    paddingVertical: 6,
+    marginBottom: 20,
+  },
+  siteSelectChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  siteSelectChipActive: {
+    backgroundColor: '#059669',
+    borderColor: '#059669',
+  },
+  siteSelectChipText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  siteSelectChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+
+  // Modal Action Buttons
+  bulkModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  bulkCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulkCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  bulkSubmitBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  bulkSubmitBtnDisabled: {
+    backgroundColor: '#94A3B8',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  bulkSubmitBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  // Result Box
+  bulkResultBox: {
+    paddingTop: 8,
+  },
+  bulkResultBanner: {
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+  },
+  bulkResultBannerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  bulkResultBannerSub: {
+    fontSize: 12,
+    color: '#047857',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  bulkStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    width: '100%',
+    justifyContent: 'space-around',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
+  bulkStatItem: {
+    alignItems: 'center',
+  },
+  bulkStatNumber: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  bulkStatLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  bulkStatDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+  },
+  loginReadyCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
+  loginReadyTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065F46',
+    marginBottom: 2,
+  },
+  loginReadyText: {
+    fontSize: 11,
+    color: '#047857',
+    lineHeight: 16,
+  },
+  processedListWrap: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  processedListTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 8,
+  },
+  processedEmpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  processedEmpName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  processedEmpDetails: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  processedStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusBadgeAdded: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusBadgeUpdated: {
+    backgroundColor: '#EFF6FF',
+  },
+  processedStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  statusTextAdded: {
+    color: '#059669',
+  },
+  statusTextUpdated: {
+    color: '#2563EB',
+  },
+  errorListWrap: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorListTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  errorItemText: {
+    fontSize: 11,
+    color: '#991B1B',
+    marginTop: 2,
+  },
+  bulkDoneBtn: {
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulkDoneBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

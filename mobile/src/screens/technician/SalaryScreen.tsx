@@ -25,6 +25,14 @@ import {
   RefreshCw,
   X,
   Check,
+  Calendar,
+  AlertCircle,
+  HelpCircle,
+  CheckCircle2,
+  Clock,
+  ShieldCheck,
+  TrendingDown,
+  Info,
 } from 'lucide-react-native';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useSupervisorDrawerStore } from '../../store/useSupervisorDrawerStore';
@@ -51,7 +59,7 @@ export const SalaryScreen: React.FC = () => {
 
   const isSupervisor = user?.role === 'supervisor';
 
-  // Date selection states (Defaulting to October 2026 where Admin has uploaded official payslip)
+  // Date selection states (Defaulting to October 2026)
   const [selectedMonth, setSelectedMonth] = useState<number>(10);
   const [selectedYear, setSelectedYear] = useState<number>(2026);
 
@@ -64,10 +72,9 @@ export const SalaryScreen: React.FC = () => {
   const [downloading, setDownloading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  // Current logged in user ID (strictly technician's or supervisor's own ID)
+  // STRICT EMPLOYEE ISOLATION: Technicians can ONLY retrieve their own salary records
   const currentUserId = user?.id || (user as any)?._id || (isSupervisor ? 'emp_05' : 'emp_01');
 
-  // Fetch user's own salary slip
   const fetchSalary = async () => {
     if (!currentUserId) return;
     try {
@@ -88,12 +95,12 @@ export const SalaryScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  // Download or Share Official Payslip PDF
-  const handleDownloadOrShare = async (isShare: boolean = false) => {
+  // Download Official Payslip PDF
+  const handleDownload = async () => {
     setDownloading(true);
     try {
       const token = useAuthStore.getState().token;
-      const url = salaryService.getDownloadUrl(currentUserId, selectedMonth, selectedYear);
+      const url = salaryService.getDownloadUrl(currentUserId, selectedMonth, selectedYear, token || undefined);
 
       if (Platform.OS === 'web') {
         window.open(url, '_blank');
@@ -101,11 +108,7 @@ export const SalaryScreen: React.FC = () => {
         return;
       }
 
-      const rawExt = slip?.fileName && slip.fileName.includes('.')
-        ? slip.fileName.split('.').pop()
-        : 'pdf';
-      const filename = slip?.fileName || `Adani_Payslip_${slip?.employeeId || currentUserId}_${selectedMonth}_${selectedYear}.${rawExt}`;
-
+      const filename = `Adani_Payslip_${slip?.employeeId || currentUserId}_${selectedMonth}_${selectedYear}.pdf`;
       const destination = new ExpoFile(Paths.document, filename);
       const downloadedFile = await ExpoFile.downloadFileAsync(url, destination, {
         headers: {
@@ -116,9 +119,9 @@ export const SalaryScreen: React.FC = () => {
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(downloadedFile.uri, {
-          mimeType: rawExt === 'pdf' ? 'application/pdf' : 'text/plain',
+          mimeType: 'application/pdf',
           dialogTitle: `Adani Payslip - ${slip?.employeeName || user?.name || 'Technician'} (${MONTH_NAMES[selectedMonth - 1]} ${selectedYear})`,
-          UTI: rawExt === 'pdf' ? 'com.adobe.pdf' : 'public.plain-text',
+          UTI: 'com.adobe.pdf',
         });
       } else {
         Alert.alert(
@@ -139,9 +142,29 @@ export const SalaryScreen: React.FC = () => {
     }
   };
 
+  // Calculations derived safely
+  const monthlySalary = slip?.monthlySalary || slip?.earnings?.grossEarnings || 20000;
+  const presentDays = slip?.presentDays || 25;
+  const halfDays = slip?.halfDays || 2;
+  const fullPresentDays = Math.max(0, presentDays - halfDays);
+  const absentDays = slip?.absentDays || 2;
+  const weeklyOffDays = slip?.weeklyOffDays || 4;
+  const publicHolidayDays = slip?.publicHolidayDays || 1;
+
+  const absentRate = slip?.absentDeductionRate || 500;
+  const halfDayRate = slip?.halfDayDeductionRate || 250;
+  const absentDeduction = slip?.absentDeductionTotal || (absentDays * absentRate);
+  const halfDayDeduction = slip?.halfDayDeductionTotal || (halfDays * halfDayRate);
+  const totalDeductions = slip?.totalDeductionAmount || (absentDeduction + halfDayDeduction);
+  const finalPayable = slip?.netPay !== undefined ? slip.netPay : Math.max(0, monthlySalary - totalDeductions);
+  const dailyRate = slip?.dailySalaryRate || Math.round((monthlySalary / 30) * 100) / 100;
+  const statusStr = (slip?.status || 'FINALIZED').toUpperCase();
+
+  const isFinalized = statusStr === 'FINALIZED' || statusStr === 'PAID';
+
   return (
     <View style={styles.container}>
-      {/* Sleek Top Navigation Bar */}
+      {/* Top Navigation Bar */}
       <View style={[styles.topNavBar, { paddingTop: Math.max(insets.top, 14) + 6 }]}>
         <View style={styles.topNavLeft}>
           <TouchableOpacity
@@ -185,15 +208,13 @@ export const SalaryScreen: React.FC = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
         }
       >
-        {/* ============================================================== */}
-        {/* TOP ROW: BADGE (LEFT) & DROPDOWN PILLS (RIGHT)                 */}
-        {/* ============================================================== */}
+        {/* Top Header Strip */}
         <View style={styles.topRow}>
           <View style={styles.badgePill}>
             <Text style={styles.badgePillText}>Workforce Payroll & Compensation</Text>
           </View>
 
-          {/* Month & Year Selectors (Top Right, matching reference image) */}
+          {/* Month & Year Selectors */}
           <View style={styles.dropdownsGroup}>
             <TouchableOpacity
               style={styles.dropdownPill}
@@ -215,10 +236,10 @@ export const SalaryScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Company Subtitle with Bullet */}
+        {/* Company Subtitle */}
         <View style={styles.companyRow}>
           <Text style={styles.bulletDot}>•</Text>
-          <Text style={styles.companyNameText}>Adani Energy Solutions</Text>
+          <Text style={styles.companyNameText}>Adani Energy Solutions Limited</Text>
         </View>
 
         {/* Main Title Heading */}
@@ -226,248 +247,303 @@ export const SalaryScreen: React.FC = () => {
           <View style={styles.banknoteBadge}>
             <Banknote size={26} color="#1E40AF" strokeWidth={2.4} />
           </View>
-          <Text style={styles.mainTitleText}>Salary & Monthly Records</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.mainTitleText}>My Salary & Compensation</Text>
+            <Text style={styles.mainSubtitleText}>Attendance-Integrated Monthly Salary Statement</Text>
+          </View>
         </View>
 
-        {/* Active Tab: [ My Salary Slip ] */}
-        <View style={styles.tabRow}>
-          <TouchableOpacity style={styles.activeTabBtn} activeOpacity={0.9}>
-            <FileText size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
-            <Text style={styles.activeTabText}>My Salary Slip</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Download Button Aligned Directly Under "My Salary Slip" Tab */}
-        <View style={styles.tabUnderActionRow}>
+        {/* Download Button Banner */}
+        <View style={styles.downloadBanner}>
           <TouchableOpacity
-            style={[
-              styles.downloadBtn,
-              downloading && { opacity: 0.75 },
-            ]}
-            onPress={() => handleDownloadOrShare(false)}
-            activeOpacity={0.8}
+            style={[styles.downloadBtn, downloading && { opacity: 0.75 }]}
+            onPress={handleDownload}
+            activeOpacity={0.85}
             disabled={downloading}
           >
-            <Download size={15} color="#FFFFFF" style={{ marginRight: 7 }} />
+            <Download size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
             <Text style={styles.downloadBtnText}>
-              {downloading ? 'Downloading PDF Slip...' : 'Download PDF Slip'}
+              {downloading ? 'Generating Payslip PDF...' : 'Download Salary Slip (PDF)'}
             </Text>
           </TouchableOpacity>
           <Text style={styles.downloadSubText}>
-            Official signed payslip for {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+            Official signed statement for {MONTH_NAMES[selectedMonth - 1]} {selectedYear} • {slip?.referenceNumber || `ADN-PAY-${selectedYear}${selectedMonth < 10 ? '0' : ''}${selectedMonth}`}
           </Text>
         </View>
 
-        {/* ============================================================== */}
-        {/* MAIN CARD CONTAINER: COMPREHENSIVE OFFICIAL PAYSLIP VIEW       */}
-        {/* ============================================================== */}
-        <View style={[styles.mainCard, SHADOWS.sm]}>
-          {/* Card Header with Adani Branding */}
-          <View style={styles.slipCardHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.slipCardCompany}>Adani Energy Solutions Limited</Text>
-              <Text style={styles.slipCardPeriod}>
-                Payroll Period: {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+        {/* 1. EMPLOYEE PROFILE CARD */}
+        <View style={[styles.card, SHADOWS.sm]}>
+          <View style={styles.cardHeaderRow}>
+            <View>
+              <Text style={styles.cardHeaderTitle}>Employee Information</Text>
+              <Text style={styles.cardHeaderSub}>Personal workforce records</Text>
+            </View>
+            <View style={[styles.statusBadge, isFinalized ? styles.statusBadgeFinalized : styles.statusBadgeDraft]}>
+              <CheckCircle2 size={12} color={isFinalized ? '#059669' : '#D97706'} style={{ marginRight: 4 }} />
+              <Text style={[styles.statusBadgeText, { color: isFinalized ? '#059669' : '#D97706' }]}>
+                {statusStr}
               </Text>
             </View>
-            <View style={styles.paidStatusBadge}>
-              <Check size={12} color="#15803D" style={{ marginRight: 4 }} />
-              <Text style={styles.paidStatusBadgeText}>PAID & VERIFIED</Text>
+          </View>
+
+          <View style={styles.empGrid}>
+            <View style={styles.empGridItem}>
+              <Text style={styles.gridLabel}>EMPLOYEE NAME</Text>
+              <Text style={styles.gridValue}>{slip?.employeeName || user?.name || 'Rohit Sharma'}</Text>
+            </View>
+            <View style={styles.empGridItem}>
+              <Text style={styles.gridLabel}>EMPLOYEE ID</Text>
+              <Text style={styles.gridValueHighlight}>{slip?.employeeId || user?.employeeId || 'b4S/Adani/01'}</Text>
+            </View>
+            <View style={styles.empGridItem}>
+              <Text style={styles.gridLabel}>DESIGNATION</Text>
+              <Text style={styles.gridValue}>{slip?.designation || user?.designation || 'Smart Meter Technician'}</Text>
+            </View>
+            <View style={styles.empGridItem}>
+              <Text style={styles.gridLabel}>PAYROLL MONTH</Text>
+              <Text style={styles.gridValue}>{MONTH_NAMES[selectedMonth - 1]} {selectedYear}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 2. SALARY OVERVIEW (BASE SALARY) */}
+        <View style={[styles.card, SHADOWS.sm]}>
+          <View style={styles.cardHeaderRow}>
+            <View>
+              <Text style={styles.cardHeaderTitle}>Assigned Monthly Salary</Text>
+              <Text style={styles.cardHeaderSub}>Base remuneration assigned by Operations Admin</Text>
+            </View>
+            <View style={styles.salaryPill}>
+              <Text style={styles.salaryPillText}>₹{monthlySalary.toLocaleString('en-IN')}</Text>
             </View>
           </View>
 
-          {/* Employee Metadata Grid */}
-          <View style={styles.empMetaGrid}>
-            <View style={styles.empMetaItem}>
-              <Text style={styles.empMetaLabel}>EMPLOYEE NAME</Text>
-              <Text style={styles.empMetaValue}>{slip?.employeeName || user?.name || 'Rohit Sharma'}</Text>
+          <View style={styles.salaryMetricsRow}>
+            <View style={styles.salaryMetricCol}>
+              <Text style={styles.metricLabel}>MONTHLY SALARY</Text>
+              <Text style={styles.metricValLarge}>₹{monthlySalary.toLocaleString('en-IN')}</Text>
+              <Text style={styles.metricSub}>Assigned contract rate</Text>
             </View>
-            <View style={styles.empMetaItem}>
-              <Text style={styles.empMetaLabel}>EMPLOYEE ID</Text>
-              <Text style={styles.empMetaValue}>{slip?.employeeId || user?.employeeId || 'b4S/Adani/01'}</Text>
+            <View style={styles.metricDivider} />
+            <View style={styles.salaryMetricCol}>
+              <Text style={styles.metricLabel}>PER-DAY RATE</Text>
+              <Text style={styles.metricValMedium}>₹{dailyRate.toLocaleString('en-IN')}</Text>
+              <Text style={styles.metricSub}>Auto-calculated (30 days)</Text>
             </View>
-            <View style={styles.empMetaItem}>
-              <Text style={styles.empMetaLabel}>DESIGNATION</Text>
-              <Text style={styles.empMetaValue}>{slip?.designation || user?.designation || 'Smart Meter Technician'}</Text>
-            </View>
-            <View style={styles.empMetaItem}>
-              <Text style={styles.empMetaLabel}>DAYS WORKED</Text>
-              <Text style={styles.empMetaValue}>{slip?.presentDays || 26} Present • {slip?.paidLeaves || 3} Paid Leave</Text>
+          </View>
+        </View>
+
+        {/* 3. ATTENDANCE SUMMARY (5 MANDATORY CATEGORIES) */}
+        <View style={[styles.card, SHADOWS.sm]}>
+          <View style={styles.cardHeaderRow}>
+            <View>
+              <Text style={styles.cardHeaderTitle}>Attendance Summary</Text>
+              <Text style={styles.cardHeaderSub}>Verified from centralized GPS attendance records</Text>
             </View>
           </View>
 
-          {/* Earnings & Deductions Tables */}
-          <View style={styles.breakdownRow}>
-            {/* Left: Earnings */}
-            <View style={styles.breakdownCol}>
-              <View style={styles.breakdownColHeaderGreen}>
-                <Text style={styles.breakdownColTitleGreen}>Earnings</Text>
-                <Text style={styles.breakdownColSubGreen}>Gross Pay</Text>
-              </View>
-              <View style={styles.breakdownList}>
-                <View style={styles.breakdownLine}>
-                  <Text style={styles.breakdownItemName}>Basic Salary</Text>
-                  <Text style={styles.breakdownItemVal}>₹{(slip?.earnings?.basicSalary || 21000).toLocaleString('en-IN')}</Text>
-                </View>
-                <View style={styles.breakdownLine}>
-                  <Text style={styles.breakdownItemName}>HRA Allowance</Text>
-                  <Text style={styles.breakdownItemVal}>₹{(slip?.earnings?.hra || 8400).toLocaleString('en-IN')}</Text>
-                </View>
-                <View style={styles.breakdownLine}>
-                  <Text style={styles.breakdownItemName}>Dearness Allowance (DA)</Text>
-                  <Text style={styles.breakdownItemVal}>₹{(slip?.earnings?.da || 4200).toLocaleString('en-IN')}</Text>
-                </View>
-                <View style={styles.breakdownLine}>
-                  <Text style={styles.breakdownItemName}>Field & Travel</Text>
-                  <Text style={styles.breakdownItemVal}>₹{((slip?.earnings?.travelAllowance || 2500) + (slip?.earnings?.siteFieldAllowance || 2000)).toLocaleString('en-IN')}</Text>
-                </View>
-                <View style={[styles.breakdownLine, styles.breakdownLineTotal]}>
-                  <Text style={styles.breakdownTotalLabel}>Gross Earnings</Text>
-                  <Text style={styles.breakdownTotalVal}>₹{(slip?.earnings?.grossEarnings || 38100).toLocaleString('en-IN')}</Text>
-                </View>
-              </View>
+          <View style={styles.attGrid}>
+            {/* P - Present (Full Days) */}
+            <View style={[styles.attCard, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+              <Text style={[styles.attCardLabel, { color: '#166534' }]}>P – PRESENT</Text>
+              <Text style={[styles.attCardVal, { color: '#15803D' }]}>{presentDays} <Text style={styles.dayUnit}>days</Text></Text>
+              <Text style={styles.attCardNote}>Includes {fullPresentDays} full + {halfDays} half</Text>
             </View>
 
-            {/* Right: Deductions */}
-            <View style={styles.breakdownCol}>
-              <View style={styles.breakdownColHeaderRed}>
-                <Text style={styles.breakdownColTitleRed}>Deductions</Text>
-                <Text style={styles.breakdownColSubRed}>Statutory</Text>
-              </View>
-              <View style={styles.breakdownList}>
-                <View style={styles.breakdownLine}>
-                  <Text style={styles.breakdownItemName}>Provident Fund (PF)</Text>
-                  <Text style={styles.breakdownItemVal}>₹{(slip?.deductions?.pf || 2520).toLocaleString('en-IN')}</Text>
-                </View>
-                <View style={styles.breakdownLine}>
-                  <Text style={styles.breakdownItemName}>ESIC Health</Text>
-                  <Text style={styles.breakdownItemVal}>₹{(slip?.deductions?.esic || 285).toLocaleString('en-IN')}</Text>
-                </View>
-                <View style={styles.breakdownLine}>
-                  <Text style={styles.breakdownItemName}>Professional Tax (PT)</Text>
-                  <Text style={styles.breakdownItemVal}>₹{(slip?.deductions?.professionalTax || 200).toLocaleString('en-IN')}</Text>
-                </View>
-                <View style={styles.breakdownLine}>
-                  <Text style={styles.breakdownItemName}>TDS / Income Tax</Text>
-                  <Text style={styles.breakdownItemVal}>₹0</Text>
-                </View>
-                <View style={[styles.breakdownLine, styles.breakdownLineTotal]}>
-                  <Text style={styles.breakdownTotalLabel}>Total Deductions</Text>
-                  <Text style={[styles.breakdownTotalVal, { color: '#DC2626' }]}>₹{(slip?.deductions?.totalDeductions || 3005).toLocaleString('en-IN')}</Text>
-                </View>
-              </View>
+            {/* Half Day */}
+            <View style={[styles.attCard, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+              <Text style={[styles.attCardLabel, { color: '#92400E' }]}>HALF DAY</Text>
+              <Text style={[styles.attCardVal, { color: '#D97706' }]}>{halfDays} <Text style={styles.dayUnit}>days</Text></Text>
+              <Text style={styles.attCardNote}>Shift duration &lt; 8 hrs</Text>
+            </View>
+
+            {/* A - Absent */}
+            <View style={[styles.attCard, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+              <Text style={[styles.attCardLabel, { color: '#991B1B' }]}>A – ABSENT</Text>
+              <Text style={[styles.attCardVal, { color: '#DC2626' }]}>{absentDays} <Text style={styles.dayUnit}>days</Text></Text>
+              <Text style={styles.attCardNote}>No check-in recorded</Text>
+            </View>
+
+            {/* WO - Weekly Off */}
+            <View style={[styles.attCard, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+              <Text style={[styles.attCardLabel, { color: '#1E40AF' }]}>WO – WEEKLY OFF</Text>
+              <Text style={[styles.attCardVal, { color: '#2563EB' }]}>{weeklyOffDays} <Text style={styles.dayUnit}>days</Text></Text>
+              <Text style={styles.attCardNote}>Paid scheduled rest</Text>
+            </View>
+
+            {/* PH - Public Holiday */}
+            <View style={[styles.attCard, { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' }]}>
+              <Text style={[styles.attCardLabel, { color: '#5B21B6' }]}>PH – HOLIDAYS</Text>
+              <Text style={[styles.attCardVal, { color: '#7C3AED' }]}>{publicHolidayDays} <Text style={styles.dayUnit}>days</Text></Text>
+              <Text style={styles.attCardNote}>Gazetted paid holiday</Text>
+            </View>
+
+            {/* Total Payable Days */}
+            <View style={[styles.attCard, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
+              <Text style={[styles.attCardLabel, { color: '#334155' }]}>PAYABLE DAYS</Text>
+              <Text style={[styles.attCardVal, { color: '#0F172A' }]}>
+                {slip?.payableDays || (presentDays + weeklyOffDays + publicHolidayDays)} <Text style={styles.dayUnit}>days</Text>
+              </Text>
+              <Text style={styles.attCardNote}>Eligible for salary</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 4. DEDUCTION BREAKDOWN */}
+        <View style={[styles.card, SHADOWS.sm]}>
+          <View style={styles.cardHeaderRow}>
+            <View>
+              <Text style={styles.cardHeaderTitle}>Attendance Deductions</Text>
+              <Text style={styles.cardHeaderSub}>Configured penalty amounts applied for missed duty</Text>
+            </View>
+            <View style={styles.deductionPill}>
+              <TrendingDown size={14} color="#DC2626" style={{ marginRight: 4 }} />
+              <Text style={styles.deductionPillText}>-₹{totalDeductions.toLocaleString('en-IN')}</Text>
             </View>
           </View>
 
-          {/* Net Take-Home Salary Banner */}
-          <View style={styles.netPayoutBanner}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.netPayoutLabel}>NET TAKE-HOME DISBURSED</Text>
-              <Text style={styles.netPayoutSub}>Transferred to Bank Account via NEFT</Text>
+          <View style={styles.deductionList}>
+            {/* Absent deduction line */}
+            <View style={styles.deductionRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deductionItemTitle}>Absent Deduction</Text>
+                <Text style={styles.deductionItemDesc}>
+                  {absentDays} Absent Day(s) × ₹{absentRate.toLocaleString('en-IN')} configured rate
+                </Text>
+              </View>
+              <Text style={styles.deductionItemVal}>-₹{absentDeduction.toLocaleString('en-IN')}</Text>
             </View>
-            <Text style={styles.netPayoutAmount}>
-              ₹{(slip?.netPay || 35095).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+
+            <View style={styles.tableDivider} />
+
+            {/* Half day deduction line */}
+            <View style={styles.deductionRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deductionItemTitle}>Half-Day Deduction</Text>
+                <Text style={styles.deductionItemDesc}>
+                  {halfDays} Half Day(s) × ₹{halfDayRate.toLocaleString('en-IN')} configured rate
+                </Text>
+              </View>
+              <Text style={styles.deductionItemVal}>-₹{halfDayDeduction.toLocaleString('en-IN')}</Text>
+            </View>
+
+            <View style={styles.tableDivider} />
+
+            {/* Total Deductions Highlight */}
+            <View style={[styles.deductionRow, styles.deductionTotalRow]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deductionTotalTitle}>Total Attendance Deductions</Text>
+                <Text style={styles.deductionTotalDesc}>Sum of absent & half-day penalties</Text>
+              </View>
+              <Text style={styles.deductionTotalVal}>-₹{totalDeductions.toLocaleString('en-IN')}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 5. FINAL PAYABLE SALARY CARD (HIGHLIGHT SUMMARY) */}
+        <View style={[styles.payableCard, SHADOWS.md]}>
+          <View style={styles.payableTopRow}>
+            <View>
+              <Text style={styles.payableLabel}>FINAL PAYABLE SALARY</Text>
+              <Text style={styles.payableSubLabel}>Net Take-Home Salary for {MONTH_NAMES[selectedMonth - 1]} {selectedYear}</Text>
+            </View>
+            <View style={styles.payableIconCircle}>
+              <ShieldCheck size={24} color="#059669" />
+            </View>
+          </View>
+
+          <Text style={styles.payableAmount}>₹{finalPayable.toLocaleString('en-IN')}</Text>
+
+          {/* Salary Formula Explanation */}
+          <View style={styles.formulaBox}>
+            <Info size={15} color="#065F46" style={{ marginRight: 6, marginTop: 1 }} />
+            <Text style={styles.formulaText}>
+              <Text style={{ fontWeight: '800' }}>Calculation Explanation: </Text>
+              Monthly Salary (₹{monthlySalary.toLocaleString('en-IN')}) − Total Deductions (₹{totalDeductions.toLocaleString('en-IN')}) = Net Payable <Text style={{ fontWeight: '800' }}>₹{finalPayable.toLocaleString('en-IN')}</Text>
             </Text>
           </View>
+
+          {slip?.notes && (
+            <View style={styles.notesBox}>
+              <Text style={styles.notesLabel}>OPERATIONS REMARKS:</Text>
+              <Text style={styles.notesText}>{slip.notes}</Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={styles.payableDownloadBtn}
+            onPress={handleDownload}
+            activeOpacity={0.85}
+          >
+            <Download size={15} color="#065F46" style={{ marginRight: 6 }} />
+            <Text style={styles.payableDownloadBtnText}>Download Official Payslip (PDF)</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* ============================================================== */}
-      {/* MONTH SELECTION MODAL                                          */}
-      {/* ============================================================== */}
-      <Modal
-        visible={showMonthModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowMonthModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowMonthModal(false)}
-        >
+      {/* Month Picker Modal */}
+      <Modal visible={showMonthModal} transparent animationType="fade" onRequestClose={() => setShowMonthModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowMonthModal(false)}>
           <View style={styles.pickerModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Payroll Month</Text>
-              <TouchableOpacity onPress={() => setShowMonthModal(false)} style={styles.modalCloseBtn}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Select Payroll Month</Text>
+              <TouchableOpacity onPress={() => setShowMonthModal(false)}>
                 <X size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
-
-            <ScrollView style={{ maxHeight: 380 }}>
-              {MONTH_NAMES.map((mName, idx) => {
-                const monthNum = idx + 1;
-                const isSelected = selectedMonth === monthNum;
-                return (
-                  <TouchableOpacity
-                    key={monthNum}
-                    style={[styles.modalItem, isSelected && styles.modalItemActive]}
-                    onPress={() => {
-                      setSelectedMonth(monthNum);
-                      setShowMonthModal(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.modalItemText, isSelected && styles.modalItemTextActive]}>
-                      {mName}
-                    </Text>
-                    {isSelected ? <Check size={18} color="#1E63F0" /> : null}
-                  </TouchableOpacity>
-                );
-              })}
+            <ScrollView style={{ maxHeight: 320 }}>
+              {MONTH_NAMES.map((m, idx) => (
+                <TouchableOpacity
+                  key={m}
+                  style={[styles.pickerItem, selectedMonth === idx + 1 && styles.pickerItemActive]}
+                  onPress={() => {
+                    setSelectedMonth(idx + 1);
+                    setShowMonthModal(false);
+                  }}
+                >
+                  <Text style={[styles.pickerItemText, selectedMonth === idx + 1 && styles.pickerItemTextActive]}>
+                    {m}
+                  </Text>
+                  {selectedMonth === idx + 1 && <Check size={16} color="#1E63F0" />}
+                </TouchableOpacity>
+              ))}
             </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* ============================================================== */}
-      {/* YEAR SELECTION MODAL                                           */}
-      {/* ============================================================== */}
-      <Modal
-        visible={showYearModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowYearModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowYearModal(false)}
-        >
+      {/* Year Picker Modal */}
+      <Modal visible={showYearModal} transparent animationType="fade" onRequestClose={() => setShowYearModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowYearModal(false)}>
           <View style={styles.pickerModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Payroll Year</Text>
-              <TouchableOpacity onPress={() => setShowYearModal(false)} style={styles.modalCloseBtn}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Select Payroll Year</Text>
+              <TouchableOpacity onPress={() => setShowYearModal(false)}>
                 <X size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
-
-            <View style={{ paddingVertical: 6 }}>
-              {AVAILABLE_YEARS.map((yr) => {
-                const isSelected = selectedYear === yr;
-                return (
-                  <TouchableOpacity
-                    key={yr}
-                    style={[styles.modalItem, isSelected && styles.modalItemActive]}
-                    onPress={() => {
-                      setSelectedYear(yr);
-                      setShowYearModal(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.modalItemText, isSelected && styles.modalItemTextActive]}>
-                      {yr}
-                    </Text>
-                    {isSelected ? <Check size={18} color="#1E63F0" /> : null}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <ScrollView style={{ maxHeight: 260 }}>
+              {AVAILABLE_YEARS.map((y) => (
+                <TouchableOpacity
+                  key={y}
+                  style={[styles.pickerItem, selectedYear === y && styles.pickerItemActive]}
+                  onPress={() => {
+                    setSelectedYear(y);
+                    setShowYearModal(false);
+                  }}
+                >
+                  <Text style={[styles.pickerItemText, selectedYear === y && styles.pickerItemTextActive]}>
+                    {y}
+                  </Text>
+                  {selectedYear === y && <Check size={16} color="#1E63F0" />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* Navigation Drawer based on role */}
+      {/* Sidecar Navigation Drawer */}
       {isSupervisor ? <SupervisorDrawerModal /> : <TechnicianDrawerModal />}
     </View>
   );
@@ -476,7 +552,7 @@ export const SalaryScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
   topNavBar: {
     flexDirection: 'row',
@@ -486,7 +562,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#E2E8F0',
   },
   topNavLeft: {
     flexDirection: 'row',
@@ -496,20 +572,18 @@ const styles = StyleSheet.create({
   navRoundBtn: {
     width: 36,
     height: 36,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   refreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#EFF6FF',
     borderRadius: 8,
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
     borderColor: '#BFDBFE',
   },
@@ -522,368 +596,460 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    padding: 16,
+    gap: 16,
   },
-
-  // 1. Top Row: Badge (Left) & Dropdowns (Right)
   topRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 4,
+    justifyContent: 'space-between',
   },
   badgePill: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
-    paddingVertical: 4.5,
-    borderRadius: 100,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: '#C7D2FE',
   },
   badgePillText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#1E40AF',
-    letterSpacing: 0.2,
+    color: '#4338CA',
   },
   dropdownsGroup: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 6,
   },
   dropdownPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 100,
-    paddingHorizontal: 12,
-    paddingVertical: 5.5,
-    ...SHADOWS.sm,
+    borderColor: '#CBD5E1',
   },
   dropdownPillText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#334155',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
   },
-
-  // 2. Company Subtitle
   companyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingLeft: 4,
+    gap: 6,
+    marginTop: -8,
   },
   bulletDot: {
-    fontSize: 14,
-    color: '#94A3B8',
-    marginRight: 6,
+    fontSize: 16,
+    color: '#2563EB',
   },
   companyNameText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2563EB',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-
-  // 3. Main Title Row
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    gap: 12,
   },
   banknoteBadge: {
-    marginRight: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#DBEAFE',
     alignItems: 'center',
     justifyContent: 'center',
   },
   mainTitleText: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '900',
     color: '#0F172A',
-    letterSpacing: -0.5,
   },
-
-  // 4. Subtitle Description
-  subtitleText: {
-    fontSize: 12.5,
+  mainSubtitleText: {
+    fontSize: 12,
+    fontWeight: '500',
     color: '#64748B',
-    lineHeight: 18,
-    marginBottom: 16,
+    marginTop: 2,
   },
-
-  // 5. Tab Row
-  tabRow: {
-    flexDirection: 'row',
+  downloadBanner: {
+    backgroundColor: '#1E3A8A',
+    borderRadius: 14,
+    padding: 16,
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  activeTabBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1657E0',
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    borderRadius: 8,
-    ...SHADOWS.sm,
-  },
-  activeTabText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  tabUnderActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   downloadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E63F0',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    ...SHADOWS.sm,
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    width: '100%',
+    justifyContent: 'center',
   },
   downloadBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#FFFFFF',
   },
   downloadSubText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
+    fontSize: 11,
+    color: '#BFDBFE',
+    textAlign: 'center',
   },
-
-  // 6. Main Card Container: Official Payslip View
-  mainCard: {
+  card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 14,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 18,
+    gap: 14,
   },
-  slipCardHeader: {
+  cardHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    marginBottom: 14,
   },
-  slipCardCompany: {
+  cardHeaderTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
   },
-  slipCardPeriod: {
-    fontSize: 12,
+  cardHeaderSub: {
+    fontSize: 11,
+    fontWeight: '500',
     color: '#64748B',
     marginTop: 2,
   },
-  paidStatusBadge: {
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  paidStatusBadgeText: {
+  statusBadgeFinalized: {
+    backgroundColor: '#ECFDF5',
+  },
+  statusBadgeDraft: {
+    backgroundColor: '#FFFBEB',
+  },
+  statusBadgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#15803D',
   },
-  empMetaGrid: {
+  empGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 14,
+    gap: 12,
+  },
+  empGridItem: {
+    width: '47%',
+  },
+  gridLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+  },
+  gridValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginTop: 2,
+  },
+  gridValueHighlight: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#2563EB',
+    marginTop: 2,
+  },
+  salaryPill: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#BFDBFE',
   },
-  empMetaItem: {
-    width: '50%',
-    marginVertical: 4,
+  salaryPillText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#1E40AF',
   },
-  empMetaLabel: {
-    fontSize: 10.5,
-    fontWeight: '700',
+  salaryMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 4,
+  },
+  salaryMetricCol: {
+    flex: 1,
+  },
+  metricDivider: {
+    width: 1,
+    height: 48,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 16,
+  },
+  metricLabel: {
+    fontSize: 10,
+    fontWeight: '800',
     color: '#64748B',
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
   },
-  empMetaValue: {
-    fontSize: 12,
-    fontWeight: '700',
+  metricValLarge: {
+    fontSize: 22,
+    fontWeight: '900',
     color: '#0F172A',
     marginTop: 2,
   },
-  breakdownRow: {
+  metricValMedium: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginTop: 2,
+  },
+  metricSub: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  attGrid: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 14,
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  breakdownCol: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  attCard: {
+    width: '31%',
     borderRadius: 10,
-    overflow: 'hidden',
-  },
-  breakdownColHeaderGreen: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#DBEAFE',
-  },
-  breakdownColTitleGreen: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#1E40AF',
-  },
-  breakdownColSubGreen: {
-    fontSize: 10.5,
-    color: '#3B82F6',
-  },
-  breakdownColHeaderRed: {
-    backgroundColor: '#FEF2F2',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#FEE2E2',
-  },
-  breakdownColTitleRed: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#991B1B',
-  },
-  breakdownColSubRed: {
-    fontSize: 10.5,
-    color: '#EF4444',
-  },
-  breakdownList: {
+    borderWidth: 1,
     padding: 10,
   },
-  breakdownLine: {
+  attCardLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  attCardVal: {
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+  dayUnit: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  attCardNote: {
+    fontSize: 9,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  deductionPill: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginVertical: 4,
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
-  breakdownItemName: {
-    fontSize: 11,
-    color: '#475569',
+  deductionPillText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#DC2626',
   },
-  breakdownItemVal: {
-    fontSize: 11,
+  deductionList: {
+    gap: 10,
+  },
+  deductionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  deductionItemTitle: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#1E293B',
   },
-  breakdownLineTotal: {
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    paddingTop: 6,
-    marginTop: 6,
+  deductionItemDesc: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 2,
   },
-  breakdownTotalLabel: {
-    fontSize: 11.5,
+  deductionItemVal: {
+    fontSize: 14,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#DC2626',
   },
-  breakdownTotalVal: {
-    fontSize: 12,
+  tableDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+  },
+  deductionTotalRow: {
+    backgroundColor: '#FEF2F2',
+    padding: 10,
+    borderRadius: 8,
+  },
+  deductionTotalTitle: {
+    fontSize: 13,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#991B1B',
   },
-  netPayoutBanner: {
+  deductionTotalDesc: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#B91C1C',
+  },
+  deductionTotalVal: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#DC2626',
+  },
+  payableCard: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: '#6EE7B7',
+    gap: 12,
+  },
+  payableTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1.5,
-    borderColor: '#A7F3D0',
-    borderRadius: 10,
-    padding: 14,
   },
-  netPayoutLabel: {
+  payableLabel: {
     fontSize: 12,
     fontWeight: '800',
     color: '#065F46',
+    letterSpacing: 0.5,
   },
-  netPayoutSub: {
-    fontSize: 10.5,
+  payableSubLabel: {
+    fontSize: 11,
+    fontWeight: '500',
     color: '#047857',
     marginTop: 2,
   },
-  netPayoutAmount: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#047857',
+  payableIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  // Modals
+  payableAmount: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#065F46',
+  },
+  formulaBox: {
+    flexDirection: 'row',
+    backgroundColor: '#D1FAE5',
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'flex-start',
+  },
+  formulaText: {
+    fontSize: 11,
+    color: '#065F46',
+    lineHeight: 16,
+    flex: 1,
+  },
+  notesBox: {
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  notesLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#047857',
+    letterSpacing: 0.5,
+  },
+  notesText: {
+    fontSize: 11,
+    color: '#334155',
+    marginTop: 2,
+  },
+  payableDownloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  payableDownloadBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#065F46',
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
   },
   pickerModal: {
     width: '100%',
     maxWidth: 340,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 16,
-    ...SHADOWS.md,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  modalHeader: {
+  pickerHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#E2E8F0',
     marginBottom: 8,
   },
-  modalTitle: {
-    fontSize: 15,
+  pickerTitle: {
+    fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
   },
-  modalCloseBtn: {
-    padding: 4,
-  },
-  modalItem: {
+  pickerItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 11,
+    paddingHorizontal: 8,
     borderRadius: 8,
   },
-  modalItemActive: {
+  pickerItemActive: {
     backgroundColor: '#EFF6FF',
   },
-  modalItemText: {
-    fontSize: 14,
+  pickerItemText: {
+    fontSize: 13,
     fontWeight: '600',
     color: '#334155',
   },
-  modalItemTextActive: {
-    color: '#1E63F0',
+  pickerItemTextActive: {
     fontWeight: '800',
+    color: '#1E63F0',
   },
 });

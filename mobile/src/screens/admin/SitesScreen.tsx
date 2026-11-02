@@ -532,7 +532,7 @@ export const SitesScreen: React.FC = () => {
           { paddingTop: Math.max(insets.top, 24) + 8 },
         ]}
       >
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.menuBtn}
           onPress={() => openDrawer('Sites')}
           activeOpacity={0.7}
@@ -545,7 +545,7 @@ export const SitesScreen: React.FC = () => {
           <Text style={styles.headerTitle}>Substation Management</Text>
         </View>
 
-        <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd} activeOpacity={0.8}>
+        <TouchableOpacity delayPressIn={0} style={styles.addBtn} onPress={handleOpenAdd} activeOpacity={0.8}>
           <Plus size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
@@ -635,7 +635,7 @@ export const SitesScreen: React.FC = () => {
               </View>
 
               {/* GPS Tag with Link */}
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.gpsLinkRow}
                 onPress={() =>
                   Linking.openURL(
@@ -652,13 +652,13 @@ export const SitesScreen: React.FC = () => {
 
               {/* Action Buttons Row */}
               <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.rosterBtn} activeOpacity={0.8}>
+                <TouchableOpacity delayPressIn={0} style={styles.rosterBtn} activeOpacity={0.8}>
                   <Users size={14} color="#2563EB" style={{ marginRight: 6 }} />
                   <Text style={styles.rosterBtnText}>STAFF ROSTER</Text>
                 </TouchableOpacity>
 
                 <View style={styles.iconActionsWrap}>
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.iconActionBtn}
                     onPress={() => handleOpenEdit(item)}
                     activeOpacity={0.7}
@@ -666,7 +666,7 @@ export const SitesScreen: React.FC = () => {
                     <Edit size={16} color="#64748B" />
                   </TouchableOpacity>
 
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={[styles.iconActionBtn, { backgroundColor: '#FEF2F2' }]}
                     onPress={() => handleDelete(item)}
                     activeOpacity={0.7}
@@ -691,7 +691,7 @@ export const SitesScreen: React.FC = () => {
               <Text style={styles.modalTitle}>
                 {editingSite ? `Edit Site: ${name || editingSite.name}` : 'Add New Site'}
               </Text>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 onPress={() => setShowModal(false)}
                 style={styles.modalCloseBtn}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -733,7 +733,7 @@ export const SitesScreen: React.FC = () => {
                   <Text style={styles.locationSectionTitle}>Site Location & Address</Text>
                 </View>
 
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.pinGpsBtn}
                   onPress={handlePinCurrentGPS}
                   activeOpacity={0.8}
@@ -756,7 +756,7 @@ export const SitesScreen: React.FC = () => {
                     onSubmitEditing={handleSearchAndNavigate}
                   />
                   {searchLocation.length > 0 && (
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       onPress={() => {
                         setSearchLocation('');
                         setSuggestions([]);
@@ -769,7 +769,7 @@ export const SitesScreen: React.FC = () => {
                   )}
                 </View>
 
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.searchNavBtn}
                   onPress={handleSearchAndNavigate}
                   activeOpacity={0.85}
@@ -787,7 +787,7 @@ export const SitesScreen: React.FC = () => {
               {showSuggestions && suggestions.length > 0 && (
                 <View style={[styles.suggestionsBox, SHADOWS.md]}>
                   {suggestions.map((item, index) => (
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       key={`${item.title}-${index}`}
                       style={styles.suggestionItem}
                       onPress={() => handleSelectSuggestion(item)}
@@ -860,7 +860,7 @@ export const SitesScreen: React.FC = () => {
 
                 {/* Map Zoom Controls (+ / -) */}
                 <View style={styles.zoomControlsWrap}>
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.zoomBtn}
                     onPress={handleZoomIn}
                     activeOpacity={0.8}
@@ -868,7 +868,7 @@ export const SitesScreen: React.FC = () => {
                     <Text style={styles.zoomBtnText}>+</Text>
                   </TouchableOpacity>
                   <View style={styles.zoomDivider} />
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.zoomBtn}
                     onPress={handleZoomOut}
                     activeOpacity={0.8}
@@ -900,7 +900,7 @@ export const SitesScreen: React.FC = () => {
                 <Text style={styles.quickPinsLabel}>QUICK PINS:</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                   {QUICK_PINS.map((pin) => (
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       key={pin.name}
                       style={[
                         styles.quickPinChip,
@@ -990,7 +990,7 @@ export const SitesScreen: React.FC = () => {
 
                 <View style={styles.colHalf}>
                   <Text style={styles.fieldLabel}>Status</Text>
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.selectBox}
                     onPress={() => setShowStatusPicker(true)}
                     activeOpacity={0.8}
@@ -1003,7 +1003,7 @@ export const SitesScreen: React.FC = () => {
 
               {/* Footer Action Buttons */}
               <View style={styles.footerRow}>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.cancelBtn}
                   onPress={() => setShowModal(false)}
                   activeOpacity={0.7}
@@ -1011,7 +1011,7 @@ export const SitesScreen: React.FC = () => {
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.saveChangesBtn}
                   onPress={handleSave}
                   activeOpacity={0.85}
@@ -1035,7 +1035,7 @@ export const SitesScreen: React.FC = () => {
           animationType="fade"
           onRequestClose={() => setShowStatusPicker(false)}
         >
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.pickerOverlay}
             activeOpacity={1}
             onPress={() => setShowStatusPicker(false)}
@@ -1043,7 +1043,7 @@ export const SitesScreen: React.FC = () => {
             <View style={styles.pickerCard}>
               <Text style={styles.pickerTitle}>Select Site Status</Text>
               {(['Active', 'Inactive'] as const).map((opt) => (
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   key={opt}
                   style={[
                     styles.pickerOption,

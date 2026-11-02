@@ -7,6 +7,7 @@ interface AttendanceState {
   todayStatus: 'not_started' | 'active' | 'completed';
   todayRecord: AttendanceRecord | null;
   assignedSite: Substation | null;
+  assignedSites: Substation[];
   liveElapsedSeconds: number;
   isLoading: boolean;
   error: string | null;
@@ -23,6 +24,7 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
   todayStatus: 'not_started',
   todayRecord: null,
   assignedSite: null,
+  assignedSites: [],
   liveElapsedSeconds: 0,
   isLoading: false,
   error: null,
@@ -33,6 +35,7 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
       todayStatus: 'not_started',
       todayRecord: null,
       assignedSite: null,
+      assignedSites: [],
       liveElapsedSeconds: 0,
       isLoading: false,
       error: null,
@@ -49,6 +52,7 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
         todayStatus: data.status,
         todayRecord: data.record,
         assignedSite: data.site,
+        assignedSites: data.sites || (data.site ? [data.site] : []),
         liveElapsedSeconds: elapsedSec,
         isLoading: false,
       });

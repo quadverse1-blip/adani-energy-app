@@ -30,6 +30,7 @@ class AttendanceResponse(BaseModel):
     siteId: str
     siteName: Optional[str] = None
     date: str
+    photoUrl: Optional[str] = None
     checkIn: Optional[AttendancePunchRecord] = None
     checkOut: Optional[AttendancePunchRecord] = None
     status: str  # present, late, half_day, absent, weekly_off

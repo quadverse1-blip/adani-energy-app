@@ -7,7 +7,7 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -48,6 +48,28 @@ try:
 except Exception as e:
     print(f"[Warning] Could not mount /uploads: {e}")
 
+# Vercel Serverless Path Normalization Middleware
+@app.middleware("http")
+async def vercel_path_normalizer(request: Request, call_next):
+    matched = request.headers.get("x-matched-path")
+    if matched:
+        request.scope["path"] = matched
+    else:
+        path = request.scope.get("path", "")
+        prefixes = (
+            "/backend/api/index.py",
+            "/backend/api/index",
+            "/backend/api",
+            "/api/index.py",
+            "/api/index"
+        )
+        for p in prefixes:
+            if path.startswith(p):
+                rem = path[len(p):]
+                request.scope["path"] = rem if rem.startswith("/") else ("/" + rem)
+                break
+    return await call_next(request)
+
 # Include Routers under API_V1_STR
 app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(attendance.router, prefix=settings.API_V1_STR)
@@ -70,30 +92,52 @@ app.include_router(tracking.router)
 app.include_router(reports.router)
 app.include_router(holidays.router)
 
-# Automatic 24-Hour Photo Deletion Scheduler
+# Middleware to ensure 8:00 AM - 9:00 AM IST photo deletion runs reliably on request activity
+@app.middleware("http")
+async def check_scheduled_cleanup_middleware(request: Request, call_next):
+    try:
+        from app.services.storage_service import storage_service
+        storage_service.check_and_run_scheduled_8am_cleanup()
+    except Exception:
+        pass
+    return await call_next(request)
+
+# Automatic 8:00 AM - 9:00 AM IST Check-in Photo Deletion Scheduler from gs://adani-energy-2f5e0.firebasestorage.app
 @app.on_event("startup")
 async def start_auto_cleanup_scheduler():
+    is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
+    if is_serverless:
+        # In Vercel serverless functions, background loops cause FUNCTION_INVOCATION_FAILED.
+        # Scheduled cleanup is handled cleanly by Vercel Cron (/api/cron/cleanup-photos) and middleware.
+        return
+
     import asyncio
     from app.services.storage_service import storage_service
 
     async def _cleanup_loop():
-        # Initial cleanup pass on server start
+        # Immediate check on server boot
         try:
-            if settings.AUTO_DELETE_PHOTOS_AFTER_24H:
-                storage_service.cleanup_expired_photos(max_age_hours=settings.PHOTO_RETENTION_HOURS)
-        except Exception as e:
+            storage_service.check_and_run_scheduled_8am_cleanup()
+        except Exception:
             pass
 
-        # Periodic hourly cleanup
+        # Continuously monitor every 60 seconds
         while True:
-            await asyncio.sleep(3600)
+            await asyncio.sleep(60)
             try:
-                if settings.AUTO_DELETE_PHOTOS_AFTER_24H:
-                    storage_service.cleanup_expired_photos(max_age_hours=settings.PHOTO_RETENTION_HOURS)
-            except Exception as e:
+                storage_service.check_and_run_scheduled_8am_cleanup()
+            except Exception:
                 pass
 
     asyncio.create_task(_cleanup_loop())
+
+@app.get("/api/cron/cleanup-photos")
+@app.get("/cron/cleanup-photos")
+async def cron_cleanup_photos():
+    """Vercel Cron endpoint scheduled daily between 8:00 AM - 9:00 AM IST."""
+    from app.services.storage_service import storage_service
+    result = storage_service.cleanup_previous_days_photos(force=True)
+    return result
 
 @app.get("/")
 async def root():

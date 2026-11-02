@@ -252,7 +252,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
         {/* Brand Header with 3-Line Menu */}
         <View style={styles.header}>
           {/* 3-Line Hamburger Menu Icon Button */}
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.menuBtn}
             onPress={() => openDrawer('AdminDashboard')}
             activeOpacity={0.7}
@@ -272,7 +272,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
 
           <View style={styles.headerRightCol}>
             {/* Notification Bell Icon */}
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.bellCardBtn}
               onPress={() => setShowNotificationsModal(true)}
               activeOpacity={0.8}
@@ -483,7 +483,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
           {/* Chart Mode Toggle */}
           <View style={styles.chartToggleRow}>
             <View style={styles.chartTogglePills}>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={[styles.chartToggleBtn, chartMode === 'volume' && styles.chartToggleBtnActive]}
                 onPress={() => setChartMode('volume')}
               >
@@ -491,7 +491,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                   Shift Volume (Stacked)
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={[styles.chartToggleBtn, chartMode === 'punctuality' && styles.chartToggleBtnActive]}
                 onPress={() => setChartMode('punctuality')}
               >
@@ -616,7 +616,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
           <View>
             <Text style={styles.recentAttendanceTitle}>Recent Attendance</Text>
           </View>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             onPress={() => setAttendanceFilter('all')}
             style={styles.viewAllBtn}
             activeOpacity={0.7}
@@ -628,7 +628,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
 
         {/* Filter Pills for Recent Attendance */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.attendanceFilterRow}>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={[styles.attFilterPill, attendanceFilter === 'all' && styles.attFilterPillActive]}
             onPress={() => setAttendanceFilter('all')}
           >
@@ -636,7 +636,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
               All Logs ({recentAttendance.length})
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={[styles.attFilterPill, attendanceFilter === 'present' && styles.attFilterPillActiveGreen]}
             onPress={() => setAttendanceFilter('present')}
           >
@@ -644,7 +644,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
               Present On-Time
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={[styles.attFilterPill, attendanceFilter === 'late' && styles.attFilterPillActiveAmber]}
             onPress={() => setAttendanceFilter('late')}
           >
@@ -652,7 +652,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
               Late Flagged ⚠️
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={[styles.attFilterPill, attendanceFilter === 'half_day' && styles.attFilterPillActivePurple]}
             onPress={() => setAttendanceFilter('half_day')}
           >
@@ -660,7 +660,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
               Half-Day ⏱️
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={[styles.attFilterPill, attendanceFilter === 'leave' && styles.attFilterPillActiveBlue]}
             onPress={() => setAttendanceFilter('leave')}
           >
@@ -668,7 +668,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
               Leave / Absent
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={[styles.attFilterPill, attendanceFilter === 'outside' && styles.attFilterPillActiveRed]}
             onPress={() => setAttendanceFilter('outside')}
           >
@@ -716,7 +716,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                       ]}
                     >
                       {/* 1. EMPLOYEE (Avatar Photo + Name) */}
-                      <TouchableOpacity
+                      <TouchableOpacity delayPressIn={0}
                         style={[styles.tableDataCell, { width: 175, flexDirection: 'row', alignItems: 'center', gap: 8 }]}
                         onPress={() => setSelectedRecord(rec)}
                         activeOpacity={0.7}
@@ -796,7 +796,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
 
                       {/* 8. ROUTE MAP: [ ✈ View Map ] Button */}
                       <View style={[styles.tableDataCell, { width: 130 }]}>
-                        <TouchableOpacity
+                        <TouchableOpacity delayPressIn={0}
                           style={styles.viewMapBtn}
                           onPress={() => setMapModalRecord(rec)}
                           activeOpacity={0.75}
@@ -824,7 +824,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Attendance Audit Inspection</Text>
-              <TouchableOpacity onPress={() => setSelectedRecord(null)}>
+              <TouchableOpacity delayPressIn={0} onPress={() => setSelectedRecord(null)}>
                 <X size={20} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -950,7 +950,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                   Emp ID: {mapModalRecord?.employeeId} • Site: {mapModalRecord?.siteName}
                 </Text>
               </View>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.mapModalCloseBtn}
                 onPress={() => setMapModalRecord(null)}
               >
@@ -1066,7 +1066,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
 
                   {/* Actions Row */}
                   <View style={styles.mapActionBtnRow}>
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.openNativeMapsBtn}
                       onPress={() => {
                         const url = `https://www.google.com/maps/search/?api=1&query=${mapLat},${mapLng}`;
@@ -1078,7 +1078,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                       <Text style={styles.openNativeMapsText}>Open in Google Maps</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.closeMapSheetBtn}
                       onPress={() => setMapModalRecord(null)}
                       activeOpacity={0.8}
@@ -1112,7 +1112,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={() => setShowNotificationsModal(false)}>
+              <TouchableOpacity delayPressIn={0} onPress={() => setShowNotificationsModal(false)}>
                 <X size={20} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -1120,7 +1120,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
             {/* Filter Pills & Mark Read */}
             <View style={[styles.notifHeaderActions, { marginBottom: 12 }]}>
               <View style={styles.notifFilterPills}>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[styles.notifPill, notifFilter === 'all' && styles.notifPillActive]}
                   onPress={() => setNotifFilter('all')}
                 >
@@ -1128,7 +1128,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                     All ({notifications.length})
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[styles.notifPill, notifFilter === 'late' && styles.notifPillActiveAmber]}
                   onPress={() => setNotifFilter('late')}
                 >
@@ -1136,7 +1136,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                     Late Punches ⚠️
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[styles.notifPill, notifFilter === 'geofence' && styles.notifPillActiveRed]}
                   onPress={() => setNotifFilter('geofence')}
                 >
@@ -1147,7 +1147,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
               </View>
 
               {unreadCount > 0 && (
-                <TouchableOpacity style={styles.markReadBtn} onPress={handleMarkAllRead}>
+                <TouchableOpacity delayPressIn={0} style={styles.markReadBtn} onPress={handleMarkAllRead}>
                   <CheckCheck size={14} color={COLORS.primary} />
                   <Text style={styles.markReadText}>Mark read</Text>
                 </TouchableOpacity>

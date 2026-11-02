@@ -6,7 +6,15 @@ from app.core.security import (
     create_access_token,
     get_current_user_token
 )
-from app.schemas.auth import LoginRequest, LoginResponse, UserProfile, ForgotPasswordRequest, ResetPasswordRequest
+from app.schemas.auth import (
+    LoginRequest,
+    LoginResponse,
+    UserProfile,
+    ForgotPasswordRequest,
+    VerifyOTPRequest,
+    ResetPasswordRequest
+)
+from app.services.otp_service import otp_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -97,15 +105,21 @@ async def get_current_user_profile(token_data: dict = Depends(get_current_user_t
 
 @router.post("/forgot-password")
 async def forgot_password(req: ForgotPasswordRequest):
-    user = db.find_employee_by_identifier(req.employeeId)
-    if not user:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    return {"message": "Password reset instructions sent to registered contact."}
+    identifier = req.identifier or req.employeeId
+    if not identifier:
+        raise HTTPException(status_code=400, detail="Employee ID, Phone, or Email is required.")
+    return otp_service.request_otp(identifier, override_email=req.email)
+
+@router.post("/verify-otp")
+async def verify_otp(req: VerifyOTPRequest):
+    identifier = req.identifier or req.employeeId
+    if not identifier:
+        raise HTTPException(status_code=400, detail="Employee ID, Phone, or Email is required.")
+    return otp_service.verify_otp(identifier, req.otp)
 
 @router.post("/reset-password")
 async def reset_password(req: ResetPasswordRequest):
-    user = db.find_employee_by_identifier(req.employeeId)
-    if not user:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    user["password"] = req.newPassword
-    return {"message": "Password updated successfully."}
+    identifier = req.identifier or req.employeeId
+    if not identifier:
+        raise HTTPException(status_code=400, detail="Employee ID, Phone, or Email is required.")
+    return otp_service.reset_password(identifier, req.otp, req.newPassword)

@@ -281,7 +281,7 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
         {/* ======================================================== */}
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.backButton}
               onPress={() => navigation.goBack()}
               activeOpacity={0.7}
@@ -294,7 +294,7 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
           </View>
 
           <View style={styles.headerRight}>
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.pillButton}
               onPress={() => setShowHolidaysModal(true)}
               activeOpacity={0.7}
@@ -303,7 +303,7 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
               <Text style={styles.pillButtonTextBlue}>Holidays 2026 (PDF)</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.pillButton}
               onPress={() => navigation.navigate('History')}
               activeOpacity={0.7}
@@ -502,7 +502,7 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
             <View style={styles.sideCard}>
               <Text style={styles.sideCardTitle}>QUICK ACTIONS</Text>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.primaryActionButton}
                 onPress={() => {
                   if (checkIn && !checkOut) {
@@ -518,7 +518,7 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
                 <Text style={styles.primaryActionButtonText}>Go to Shift Check-Out</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.secondaryActionButton}
                 onPress={() => setShowHolidaysModal(true)}
                 activeOpacity={0.7}
@@ -549,7 +549,7 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
                 <Calendar size={20} color="#1E63F0" />
                 <Text style={styles.modalTitle}>Adani Gazetted Holidays 2026</Text>
               </View>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 onPress={() => setShowHolidaysModal(false)}
                 style={styles.modalCloseBtn}
               >
@@ -591,7 +591,7 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
             </ScrollView>
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={[styles.modalDownloadBtn, downloadingHolidays && { opacity: 0.75 }]}
                 onPress={handleDownloadHolidaysPdf}
                 disabled={downloadingHolidays}

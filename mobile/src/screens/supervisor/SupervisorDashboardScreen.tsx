@@ -410,7 +410,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
         <View style={styles.headerCard}>
           <View style={styles.headerTopRow}>
             {/* 3-Line Hamburger Menu Icon Button */}
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.hamburgerBtn}
               onPress={() => openDrawer('SupervisorDashboard')}
               activeOpacity={0.7}
@@ -445,7 +445,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
             {/* Right Action Pills */}
             <View style={styles.headerActionsWrap}>
               {/* Notification Button */}
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={[styles.headerPillBtn, styles.notifPillBtn]}
                 onPress={() => setShowNotifModal(true)}
                 activeOpacity={0.7}
@@ -463,7 +463,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
               </TouchableOpacity>
 
               {/* Logout Button */}
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={[styles.headerPillBtn, styles.logoutPillBtn]}
                 onPress={handleLogout}
                 activeOpacity={0.7}
@@ -478,7 +478,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
                 <Text style={styles.statusPillActiveText}>Field Portal Active</Text>
               </View>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.headerPillBtn}
                 onPress={async () => {
                   try {
@@ -493,7 +493,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
                 <Text style={styles.headerPillBtnText}>Holidays 2026 (PDF)</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.headerPillBtn}
                 onPress={fetchDashboardData}
                 activeOpacity={0.7}
@@ -510,7 +510,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
         {/* ============================================================== */}
         <View style={styles.metricsRow}>
           {/* Card 1: Today's Shift */}
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.kpiCard}
             onPress={() => navigation.navigate('AttendanceLogs')}
             activeOpacity={0.85}
@@ -653,7 +653,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
 
             {/* Action Check In / Check Out Button */}
             {isShiftActive ? (
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.normalCheckOutBtn}
                 onPress={handleNormalCheckOut}
                 disabled={checkingOut}
@@ -670,7 +670,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
               </TouchableOpacity>
             ) : !shiftInfo.isCheckInAllowed ? (
               /* DISABLED BUTTON AFTER 6 PM AND BEFORE 9 AM (REOPENS AT 9 AM) */
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={[
                   styles.normalCheckInBtn,
                   {
@@ -698,7 +698,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
               </TouchableOpacity>
             ) : (
               /* ACTIVE CHECK IN BUTTON BETWEEN 09:00 AM AND 06:00 PM */
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.normalCheckInBtn}
                 onPress={handleNormalCheckIn}
                 disabled={checkingIn}
@@ -763,7 +763,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
               </Text>
             </View>
 
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.refreshListBtn}
               onPress={fetchDashboardData}
               activeOpacity={0.7}
@@ -850,7 +850,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
 
             <View style={styles.analyticsHeaderActions}>
               <View style={styles.segmentToggle}>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[styles.segmentBtn, chartMode === 'daily' && styles.segmentBtnActive]}
                   onPress={() => setChartMode('daily')}
                 >
@@ -863,7 +863,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
                     Daily Hours Trend
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[styles.segmentBtn, chartMode === 'distribution' && styles.segmentBtnActive]}
                   onPress={() => setChartMode('distribution')}
                 >
@@ -878,7 +878,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.fullLogsBtn}
                 onPress={() => navigation.navigate('AttendanceLogs')}
                 activeOpacity={0.7}
@@ -1014,7 +1014,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 onPress={() => setShowNotifModal(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
@@ -1025,7 +1025,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
             {/* Filter Tabs & Mark Read Row */}
             <View style={styles.notifHeaderActions}>
               <View style={styles.notifFilterPills}>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[styles.notifPill, notifFilter === 'all' && styles.notifPillActive]}
                   onPress={() => setNotifFilter('all')}
                 >
@@ -1034,7 +1034,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
                   </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[styles.notifPill, notifFilter === 'admin' && styles.notifPillActiveAdmin]}
                   onPress={() => setNotifFilter('admin')}
                 >
@@ -1043,7 +1043,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
                   </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[styles.notifPill, notifFilter === 'employee' && styles.notifPillActiveEmp]}
                   onPress={() => setNotifFilter('employee')}
                 >
@@ -1054,7 +1054,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
               </View>
 
               {unreadCount > 0 && (
-                <TouchableOpacity style={styles.markReadBtn} onPress={handleMarkAllRead}>
+                <TouchableOpacity delayPressIn={0} style={styles.markReadBtn} onPress={handleMarkAllRead}>
                   <CheckCheck size={14} color="#1E63F0" />
                   <Text style={styles.markReadText}>Mark all read</Text>
                 </TouchableOpacity>
@@ -1079,7 +1079,7 @@ export const SupervisorDashboardScreen: React.FC = () => {
                   const isSuccess = item.type === 'success';
 
                   return (
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       key={item.id}
                       style={[
                         styles.notifItem,

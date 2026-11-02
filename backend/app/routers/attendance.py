@@ -28,6 +28,18 @@ async def upload_attendance_photo(
     url = await storage_service.save_file(photo, subfolder="selfie")
     return {"photoUrl": url}
 
+@router.post("/cleanup-photos")
+async def trigger_photos_cleanup(
+    token_data: dict = Depends(get_current_user_token)
+):
+    """
+    Manually triggers deletion of previous days' check-in photos from
+    Firebase Cloud Storage (gs://adani-energy-2f5e0.firebasestorage.app)
+    matching the scheduled 8:00 AM - 9:00 AM IST cleanup behavior.
+    """
+    result = storage_service.cleanup_previous_days_photos(force=True)
+    return result
+
 @router.post("/check-in", response_model=AttendanceResponse)
 async def check_in(
     req: CheckInRequest,
@@ -69,18 +81,25 @@ async def get_today_attendance(
     if record:
         record = attendance_service.apply_auto_checkout_if_needed(record)
     
-    # Derive assigned site dynamically from latest employee DB state
-    assigned_site_id = None
+    # Derive all assigned sites dynamically from latest employee DB state
+    assigned_site_ids = []
     if emp:
-        assigned_site_id = emp.get("assignedSiteId") or (emp.get("assignedSiteIds", [None])[0] if emp.get("assignedSiteIds") else None)
-        resolved_site_id = assigned_site_id
-    else:
-        resolved_site_id = record.get("siteId") if record else None
-    raw_site = db.get_site(resolved_site_id) if resolved_site_id else None
-    
-    site_obj = None
-    if raw_site:
-        site_obj = {**raw_site, "id": raw_site.get("_id", raw_site.get("id"))}
+        if emp.get("assignedSiteIds"):
+            assigned_site_ids = [str(x) for x in emp.get("assignedSiteIds") if x]
+        if emp.get("assignedSiteId") and str(emp.get("assignedSiteId")) not in assigned_site_ids:
+            assigned_site_ids.insert(0, str(emp.get("assignedSiteId")))
+    elif record and record.get("siteId"):
+        assigned_site_ids = [str(record.get("siteId"))]
+
+    assigned_sites = []
+    for s_id in assigned_site_ids:
+        raw = db.get_site(s_id)
+        if raw:
+            s_obj = {**raw, "id": raw.get("_id", raw.get("id"))}
+            if not any(x.get("id") == s_obj["id"] for x in assigned_sites):
+                assigned_sites.append(s_obj)
+
+    primary_site_obj = assigned_sites[0] if assigned_sites else None
 
     if not record:
         return {
@@ -88,7 +107,8 @@ async def get_today_attendance(
             "liveElapsedMinutes": 0,
             "message": "Shift Not Started",
             "record": None,
-            "site": site_obj
+            "site": primary_site_obj,
+            "sites": assigned_sites
         }
     
     # Calculate live elapsed duration if currently active
@@ -103,7 +123,8 @@ async def get_today_attendance(
         "status": "completed" if record.get("checkOut") else "active",
         "liveElapsedMinutes": live_elapsed_minutes,
         "record": record,
-        "site": site_obj
+        "site": primary_site_obj,
+        "sites": assigned_sites
     }
 
 @router.get("/history")

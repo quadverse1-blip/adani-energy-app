@@ -7,6 +7,26 @@ export interface LoginResult {
   user: User;
 }
 
+export interface ForgotPasswordResponse {
+  success: boolean;
+  message: string;
+  email?: string;
+  targetEmail?: string;
+  employeeId?: string;
+}
+
+export interface VerifyOtpResponse {
+  success: boolean;
+  message: string;
+  employeeId?: string;
+}
+
+export interface ResetPasswordResponse {
+  success: boolean;
+  message: string;
+  employeeId?: string;
+}
+
 export const authService = {
   async login(username: string, password: string): Promise<LoginResult> {
     const response = await apiClient.post<LoginResult>('/auth/login', {
@@ -24,13 +44,31 @@ export const authService = {
     return response.data;
   },
 
-  async forgotPassword(employeeId: string): Promise<{ message: string }> {
-    const response = await apiClient.post('/auth/forgot-password', { employeeId });
+  async forgotPassword(identifier: string, email?: string): Promise<ForgotPasswordResponse> {
+    const response = await apiClient.post<ForgotPasswordResponse>('/auth/forgot-password', {
+      identifier: identifier.trim(),
+      employeeId: identifier.trim(),
+      email: email ? email.trim() : undefined,
+    });
     return response.data;
   },
 
-  async resetPassword(employeeId: string, newPassword: string): Promise<{ message: string }> {
-    const response = await apiClient.post('/auth/reset-password', { employeeId, newPassword });
+  async verifyOtp(identifier: string, otp: string): Promise<VerifyOtpResponse> {
+    const response = await apiClient.post<VerifyOtpResponse>('/auth/verify-otp', {
+      identifier: identifier.trim(),
+      employeeId: identifier.trim(),
+      otp: otp.trim(),
+    });
+    return response.data;
+  },
+
+  async resetPassword(identifier: string, otp: string, newPassword: string): Promise<ResetPasswordResponse> {
+    const response = await apiClient.post<ResetPasswordResponse>('/auth/reset-password', {
+      identifier: identifier.trim(),
+      employeeId: identifier.trim(),
+      otp: otp.trim(),
+      newPassword,
+    });
     return response.data;
   },
 

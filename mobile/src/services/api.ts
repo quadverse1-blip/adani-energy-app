@@ -3,9 +3,12 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { CONFIG } from '../config';
 
+// In-memory token cache for lightning-fast synchronous request dispatching
+let cachedAuthToken: string | null = null;
+
 export const apiClient = axios.create({
   baseURL: CONFIG.API_BASE_URL,
-  timeout: 20000,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -16,19 +19,35 @@ export function setApiBaseUrl(url: string): void {
 }
 
 export async function getStoredToken(): Promise<string | null> {
+  if (cachedAuthToken !== null) {
+    return cachedAuthToken;
+  }
   if (Platform.OS === 'web') {
-    return localStorage.getItem(CONFIG.TOKEN_KEY);
+    try {
+      cachedAuthToken = localStorage.getItem(CONFIG.TOKEN_KEY);
+      return cachedAuthToken;
+    } catch {
+      return null;
+    }
   }
   try {
-    return await SecureStore.getItemAsync(CONFIG.TOKEN_KEY);
+    cachedAuthToken = await SecureStore.getItemAsync(CONFIG.TOKEN_KEY);
+    return cachedAuthToken;
   } catch {
     return null;
   }
 }
 
+export function getCachedTokenSync(): string | null {
+  return cachedAuthToken;
+}
+
 export async function setStoredToken(token: string): Promise<void> {
+  cachedAuthToken = token;
   if (Platform.OS === 'web') {
-    localStorage.setItem(CONFIG.TOKEN_KEY, token);
+    try {
+      localStorage.setItem(CONFIG.TOKEN_KEY, token);
+    } catch {}
     return;
   }
   try {
@@ -39,8 +58,11 @@ export async function setStoredToken(token: string): Promise<void> {
 }
 
 export async function clearStoredToken(): Promise<void> {
+  cachedAuthToken = null;
   if (Platform.OS === 'web') {
-    localStorage.removeItem(CONFIG.TOKEN_KEY);
+    try {
+      localStorage.removeItem(CONFIG.TOKEN_KEY);
+    } catch {}
     return;
   }
   try {
@@ -86,28 +108,14 @@ export async function setStorageItem(key: string, value: string): Promise<void> 
   }
 }
 
-// Attach JWT token to all requests
+// Fast synchronous token attachment on all outbound requests
 apiClient.interceptors.request.use(
-  async (config) => {
-    const token = await getStoredToken();
+  (config) => {
+    const token = cachedAuthToken || (Platform.OS === 'web' ? localStorage.getItem(CONFIG.TOKEN_KEY) : null);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
   (error) => Promise.reject(error)
-);
-
-// Response interceptor for error unwrapping
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    let message = 'An unexpected network error occurred. Please check your connection.';
-    if (error.response?.data?.detail) {
-      message = error.response.data.detail;
-    } else if (error.message) {
-      message = error.message;
-    }
-    return Promise.reject(new Error(message));
-  }
 );

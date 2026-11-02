@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, root_validator
+from typing import Optional, List
 
 class LoginRequest(BaseModel):
     username: str = Field(..., description="Employee ID, Phone, or Email")
@@ -12,7 +12,7 @@ class UserProfile(BaseModel):
     role: str
     designation: str
     assignedSiteId: Optional[str] = None
-    assignedSiteIds: Optional[list[str]] = []
+    assignedSiteIds: Optional[List[str]] = []
     phone: Optional[str] = None
     email: Optional[str] = None
     avatar: Optional[str] = None
@@ -24,8 +24,35 @@ class LoginResponse(BaseModel):
     user: UserProfile
 
 class ForgotPasswordRequest(BaseModel):
-    employeeId: str
+    identifier: Optional[str] = Field(None, description="Employee ID, Phone, or Email")
+    employeeId: Optional[str] = Field(None, description="Legacy parameter for Employee ID")
+    email: Optional[str] = Field(None, description="Optional destination email")
+
+    @root_validator(pre=True)
+    def check_identifier(cls, values):
+        if not values.get("identifier") and values.get("employeeId"):
+            values["identifier"] = values.get("employeeId")
+        return values
+
+class VerifyOTPRequest(BaseModel):
+    identifier: Optional[str] = Field(None, description="Employee ID, Phone, or Email")
+    employeeId: Optional[str] = Field(None, description="Legacy parameter for Employee ID")
+    otp: str = Field(..., description="6-digit OTP code")
+
+    @root_validator(pre=True)
+    def check_identifier(cls, values):
+        if not values.get("identifier") and values.get("employeeId"):
+            values["identifier"] = values.get("employeeId")
+        return values
 
 class ResetPasswordRequest(BaseModel):
-    employeeId: str
-    newPassword: str
+    identifier: Optional[str] = Field(None, description="Employee ID, Phone, or Email")
+    employeeId: Optional[str] = Field(None, description="Legacy parameter for Employee ID")
+    otp: str = Field(..., description="6-digit OTP code")
+    newPassword: str = Field(..., description="New account password")
+
+    @root_validator(pre=True)
+    def check_identifier(cls, values):
+        if not values.get("identifier") and values.get("employeeId"):
+            values["identifier"] = values.get("employeeId")
+        return values

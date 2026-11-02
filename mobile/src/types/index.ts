@@ -105,15 +105,31 @@ export interface SalarySlip {
   employeeId: string;
   employeeName: string;
   designation: string;
+  department?: string;
   month: number;
   year: number;
   monthName: string;
   netPay: number;
-  status: 'PAID' | 'PROCESSING';
+  status: 'PAID' | 'PROCESSING' | 'FINALIZED' | 'DRAFT' | 'REVISED' | string;
   payableDays: number;
   presentDays: number;
   paidLeaves: number;
   lossOfPay: number;
+  monthlySalary?: number;
+  dailySalaryRate?: number;
+  absentDays?: number;
+  halfDays?: number;
+  weeklyOffDays?: number;
+  publicHolidayDays?: number;
+  absentDeductionRate?: number;
+  halfDayDeductionRate?: number;
+  absentDeductionTotal?: number;
+  halfDayDeductionTotal?: number;
+  totalDeductionAmount?: number;
+  referenceNumber?: string;
+  finalizedAt?: string;
+  finalizedBy?: string;
+  revisionReason?: string;
   earnings: EarningsBreakdown;
   deductions: DeductionsBreakdown;
   payslipPdfUrl?: string;
@@ -123,6 +139,32 @@ export interface SalarySlip {
   notes?: string;
   uploadedAt?: string;
   uploadedBy?: string;
+}
+
+export interface SalaryConfig {
+  employeeId: string;
+  employeeName: string;
+  monthlySalary: number;
+  dailyRate: number;
+  absentDeductionRate: number;
+  halfDayDeductionRate: number;
+  effectiveDate: string;
+  updatedAt?: string;
+  updatedBy?: string;
+  notes?: string;
+}
+
+export interface SalarySummaryResponse {
+  month: number;
+  year: number;
+  monthName: string;
+  totalEmployees: number;
+  totalGrossDisbursed: number;
+  totalDeductions: number;
+  totalNetPayable: number;
+  finalizedCount: number;
+  draftCount: number;
+  slips: SalarySlip[];
 }
 
 export interface FleetTechnician {

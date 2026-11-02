@@ -507,7 +507,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
       {/* 1. Header Bar */}
       <View style={[styles.headerRow, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.menuBtn}
             onPress={() => openDrawer('Sites')}
             activeOpacity={0.7}
@@ -516,7 +516,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
             <Menu size={20} color="#0F172A" />
           </TouchableOpacity>
 
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.backBtn}
             onPress={() => navigation.goBack()}
             activeOpacity={0.7}
@@ -530,7 +530,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
           <Text style={styles.screenTitle} numberOfLines={1}>Site Allocation Management</Text>
         </View>
 
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.refreshIconBtn}
           onPress={onRefresh}
           activeOpacity={0.7}
@@ -606,14 +606,14 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
               clearButtonMode="while-editing"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <TouchableOpacity delayPressIn={0} onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <X size={15} color="#94A3B8" />
               </TouchableOpacity>
             )}
           </View>
 
           {/* Site Filter Button */}
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.filterBtn}
             onPress={() => setShowSiteFilterModal(true)}
             activeOpacity={0.7}
@@ -628,7 +628,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
           </TouchableOpacity>
 
           {/* Role Filter Button */}
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.filterBtn}
             onPress={() => setShowRoleFilterModal(true)}
             activeOpacity={0.7}
@@ -799,7 +799,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
                           alignItems: 'center',
                         }}
                       >
-                        <TouchableOpacity
+                        <TouchableOpacity delayPressIn={0}
                           style={styles.changeSitesBtn}
                           onPress={() => handleOpenChangeSites(emp)}
                           activeOpacity={0.8}
@@ -836,7 +836,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
               <Text style={styles.modalTitle} numberOfLines={1}>
                 Change Site Assignment — {selectedEmployee?.name || 'Staff'}
               </Text>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 onPress={() => setShowChangeSiteModal(false)}
                 style={styles.modalCloseBtn}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -895,7 +895,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
                 </View>
 
                 {/* Primary Site Dropdown Trigger */}
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.dropdownTriggerBox}
                   onPress={() => setShowPrimaryDropdown(true)}
                   activeOpacity={0.7}
@@ -926,7 +926,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
 
                   {/* Quick Action Pill Buttons */}
                   <View style={styles.quickActionGroup}>
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.quickBtnSelectAll}
                       onPress={handleSelectAllSites}
                       activeOpacity={0.7}
@@ -934,7 +934,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
                       <Text style={styles.quickBtnSelectAllText}>Select All Sites</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.quickBtnPrimaryOnly}
                       onPress={handlePrimaryOnly}
                       activeOpacity={0.7}
@@ -960,7 +960,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
                       const isChecked = selectedPermittedSiteIds.includes(site.id) || selectedPermittedSiteIds.includes(site.name);
 
                       return (
-                        <TouchableOpacity
+                        <TouchableOpacity delayPressIn={0}
                           key={site.id}
                           style={[
                             styles.siteCheckboxCard,
@@ -1008,7 +1008,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
 
             {/* Fixed Modal Footer */}
             <View style={styles.modalFooterRow}>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.modalCancelBtn}
                 onPress={() => setShowChangeSiteModal(false)}
                 activeOpacity={0.7}
@@ -1017,7 +1017,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
                 <Text style={styles.modalCancelBtnText}>Cancel</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.modalSaveBtn}
                 onPress={handleSaveSiteAllocation}
                 activeOpacity={0.85}
@@ -1043,7 +1043,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
         animationType="fade"
         onRequestClose={() => setShowPrimaryDropdown(false)}
       >
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.pickerOverlay}
           activeOpacity={1}
           onPress={() => setShowPrimaryDropdown(false)}
@@ -1051,7 +1051,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
           <View style={[styles.pickerModalCard, { maxWidth: 500 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <Text style={styles.pickerTitle}>Select Primary Assigned Worksite</Text>
-              <TouchableOpacity onPress={() => setShowPrimaryDropdown(false)}>
+              <TouchableOpacity delayPressIn={0} onPress={() => setShowPrimaryDropdown(false)}>
                 <X size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
@@ -1059,7 +1059,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
               {substations.map((site) => {
                 const isSelected = selectedPrimarySiteId === site.id || selectedPrimarySiteId === site.name;
                 return (
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     key={site.id}
                     style={[
                       styles.primaryPickItem,
@@ -1094,7 +1094,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
         animationType="fade"
         onRequestClose={() => setShowSiteFilterModal(false)}
       >
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.pickerOverlay}
           activeOpacity={1}
           onPress={() => setShowSiteFilterModal(false)}
@@ -1102,7 +1102,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
           <View style={styles.pickerModalCard}>
             <Text style={styles.pickerTitle}>Filter by Substation</Text>
             <ScrollView style={{ maxHeight: 320 }}>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={[
                   styles.pickerItem,
                   selectedSiteFilter === 'all' && styles.pickerItemActive,
@@ -1124,7 +1124,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
               </TouchableOpacity>
 
               {substations.map((s) => (
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   key={s.id}
                   style={[
                     styles.pickerItem,
@@ -1160,7 +1160,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
         animationType="fade"
         onRequestClose={() => setShowRoleFilterModal(false)}
       >
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.pickerOverlay}
           activeOpacity={1}
           onPress={() => setShowRoleFilterModal(false)}
@@ -1172,7 +1172,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
               { key: 'technician', label: 'Field Technicians & Installers' },
               { key: 'supervisor', label: 'Supervisors & Leads' },
             ].map((roleOpt) => (
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 key={roleOpt.key}
                 style={[
                   styles.pickerItem,

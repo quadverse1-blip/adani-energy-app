@@ -222,7 +222,7 @@ export const HistoryScreen: React.FC = () => {
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
       {/* Top Header Bar */}
       <View style={styles.topNavHeader}>
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.navHeaderBtn}
           onPress={() => openDrawer('History')}
           activeOpacity={0.7}
@@ -230,7 +230,7 @@ export const HistoryScreen: React.FC = () => {
           <Menu size={20} color="#0F172A" />
         </TouchableOpacity>
         <Text style={styles.navHeaderTitle}>Attendance History</Text>
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.navHeaderBtn}
           onPress={() => navigation.navigate('Dashboard')}
           activeOpacity={0.7}
@@ -242,7 +242,7 @@ export const HistoryScreen: React.FC = () => {
       {/* Scope Filter: Monthly, Weekly, Daily */}
       <View style={styles.filterPillsRow}>
         {(['monthly', 'weekly', 'daily'] as const).map((mode) => (
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             key={mode}
             style={[styles.filterPill, filterMode === mode && styles.filterPillActive]}
             onPress={() => setFilterMode(mode)}
@@ -262,7 +262,7 @@ export const HistoryScreen: React.FC = () => {
 
       {/* Dynamic Date Selector Bar */}
       <View style={styles.dateSelectorBar}>
-        <TouchableOpacity onPress={handlePrev} style={styles.dateNavBtn} activeOpacity={0.7}>
+        <TouchableOpacity delayPressIn={0} onPress={handlePrev} style={styles.dateNavBtn} activeOpacity={0.7}>
           <ChevronLeft size={20} color={COLORS.primary} />
         </TouchableOpacity>
 
@@ -276,7 +276,7 @@ export const HistoryScreen: React.FC = () => {
         </View>
 
         <View style={styles.dateNavRight}>
-          <TouchableOpacity onPress={handleNext} style={styles.dateNavBtn} activeOpacity={0.7}>
+          <TouchableOpacity delayPressIn={0} onPress={handleNext} style={styles.dateNavBtn} activeOpacity={0.7}>
             <ChevronRight size={20} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
@@ -292,7 +292,7 @@ export const HistoryScreen: React.FC = () => {
               const dayNum = d.getDate();
 
               return (
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   key={d.toISOString()}
                   style={[styles.dayStripItem, isSelected && styles.dayStripItemSelected]}
                   onPress={() => setCurrentDate(new Date(d))}
@@ -365,7 +365,7 @@ export const HistoryScreen: React.FC = () => {
               </Text>
 
               {filterMode === 'daily' && selectedDayStr !== '2026-10-22' && (
-                <TouchableOpacity style={styles.todayQuickBtn} onPress={handleJumpToToday}>
+                <TouchableOpacity delayPressIn={0} style={styles.todayQuickBtn} onPress={handleJumpToToday}>
                   <RotateCcw size={12} color="#4338CA" />
                   <Text style={styles.todayQuickText}>Today</Text>
                 </TouchableOpacity>

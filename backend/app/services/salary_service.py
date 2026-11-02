@@ -1,11 +1,325 @@
 import calendar
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, Any, List, Optional
 from app.core.database import db
 
 UPLOADED_SLIPS: Dict[str, dict] = {}
 
 class SalaryService:
+    @staticmethod
+    def get_salary_config(employee_id: str) -> dict:
+        """Retrieves individual employee salary & deduction configuration."""
+        return db.get_salary_config(employee_id)
+
+    @staticmethod
+    def update_salary_config(
+        employee_id: str,
+        monthly_salary: float,
+        absent_deduction_rate: float,
+        half_day_deduction_rate: float,
+        effective_date: Optional[str] = None,
+        notes: Optional[str] = None,
+        updated_by: Optional[str] = "Operations Administrator"
+    ) -> dict:
+        """Updates individual employee salary and deduction amounts with effective date."""
+        config_data = {
+            "monthlySalary": float(monthly_salary),
+            "absentDeductionRate": float(absent_deduction_rate),
+            "halfDayDeductionRate": float(half_day_deduction_rate),
+            "effectiveDate": effective_date or datetime.utcnow().strftime("%Y-%m-%d"),
+            "notes": notes or "Configured by Admin",
+            "updatedBy": updated_by or "Operations Administrator",
+            "updatedAt": datetime.utcnow().isoformat() + "Z"
+        }
+        return db.set_salary_config(employee_id, config_data)
+
+    @staticmethod
+    def calculate_attendance_summary(employee_id: str, month: int, year: int) -> dict:
+        """
+        Dynamically calculates employee attendance categories from centralized attendance:
+        - P (Present): Full days worked
+        - Half Day: Days where working minutes < 480 or marked as half-day
+        - A (Absent): Regular working days without check-in up to today
+        - WO (Weekly Off): Sundays (no deduction)
+        - PH (Public Holiday): Official gazetted holidays (no deduction)
+        """
+        now = datetime.now()
+        days_in_month = calendar.monthrange(year, month)[1]
+
+        # 1. Fetch holidays
+        holidays_list = db.get_all_holidays(year=year)
+        holiday_map = {}
+        for h in holidays_list:
+            if h.get("date") and h.get("status") != "deleted":
+                holiday_map[str(h["date"]).strip()] = h
+
+        # 2. Fetch employee attendance records
+        employee = db.get_employee(employee_id) or db.find_employee_by_identifier(employee_id)
+        emp_raw_id = employee.get("_id", employee_id) if employee else employee_id
+        emp_code = employee.get("employeeId", employee_id) if employee else employee_id
+
+        emp_att_list = db.get_attendance_history(emp_raw_id, month=month, year=year)
+        if not emp_att_list and emp_code != emp_raw_id:
+            emp_att_list = db.get_attendance_history(emp_code, month=month, year=year)
+
+        emp_att_map: Dict[str, dict] = {}
+        for att in emp_att_list:
+            d_val = str(att.get("date") or "").strip()
+            if d_val:
+                emp_att_map[d_val] = att
+
+        present_days = 0
+        half_days = 0
+        absent_days = 0
+        weekly_off_days = 0
+        public_holiday_days = 0
+
+        for d in range(1, days_in_month + 1):
+            dt_obj = date(year, month, d)
+            d_str = dt_obj.strftime("%Y-%m-%d")
+
+            # Condition 1: Public Holiday (PH) - No deduction
+            if d_str in holiday_map:
+                public_holiday_days += 1
+            # Condition 2: Weekly Off (WO - Sunday) - No deduction
+            elif dt_obj.weekday() == 6:
+                weekly_off_days += 1
+            # Condition 3: Regular Working Day
+            else:
+                att_rec = emp_att_map.get(d_str)
+                if att_rec and isinstance(att_rec, dict):
+                    ci = att_rec.get("checkIn")
+                    st = str(att_rec.get("status") or "").lower().replace("-", "_")
+                    shift_st = str(att_rec.get("shiftStatus") or "").lower().replace("-", "_")
+                    is_hd_flag = bool(att_rec.get("isHalfDay"))
+                    working_mins = att_rec.get("workingMinutes") or 0
+
+                    is_half = (
+                        is_hd_flag or
+                        st in ("half_day", "halfday") or
+                        shift_st in ("half_day", "halfday") or
+                        (ci and 0 < working_mins < 480)
+                    )
+
+                    if is_half:
+                        half_days += 1
+                        present_days += 1
+                    elif ci or st in ["p", "present", "late", "completed", "active"]:
+                        present_days += 1
+                    else:
+                        if dt_obj <= now.date():
+                            absent_days += 1
+                else:
+                    # No check-in record
+                    if dt_obj <= now.date():
+                        absent_days += 1
+
+        payable_days = present_days + weekly_off_days + public_holiday_days
+
+        return {
+            "presentDays": present_days,
+            "absentDays": absent_days,
+            "halfDays": half_days,
+            "weeklyOffDays": weekly_off_days,
+            "publicHolidayDays": public_holiday_days,
+            "totalCalendarDays": days_in_month,
+            "payableDays": payable_days
+        }
+
+    @staticmethod
+    def get_salary_slip(employee_id: str, month: int, year: int) -> dict:
+        """
+        Returns employee salary slip.
+        If a statement was finalized by Admin, returns the frozen finalized record.
+        Otherwise calculates dynamically from attendance and current salary config.
+        """
+        employee = db.get_employee(employee_id) or db.find_employee_by_identifier(employee_id)
+        canonical_id = employee.get("employeeId") if employee else employee_id
+        name = employee.get("name", "Field Technician") if employee else "Field Technician"
+        desig = employee.get("designation", "Smart Meter Technician") if employee else "Smart Meter Technician"
+        dept = employee.get("department", "Smart Meter Operations") if employee else "Smart Meter Operations"
+        circle = employee.get("circle", "Gujarat Circle") if employee else "Gujarat Circle"
+        division = employee.get("division", "Surat Division") if employee else "Surat Division"
+
+        # 1. Check if finalized statement is already recorded
+        frozen_statement = db.get_salary_statement(employee_id, month, year)
+        if frozen_statement:
+            # Ensure URL is populated
+            frozen_statement["payslipPdfUrl"] = f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}"
+            return frozen_statement
+
+        # 2. Check if an admin uploaded an external slip file
+        key1 = f"{employee_id}_{month}_{year}"
+        key2 = f"{canonical_id}_{month}_{year}"
+        uploaded_slip = UPLOADED_SLIPS.get(key1) or UPLOADED_SLIPS.get(key2)
+        has_uploaded = uploaded_slip is not None
+
+        # 3. Retrieve employee salary configuration
+        cfg = db.get_salary_config(canonical_id)
+        monthly_salary = float(cfg.get("monthlySalary", 20000.0))
+        absent_rate = float(cfg.get("absentDeductionRate", 500.0))
+        half_day_rate = float(cfg.get("halfDayDeductionRate", 250.0))
+
+        # 4. Calculate actual attendance counts
+        att = SalaryService.calculate_attendance_summary(employee_id, month, year)
+        days_in_month = att["totalCalendarDays"]
+        daily_rate = round(monthly_salary / float(days_in_month), 2)
+
+        # 5. Calculate deductions
+        absent_deduction_total = round(att["absentDays"] * absent_rate, 2)
+        half_day_deduction_total = round(att["halfDays"] * half_day_rate, 2)
+        total_deduction_amount = round(absent_deduction_total + half_day_deduction_total, 2)
+
+        if has_uploaded:
+            net_pay = uploaded_slip["netAmount"]
+        else:
+            net_pay = max(0.0, round(monthly_salary - total_deduction_amount, 2))
+
+        # 6. Standard breakdown for statutory components
+        basic = round(monthly_salary * 0.55, 2)
+        hra = round(monthly_salary * 0.22, 2)
+        da = round(monthly_salary * 0.11, 2)
+        travel = round(monthly_salary * 0.08, 2)
+        field = round(monthly_salary * 0.04, 2)
+        gross = basic + hra + da + travel + field
+        pf = round(basic * 0.12, 2)
+
+        month_name = calendar.month_name[month]
+        ref_no = f"ADN-PAY-{year}{month:02d}-{canonical_id.replace('/', '-')}"
+
+        statement = {
+            "referenceNumber": ref_no,
+            "employeeId": canonical_id,
+            "employeeName": name,
+            "designation": desig,
+            "department": dept,
+            "circle": circle,
+            "division": division,
+            "month": month,
+            "year": year,
+            "monthName": f"{month_name} {year}",
+            "monthlySalary": monthly_salary,
+            "dailySalaryRate": daily_rate,
+            "netPay": round(net_pay, 2),
+            "status": "DRAFT",
+            "payableDays": att["payableDays"],
+            "presentDays": att["presentDays"],
+            "absentDays": att["absentDays"],
+            "halfDays": att["halfDays"],
+            "weeklyOffDays": att["weeklyOffDays"],
+            "publicHolidayDays": att["publicHolidayDays"],
+            "paidLeaves": att["weeklyOffDays"] + att["publicHolidayDays"],
+            "lossOfPay": att["absentDays"],
+            "absentDeductionRate": absent_rate,
+            "halfDayDeductionRate": half_day_rate,
+            "absentDeductionTotal": absent_deduction_total,
+            "halfDayDeductionTotal": half_day_deduction_total,
+            "totalDeductionAmount": total_deduction_amount,
+            "earnings": {
+                "basicSalary": basic,
+                "hra": hra,
+                "da": da,
+                "travelAllowance": travel,
+                "siteFieldAllowance": field,
+                "grossEarnings": gross
+            },
+            "deductions": {
+                "pf": pf,
+                "esic": 0.0,
+                "professionalTax": 200.0,
+                "tds": 0.0,
+                "totalDeductions": total_deduction_amount
+            },
+            "payslipPdfUrl": f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}",
+            "hasUploadedDocument": has_uploaded,
+            "documentUrl": f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}" if has_uploaded else None,
+            "fileName": uploaded_slip.get("fileName") if uploaded_slip else None,
+            "notes": uploaded_slip.get("notes") if uploaded_slip else "Attendance-based monthly compensation",
+            "uploadedAt": uploaded_slip.get("uploadedAt") if uploaded_slip else None,
+            "uploadedBy": uploaded_slip.get("uploadedBy") if uploaded_slip else None
+        }
+
+        return statement
+
+    @staticmethod
+    def finalize_salary_statement(
+        employee_id: str,
+        month: int,
+        year: int,
+        admin_name: str,
+        notes: Optional[str] = None
+    ) -> dict:
+        """
+        Admin action: Calculates and freezes the monthly salary statement as FINALIZED.
+        Once finalized, the statement is preserved and does not alter automatically.
+        """
+        statement = SalaryService.get_salary_slip(employee_id, month, year)
+        statement["status"] = "FINALIZED"
+        statement["finalizedAt"] = datetime.utcnow().isoformat() + "Z"
+        statement["finalizedBy"] = admin_name or "Operations Administrator"
+        if notes:
+            statement["notes"] = notes
+
+        db.save_salary_statement(statement)
+        return statement
+
+    @staticmethod
+    def revise_salary_statement(
+        employee_id: str,
+        month: int,
+        year: int,
+        admin_name: str,
+        revision_reason: str,
+        custom_salary: Optional[float] = None,
+        custom_absent_rate: Optional[float] = None,
+        custom_half_day_rate: Optional[float] = None,
+        notes: Optional[str] = None
+    ) -> dict:
+        """
+        Admin action: Revises a finalized salary statement with an explicit audit trail.
+        """
+        statement = SalaryService.get_salary_slip(employee_id, month, year).copy()
+
+        # Update rates if provided
+        monthly_salary = float(custom_salary) if custom_salary is not None else float(statement["monthlySalary"])
+        absent_rate = float(custom_absent_rate) if custom_absent_rate is not None else float(statement.get("absentDeductionRate", 500.0))
+        half_day_rate = float(custom_half_day_rate) if custom_half_day_rate is not None else float(statement.get("halfDayDeductionRate", 250.0))
+
+        days_in_month = statement.get("totalCalendarDays") or calendar.monthrange(year, month)[1]
+        daily_rate = round(monthly_salary / float(days_in_month), 2)
+
+        absent_deduction_total = round(statement.get("absentDays", 0) * absent_rate, 2)
+        half_day_deduction_total = round(statement.get("halfDays", 0) * half_day_rate, 2)
+        total_deduction_amount = round(absent_deduction_total + half_day_deduction_total, 2)
+        net_pay = max(0.0, round(monthly_salary - total_deduction_amount, 2))
+
+        # Maintain revision audit trail
+        revisions = statement.get("revisions", [])
+        revisions.append({
+            "revisedAt": datetime.utcnow().isoformat() + "Z",
+            "revisedBy": admin_name or "Operations Administrator",
+            "previousNetPay": statement.get("netPay"),
+            "newNetPay": net_pay,
+            "revisionReason": revision_reason
+        })
+
+        statement["monthlySalary"] = monthly_salary
+        statement["dailySalaryRate"] = daily_rate
+        statement["absentDeductionRate"] = absent_rate
+        statement["halfDayDeductionRate"] = half_day_rate
+        statement["absentDeductionTotal"] = absent_deduction_total
+        statement["halfDayDeductionTotal"] = half_day_deduction_total
+        statement["totalDeductionAmount"] = total_deduction_amount
+        statement["netPay"] = net_pay
+        statement["status"] = "REVISED"
+        statement["revisionReason"] = revision_reason
+        statement["revisions"] = revisions
+        if notes:
+            statement["notes"] = notes
+
+        db.save_salary_statement(statement)
+        return statement
+
     @staticmethod
     def record_salary_slip(
         employee_id: str,
@@ -17,10 +331,7 @@ class SalaryService:
         file_base64: Optional[str] = None,
         uploaded_by: Optional[str] = "Operations Administrator"
     ) -> dict:
-        employee = db.get_employee(employee_id)
-        if not employee:
-            employee = db.find_employee_by_identifier(employee_id)
-
+        employee = db.get_employee(employee_id) or db.find_employee_by_identifier(employee_id)
         canonical_id = employee.get("employeeId") if employee else employee_id
 
         record = {
@@ -43,254 +354,28 @@ class SalaryService:
         return SalaryService.get_salary_slip(employee_id, month, year)
 
     @staticmethod
-    def get_salary_slip(employee_id: str, month: int, year: int) -> dict:
-        employee = db.get_employee(employee_id)
-        if not employee:
-            employee = db.find_employee_by_identifier(employee_id)
-        
-        canonical_id = employee.get("employeeId") if employee else employee_id
-        name = employee.get("name", "Field Technician") if employee else "Field Technician"
-        desig = employee.get("designation", "Smart Meter Technician") if employee else "Smart Meter Technician"
-        role = employee.get("role", "technician") if employee else "technician"
+    def get_salary_summary(month: int, year: int) -> dict:
+        """Returns monthly compensation summary across all active workforce employees."""
+        all_emps = db.get_all_employees()
+        all_emps.sort(key=lambda x: str(x.get("employeeId") or x.get("_id") or ""))
 
-        # Check if an admin uploaded a custom verified salary slip
-        key1 = f"{employee_id}_{month}_{year}"
-        key2 = f"{canonical_id}_{month}_{year}"
-        uploaded_slip = UPLOADED_SLIPS.get(key1) or UPLOADED_SLIPS.get(key2)
-        has_uploaded = uploaded_slip is not None
+        slips = [SalaryService.get_salary_slip(e["_id"], month, year) for e in all_emps]
+        total_disbursed = sum(s["netPay"] for s in slips)
+        total_deductions = sum(s.get("totalDeductionAmount", 0.0) for s in slips)
+        total_base = sum(s.get("monthlySalary", 0.0) for s in slips)
 
-        # Base compensation scales according to role
-        if role == "admin":
-            basic = 48000.0
-            hra = 19200.0
-            da = 9600.0
-            travel = 5000.0
-            field = 4000.0
-            pf = 5760.0
-            esic = 0.0
-            pt = 200.0
-            tds = 5000.0
-        elif role == "supervisor":
-            basic = 28000.0
-            hra = 11200.0
-            da = 5600.0
-            travel = 3500.0
-            field = 3500.0
-            pf = 3360.0
-            esic = 0.0
-            pt = 200.0
-            tds = 1500.0
-        else: # technician (matching specification net ~ ₹28,450)
-            basic = 16000.0
-            hra = 6400.0
-            da = 3200.0
-            travel = 2500.0
-            field = 3000.0
-            pf = 1920.0
-            esic = 230.0
-            pt = 200.0
-            tds = 300.0
-
-        if has_uploaded:
-            net_pay = uploaded_slip["netAmount"]
-            basic = round(net_pay * 0.55, 2)
-            hra = round(net_pay * 0.22, 2)
-            da = round(net_pay * 0.11, 2)
-            travel = round(net_pay * 0.08, 2)
-            field = round(net_pay * 0.04, 2)
-            gross = basic + hra + da + travel + field
-            pf = round(basic * 0.12, 2)
-            deductions = round(gross - net_pay, 2)
-        else:
-            gross = basic + hra + da + travel + field
-            deductions = pf + esic + pt + tds
-            net_pay = gross - deductions
-
-        month_name = calendar.month_name[month]
+        finalized_count = sum(1 for s in slips if s.get("status") in ("FINALIZED", "PAID", "REVISED"))
+        draft_count = sum(1 for s in slips if s.get("status") == "DRAFT")
 
         return {
-            "employeeId": canonical_id,
-            "employeeName": name,
-            "designation": desig,
-            "month": month,
-            "year": year,
-            "monthName": f"{month_name} {year}",
-            "netPay": round(net_pay, 2),
-            "status": "PAID" if (has_uploaded or month <= 10) else "PROCESSING",
-            "payableDays": 30,
-            "presentDays": 26,
-            "paidLeaves": 3,
-            "lossOfPay": 1,
-            "earnings": {
-                "basicSalary": basic,
-                "hra": hra,
-                "da": da,
-                "travelAllowance": travel,
-                "siteFieldAllowance": field,
-                "grossEarnings": gross
-            },
-            "deductions": {
-                "pf": pf,
-                "esic": esic,
-                "professionalTax": pt,
-                "tds": tds,
-                "totalDeductions": deductions
-            },
-            "payslipPdfUrl": f"/api/v1/salary/download/{employee_id}?month={month}&year={year}",
-            "hasUploadedDocument": has_uploaded,
-            "documentUrl": f"/api/v1/salary/download/{employee_id}?month={month}&year={year}" if has_uploaded else None,
-            "fileName": uploaded_slip.get("fileName") if uploaded_slip else None,
-            "notes": uploaded_slip.get("notes") if uploaded_slip else "Monthly verified compensation",
-            "uploadedAt": uploaded_slip.get("uploadedAt") if uploaded_slip else None,
-            "uploadedBy": uploaded_slip.get("uploadedBy") if uploaded_slip else None
+            "totalDisbursed": round(total_disbursed, 2),
+            "totalDeductions": round(total_deductions, 2),
+            "totalBaseSalary": round(total_base, 2),
+            "paidCount": finalized_count,
+            "finalizedCount": finalized_count,
+            "draftCount": draft_count,
+            "pendingCount": draft_count,
+            "slips": slips
         }
 
 salary_service = SalaryService()
-
-# Seed verified Admin-Uploaded Payslip PDF for Supervisor (Neha Patil - October 2026)
-def _seed_supervisor_payslip():
-    try:
-        import io, base64
-        from reportlab.lib.pagesizes import letter
-        from reportlab.pdfgen import canvas
-
-        buf = io.BytesIO()
-        c = canvas.Canvas(buf, pagesize=letter)
-        c.setFont("Helvetica-Bold", 18)
-        c.drawString(50, 750, "ADANI ELECTRICITY & TRANSMISSION")
-        c.setFont("Helvetica", 11)
-        c.drawString(50, 732, "Workforce Operations Management • Official Salary Payslip")
-        c.setStrokeColorRGB(0.12, 0.39, 0.94)
-        c.setLineWidth(2)
-        c.line(50, 720, 560, 720)
-
-        c.setFont("Helvetica-Bold", 12)
-        c.setFillColorRGB(0.06, 0.09, 0.16)
-        c.drawString(50, 690, "Employee Name: Neha Patil")
-        c.drawString(50, 670, "Employee ID: b4S/Adani/05 (SUPERVISOR)")
-        c.drawString(50, 650, "Payroll Period: October 2026")
-        c.drawString(50, 630, "Net Disbursed Take-Home Pay: Rs. 46,740.00")
-        c.drawString(50, 610, "Status: VERIFIED & TRANSFERRED TO SALARY ACCOUNT")
-
-        c.setStrokeColorRGB(0.8, 0.85, 0.9)
-        c.setLineWidth(1)
-        c.line(50, 595, 560, 595)
-
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(50, 575, "Earnings Breakdown:")
-        c.setFont("Helvetica", 10)
-        c.drawString(70, 555, "• Basic Pay: Rs. 28,000.00")
-        c.drawString(70, 540, "• House Rent Allowance (HRA): Rs. 11,200.00")
-        c.drawString(70, 525, "• Dearness Allowance (DA): Rs. 5,600.00")
-        c.drawString(70, 510, "• Travel & Conveyance Allowance: Rs. 3,500.00")
-        c.drawString(70, 495, "• Site & Field Allowance: Rs. 3,500.00")
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(70, 475, "Gross Earnings: Rs. 51,800.00")
-
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(300, 575, "Statutory Deductions:")
-        c.setFont("Helvetica", 10)
-        c.drawString(320, 555, "• Provident Fund (PF): Rs. 3,360.00")
-        c.drawString(320, 540, "• Professional Tax (PT): Rs. 200.00")
-        c.drawString(320, 525, "• Tax Deducted at Source (TDS): Rs. 1,500.00")
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(320, 475, "Total Deductions: Rs. 5,060.00")
-
-        c.line(50, 455, 560, 455)
-        c.setFont("Helvetica-Oblique", 9)
-        c.setFillColorRGB(0.4, 0.45, 0.55)
-        c.drawString(50, 435, "This is an official computer-generated salary slip digitally approved by Adani HR & Accounts Division.")
-        c.drawString(50, 420, "Approved by: Operations Administrator • Archive ID: ADN-PAY-2026-10-05")
-
-        c.showPage()
-        c.save()
-        pdf_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-
-        salary_service.record_salary_slip(
-            employee_id="emp_05",
-            month=10,
-            year=2026,
-            net_amount=46740.0,
-            notes="October 2026 verified monthly supervisor compensation approved by Adani Accounts.",
-            file_name="Adani_Payslip_b4S_Adani_05_October_2026.pdf",
-            file_base64=pdf_b64,
-            uploaded_by="Adani Operations Admin"
-        )
-    except Exception as e:
-        print("Error seeding supervisor payslip:", e)
-
-_seed_supervisor_payslip()
-
-def _seed_technician_payslip():
-    try:
-        import io, base64
-        from reportlab.lib.pagesizes import letter
-        from reportlab.pdfgen import canvas
-
-        buf = io.BytesIO()
-        c = canvas.Canvas(buf, pagesize=letter)
-        c.setFont("Helvetica-Bold", 18)
-        c.drawString(50, 750, "ADANI ELECTRICITY & TRANSMISSION")
-        c.setFont("Helvetica", 11)
-        c.drawString(50, 732, "Smart Meter Field Operations • Official Salary Payslip")
-        c.setStrokeColorRGB(0.12, 0.39, 0.94)
-        c.setLineWidth(2)
-        c.line(50, 720, 560, 720)
-
-        c.setFont("Helvetica-Bold", 12)
-        c.setFillColorRGB(0.06, 0.09, 0.16)
-        c.drawString(50, 690, "Employee Name: Rohit Sharma")
-        c.drawString(50, 670, "Employee ID: b4S/Adani/01 (TECHNICIAN - JUNIOR ENGINEER)")
-        c.drawString(50, 650, "Payroll Period: October 2026")
-        c.drawString(50, 630, "Net Disbursed Take-Home Pay: Rs. 28,450.00")
-        c.drawString(50, 610, "Status: VERIFIED & TRANSFERRED TO SALARY ACCOUNT")
-
-        c.setStrokeColorRGB(0.8, 0.85, 0.9)
-        c.setLineWidth(1)
-        c.line(50, 595, 560, 595)
-
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(50, 575, "Earnings Breakdown:")
-        c.setFont("Helvetica", 10)
-        c.drawString(70, 555, "• Basic Pay: Rs. 16,000.00")
-        c.drawString(70, 540, "• House Rent Allowance (HRA): Rs. 6,400.00")
-        c.drawString(70, 525, "• Dearness Allowance (DA): Rs. 3,200.00")
-        c.drawString(70, 510, "• Travel & Conveyance Allowance: Rs. 2,500.00")
-        c.drawString(70, 495, "• Site & Field Allowance: Rs. 3,000.00")
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(70, 475, "Gross Earnings: Rs. 31,100.00")
-
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(300, 575, "Statutory Deductions:")
-        c.setFont("Helvetica", 10)
-        c.drawString(320, 555, "• Provident Fund (PF): Rs. 1,920.00")
-        c.drawString(320, 540, "• Employee State Insurance (ESIC): Rs. 230.00")
-        c.drawString(320, 525, "• Professional Tax (PT): Rs. 200.00")
-        c.drawString(320, 510, "• Tax Deducted at Source (TDS): Rs. 300.00")
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(320, 475, "Total Deductions: Rs. 2,650.00")
-
-        c.line(50, 455, 560, 455)
-        c.setFont("Helvetica-Oblique", 9)
-        c.setFillColorRGB(0.4, 0.45, 0.55)
-        c.drawString(50, 435, "This is an official computer-generated salary slip digitally approved by Adani HR & Accounts Division.")
-        c.drawString(50, 420, "Approved by: Operations Administrator • Archive ID: ADN-TECH-2026-10-01")
-
-        c.showPage()
-        c.save()
-        pdf_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-
-        salary_service.record_salary_slip(
-            employee_id="emp_01",
-            month=10,
-            year=2026,
-            net_amount=28450.0,
-            notes="October 2026 verified monthly technician compensation approved by Adani Accounts.",
-            file_name="Adani_Payslip_b4S_Adani_01_October_2026.pdf",
-            file_base64=pdf_b64,
-            uploaded_by="Adani Operations Admin"
-        )
-    except Exception as e:
-        print("Error seeding technician payslip:", e)
-
-_seed_technician_payslip()

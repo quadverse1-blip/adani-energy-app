@@ -22,6 +22,7 @@ export interface TodayAttendanceResult {
   liveElapsedMinutes: number;
   record: AttendanceRecord | null;
   site: Substation | null;
+  sites?: Substation[];
 }
 
 export interface HistoryResult {

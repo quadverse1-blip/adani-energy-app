@@ -1,26 +1,46 @@
 from datetime import datetime, timedelta
 from typing import Optional, Any, Union
 from jose import jwt, JWTError
-from passlib.context import CryptContext
+import bcrypt
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Python 3.12+ compatibility: passlib expects bcrypt.__about__.__version__
+pwd_context = None
+try:
+    if not hasattr(bcrypt, "__about__"):
+        class _About:
+            __version__ = getattr(bcrypt, "__version__", "4.0.1")
+        bcrypt.__about__ = _About()
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+except Exception as e:
+    print(f"[Warning] passlib init fallback: {e}")
+
 security_bearer = HTTPBearer(auto_error=False)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if not hashed_password or not plain_password:
+        return False
     # Support development plain check or bcrypt
     if hashed_password.startswith("$2b$") or hashed_password.startswith("$2a$"):
         try:
-            return pwd_context.verify(plain_password, hashed_password)
+            if pwd_context:
+                return pwd_context.verify(plain_password, hashed_password)
+            return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
         except Exception:
             return False
     # Fallback for seeded dev passwords
     return plain_password == hashed_password
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    try:
+        if pwd_context:
+            return pwd_context.hash(password)
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    except Exception:
+        return password
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()

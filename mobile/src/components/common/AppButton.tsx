@@ -90,7 +90,8 @@ export const AppButton: React.FC<AppButtonProps> = ({
 
   return (
     <TouchableOpacity
-      activeOpacity={0.8}
+      activeOpacity={0.7}
+      delayPressIn={0}
       onPress={handlePress}
       disabled={disabled || loading}
       style={[

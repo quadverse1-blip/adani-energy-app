@@ -276,7 +276,7 @@ export const HolidayManagementScreen: React.FC = () => {
       {/* Top Header Card */}
       <View style={[styles.headerCard, { paddingTop: Math.max(insets.top, 16) }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.headerIconBtn}
             onPress={() => openDrawer('Holidays')}
             activeOpacity={0.7}
@@ -285,7 +285,7 @@ export const HolidayManagementScreen: React.FC = () => {
             <Menu size={20} color="#0F172A" />
           </TouchableOpacity>
 
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={[styles.headerIconBtn, { marginLeft: 8 }]}
             onPress={handleBack}
             activeOpacity={0.7}
@@ -301,7 +301,7 @@ export const HolidayManagementScreen: React.FC = () => {
             </Text>
           </View>
 
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.headerAddBtn}
             onPress={handleOpenAddModal}
             activeOpacity={0.85}
@@ -315,7 +315,7 @@ export const HolidayManagementScreen: React.FC = () => {
         <View style={styles.actionBarRow}>
           <View style={styles.yearPillsGroup}>
             {[2025, 2026, 2027].map((y) => (
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 key={y}
                 style={[styles.yearPill, selectedYear === y && styles.yearPillActive]}
                 onPress={() => setSelectedYear(y)}
@@ -327,7 +327,7 @@ export const HolidayManagementScreen: React.FC = () => {
             ))}
           </View>
 
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.pdfDownloadBtn}
             onPress={handleDownloadPdf}
             disabled={downloadingPdf}
@@ -445,7 +445,7 @@ export const HolidayManagementScreen: React.FC = () => {
 
                 {/* Right Actions */}
                 <View style={styles.actionsRow}>
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.actionIconBtn}
                     onPress={() => handleOpenEditModal(item)}
                     activeOpacity={0.7}
@@ -453,7 +453,7 @@ export const HolidayManagementScreen: React.FC = () => {
                     <Edit2 size={16} color="#1E63F0" />
                   </TouchableOpacity>
 
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={[styles.actionIconBtn, { backgroundColor: '#FEE2E2', marginLeft: 6 }]}
                     onPress={() => confirmDeleteHoliday(item)}
                     activeOpacity={0.7}
@@ -485,7 +485,7 @@ export const HolidayManagementScreen: React.FC = () => {
                   Centralized holiday auto-marked as PH in Attendance
                 </Text>
               </View>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 onPress={() => setModalVisible(false)}
                 style={styles.modalCloseBtn}
               >
@@ -525,7 +525,7 @@ export const HolidayManagementScreen: React.FC = () => {
                   }}
                   placeholderTextColor="#94A3B8"
                 />
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[
                     styles.dateCalendarIconBtn,
                     showDatePicker && styles.dateCalendarIconBtnActive,
@@ -543,7 +543,7 @@ export const HolidayManagementScreen: React.FC = () => {
                 <View style={styles.calPickerBox}>
                   {/* Calendar Navigation Header */}
                   <View style={styles.calNavHeader}>
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.calNavBtn}
                       onPress={handlePrevCalMonth}
                       activeOpacity={0.7}
@@ -555,7 +555,7 @@ export const HolidayManagementScreen: React.FC = () => {
                       {MONTH_NAMES[calMonth]} {calYear}
                     </Text>
 
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.calNavBtn}
                       onPress={handleNextCalMonth}
                       activeOpacity={0.7}
@@ -595,7 +595,7 @@ export const HolidayManagementScreen: React.FC = () => {
                       const isSunday = (calFirstDayOffset + i) % 7 === 0;
 
                       return (
-                        <TouchableOpacity
+                        <TouchableOpacity delayPressIn={0}
                           key={`day-${day}`}
                           style={[
                             styles.calDayCell,
@@ -620,7 +620,7 @@ export const HolidayManagementScreen: React.FC = () => {
 
                   {/* Calendar Quick Actions */}
                   <View style={styles.calFooterActions}>
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.calTodayBtn}
                       onPress={handleSelectToday}
                       activeOpacity={0.7}
@@ -628,7 +628,7 @@ export const HolidayManagementScreen: React.FC = () => {
                       <Text style={styles.calTodayBtnText}>Select Today</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.calCloseBtn}
                       onPress={() => setShowDatePicker(false)}
                       activeOpacity={0.7}
@@ -642,7 +642,7 @@ export const HolidayManagementScreen: React.FC = () => {
               <Text style={[styles.inputLabel, { marginTop: 12 }]}>Classification / Type</Text>
               <View style={styles.typeSelectorRow}>
                 {['National Gazetted', 'Gazetted', 'Regional'].map((t) => (
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     key={t}
                     style={[styles.typePill, formType === t && styles.typePillActive]}
                     onPress={() => setFormType(t)}
@@ -667,7 +667,7 @@ export const HolidayManagementScreen: React.FC = () => {
             </ScrollView>
 
             <View style={styles.modalFooterRow}>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.modalCancelBtn}
                 onPress={() => setModalVisible(false)}
                 disabled={saving}
@@ -675,7 +675,7 @@ export const HolidayManagementScreen: React.FC = () => {
                 <Text style={styles.modalCancelBtnText}>Cancel</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.modalSaveBtn}
                 onPress={handleSaveHoliday}
                 disabled={saving}

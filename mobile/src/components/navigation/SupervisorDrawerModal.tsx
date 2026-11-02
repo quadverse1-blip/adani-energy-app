@@ -87,20 +87,9 @@ export const SupervisorDrawerModal: React.FC = () => {
 
   const handleNavigate = (screenName: string) => {
     closeDrawer();
-    if (screenName === 'SupervisorDashboard') {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'SupervisorDashboard' }],
-      });
-    } else {
-      navigation.reset({
-        index: 1,
-        routes: [
-          { name: 'SupervisorDashboard' },
-          { name: screenName },
-        ],
-      });
-    }
+    requestAnimationFrame(() => {
+      navigation.navigate(screenName);
+    });
   };
 
   const handleLogout = () => {
@@ -202,7 +191,7 @@ export const SupervisorDrawerModal: React.FC = () => {
                   key={item.key}
                   style={[styles.menuItem, isActive && styles.menuItemActive]}
                   onPress={() => handleNavigate(item.screenName)}
-                  activeOpacity={0.7}
+                  activeOpacity={0.7} delayPressIn={0}
                 >
                   <View
                     style={[
@@ -256,7 +245,7 @@ export const SupervisorDrawerModal: React.FC = () => {
             <TouchableOpacity
               style={styles.logoutBtn}
               onPress={handleLogout}
-              activeOpacity={0.8}
+              activeOpacity={0.7} delayPressIn={0}
             >
               <LogOut size={18} color="#EF4444" />
               <Text style={styles.logoutText}>Sign Out</Text>

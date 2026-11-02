@@ -149,7 +149,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               <View style={{ flex: 1 }}>
                 <Text style={styles.errorText}>{formError}</Text>
                 {formError.includes('Network Error') ? (
-                  <TouchableOpacity
+                  <TouchableOpacity delayPressIn={0}
                     style={styles.fixServerBtn}
                     onPress={() => setShowServerModal(true)}
                     activeOpacity={0.8}
@@ -190,7 +190,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
           {/* Options Row: Remember Me & Forgot Password */}
           <View style={styles.optionsRow}>
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.checkboxContainer}
               activeOpacity={0.7}
               onPress={() => setRememberMe(!rememberMe)}
@@ -206,7 +206,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               <Text style={styles.rememberText}>Remember Me</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               onPress={() => navigation.navigate('ForgotPassword')}
               activeOpacity={0.7}
             >
@@ -228,7 +228,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         <View style={styles.demoSection}>
           <Text style={styles.demoTitle}>DEVELOPMENT DEMO CREDENTIALS</Text>
           <View style={styles.demoButtonRow}>
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={[
                 styles.demoPill,
                 username === 'b4S/Adani/01' && styles.demoPillActive,
@@ -246,7 +246,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={[
                 styles.demoPill,
                 (username === 'SUPER01' || username === 'supervisor' || username === 'b4S/Adani/04' || username === 'b4S/Adani/05') && styles.demoPillActive,
@@ -264,7 +264,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={[
                 styles.demoPill,
                 (username === 'admin' || username === 'b4S/Adani/Admin') && styles.demoPillActive,
@@ -316,7 +316,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
               <Text style={styles.quickPresetTitle}>QUICK PRESETS</Text>
               <View style={styles.presetCol}>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.presetBtn}
                   onPress={() => {
                     setServerUrl('http://192.168.0.111:8000');
@@ -327,7 +327,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
                   <Text style={styles.presetBtnSub}>http://192.168.0.111:8000</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.presetBtn}
                   onPress={() => {
                     setServerUrl('http://127.0.0.1:8000');
@@ -338,7 +338,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
                   <Text style={styles.presetBtnSub}>http://127.0.0.1:8000</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.presetBtn}
                   onPress={() => {
                     setServerUrl('http://10.0.2.2:8000');

@@ -77,3 +77,24 @@ def calculate_working_hours_status(
         final_status = "half_day"
         
     return total_hours, total_minutes, final_status
+
+def get_now_ist() -> datetime:
+    """Returns the current datetime in Indian Standard Time (UTC+5:30)."""
+    return datetime.utcnow() + timedelta(hours=5, minutes=30)
+
+def get_today_ist_str() -> str:
+    """Returns today's date formatted as YYYY-MM-DD in IST."""
+    return get_now_ist().strftime("%Y-%m-%d")
+
+def is_in_photo_cleanup_window_ist(
+    dt: Optional[datetime] = None,
+    start_hour: int = 8,
+    end_hour: int = 9
+) -> bool:
+    """
+    Returns True if current IST time is between 8:00 AM and 9:00 AM (08:00 to 09:00).
+    """
+    ist_dt = (dt or datetime.utcnow()) + timedelta(hours=5, minutes=30)
+    current_time = ist_dt.time()
+    return time(start_hour, 0, 0) <= current_time < time(end_hour, 0, 0)
+

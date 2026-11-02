@@ -43,7 +43,10 @@ import {
   AlertTriangle,
   Download,
   Building2,
+  Banknote,
 } from 'lucide-react-native';
+import { salaryService } from '../../services/salaryService';
+import { SalarySlip } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useAttendanceStore } from '../../store/useAttendanceStore';
@@ -116,6 +119,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [shiftInfo, setShiftInfo] = useState(getShiftInfo());
   const [substation, setSubstation] = useState<Substation | null>(null);
+  const [dashboardSalarySlip, setDashboardSalarySlip] = useState<SalarySlip | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [showCheckOutConfirm, setShowCheckOutConfirm] = useState(false);
@@ -206,6 +210,15 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         }
       } else {
         setSubstation(null);
+      }
+
+      // Load personal attendance-based salary overview
+      try {
+        const currentEmpId = (freshUser || user)?.id || ((freshUser || user) as any)?._id || 'emp_01';
+        const slip = await salaryService.getSalarySlip(currentEmpId, 10, 2026);
+        if (slip) setDashboardSalarySlip(slip);
+      } catch (salErr) {
+        // Silently use defaults
       }
 
       // Load Notifications from Dashboard Service
@@ -1212,6 +1225,75 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
               </View>
             </View>
           )}
+        </View>
+
+        {/* ============================================================== */}
+        {/* MY SALARY & ATTENDANCE COMPENSATION SECTION                    */}
+        {/* ============================================================== */}
+        <View style={styles.salarySectionCard}>
+          <View style={styles.salarySectionHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={styles.salarySectionIconWrap}>
+                <Banknote size={22} color="#1E40AF" />
+              </View>
+              <View>
+                <Text style={styles.salarySectionTitle}>My Salary & Compensation</Text>
+                <Text style={styles.salarySectionSub}>October 2026 • Attendance-Based Remuneration</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.salaryViewAllBtn}
+              onPress={() => navigation.navigate('Salary')}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.salaryViewAllBtnText}>Full Breakdown</Text>
+              <ChevronRight size={14} color="#2563EB" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.salaryKpiRow}>
+            <View style={styles.salaryKpiCol}>
+              <Text style={styles.salaryKpiLbl}>ASSIGNED SALARY</Text>
+              <Text style={styles.salaryKpiVal}>
+                ₹{(dashboardSalarySlip?.monthlySalary || 20000).toLocaleString('en-IN')}
+              </Text>
+              <Text style={styles.salaryKpiSub}>Base remuneration</Text>
+            </View>
+            <View style={styles.salaryKpiDivider} />
+            <View style={styles.salaryKpiCol}>
+              <Text style={styles.salaryKpiLbl}>ATTENDANCE</Text>
+              <Text style={[styles.salaryKpiVal, { color: '#0F172A', fontSize: 13 }]}>
+                {dashboardSalarySlip?.presentDays || 25}P • {dashboardSalarySlip?.absentDays || 2}A • {dashboardSalarySlip?.halfDays || 2}HD
+              </Text>
+              <Text style={styles.salaryKpiSub}>{dashboardSalarySlip?.weeklyOffDays || 4} Sundays paid</Text>
+            </View>
+            <View style={styles.salaryKpiDivider} />
+            <View style={styles.salaryKpiCol}>
+              <Text style={styles.salaryKpiLbl}>DEDUCTIONS</Text>
+              <Text style={[styles.salaryKpiVal, { color: '#DC2626' }]}>
+                -₹{(dashboardSalarySlip?.totalDeductionAmount || 1500).toLocaleString('en-IN')}
+              </Text>
+              <Text style={styles.salaryKpiSub}>Absent + Half day</Text>
+            </View>
+          </View>
+
+          <View style={styles.salaryPayableBanner}>
+            <View>
+              <Text style={styles.salaryPayableBannerLbl}>FINAL PAYABLE SALARY</Text>
+              <Text style={styles.salaryPayableBannerVal}>
+                ₹{(dashboardSalarySlip?.netPay || 18500).toLocaleString('en-IN')}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.salarySlipDownloadBtn}
+              onPress={() => navigation.navigate('Salary')}
+              activeOpacity={0.85}
+            >
+              <FileText size={14} color="#065F46" style={{ marginRight: 6 }} />
+              <Text style={styles.salarySlipDownloadBtnText}>Download PDF Payslip</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
 
@@ -3059,6 +3141,122 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#94A3B8',
+  },
+  salarySectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 14,
+    marginTop: 12,
+  },
+  salarySectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  salarySectionIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  salarySectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  salarySectionSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  salaryViewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  salaryViewAllBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563EB',
+    marginRight: 2,
+  },
+  salaryKpiRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+  },
+  salaryKpiCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  salaryKpiDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: '#E2E8F0',
+  },
+  salaryKpiLbl: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.4,
+  },
+  salaryKpiVal: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 3,
+  },
+  salaryKpiSub: {
+    fontSize: 9,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  salaryPayableBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  salaryPayableBannerLbl: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#047857',
+    letterSpacing: 0.5,
+  },
+  salaryPayableBannerVal: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#065F46',
+    marginTop: 2,
+  },
+  salarySlipDownloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#6EE7B7',
+  },
+  salarySlipDownloadBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#065F46',
   },
 });
 

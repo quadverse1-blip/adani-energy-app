@@ -100,20 +100,9 @@ export const TechnicianDrawerModal: React.FC = () => {
 
   const handleNavigate = (screenName: string) => {
     closeDrawer();
-    if (screenName === 'Dashboard') {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Dashboard' }],
-      });
-    } else {
-      navigation.reset({
-        index: 1,
-        routes: [
-          { name: 'Dashboard' },
-          { name: screenName },
-        ],
-      });
-    }
+    requestAnimationFrame(() => {
+      navigation.navigate(screenName);
+    });
   };
 
   const handleSignOut = () => {
@@ -181,7 +170,7 @@ export const TechnicianDrawerModal: React.FC = () => {
             <TouchableOpacity
               style={styles.closeBtn}
               onPress={closeDrawer}
-              activeOpacity={0.7}
+              activeOpacity={0.7} delayPressIn={0}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <X size={20} color="#475569" />
@@ -311,7 +300,7 @@ export const TechnicianDrawerModal: React.FC = () => {
             <TouchableOpacity
               style={styles.signOutBtn}
               onPress={handleSignOut}
-              activeOpacity={0.8}
+              activeOpacity={0.7} delayPressIn={0}
             >
               <LogOut size={16} color="#DC2626" />
               <Text style={styles.signOutBtnText}>Sign Out</Text>

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 class EmployeeCreate(BaseModel):
     name: str
@@ -55,3 +55,27 @@ class EmployeeResponse(BaseModel):
     longitude: Optional[float] = None
     locationName: Optional[str] = None
     shiftStatus: Optional[str] = "present"
+
+class BulkEmployeeItem(BaseModel):
+    employeeId: str
+    phone: str
+    password: str
+    name: Optional[str] = None
+    role: Optional[str] = "technician"
+    designation: Optional[str] = "Field Smart Meter Technician"
+    assignedSiteIds: Optional[List[str]] = []
+    assignedSiteId: Optional[str] = None
+    email: Optional[str] = None
+    circle: Optional[str] = None
+    division: Optional[str] = None
+    department: Optional[str] = "Smart Meter Operations"
+
+class BulkUploadResponse(BaseModel):
+    success: bool
+    totalRows: int
+    addedCount: int
+    updatedCount: int
+    errorCount: int
+    errors: List[str] = []
+    message: str
+    employees: List[Dict[str, Any]] = []

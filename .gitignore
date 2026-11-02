@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+uploads/
+backend/uploads/
+.env.local
+.DS_Store
+node_modules/
+.expo/
+dist/
+build/
+

@@ -276,7 +276,7 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
       {/* Top Header Row with Menu & Back Navigation */}
       <View style={[styles.headerRow, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.menuBtn}
             onPress={() => openDrawer('AttendanceLogs')}
             activeOpacity={0.7}
@@ -285,7 +285,7 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
             <Menu size={20} color="#0F172A" />
           </TouchableOpacity>
 
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.backBtn}
             onPress={handleBack}
             activeOpacity={0.7}
@@ -299,7 +299,7 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
           <Text style={styles.screenTitle} numberOfLines={1}>My Attendance History</Text>
         </View>
 
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.refreshIconBtn}
           onPress={onRefresh}
           activeOpacity={0.7}
@@ -351,7 +351,7 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
           {(['Daily', 'Weekly', 'Monthly'] as const).map((tab) => {
             const isActive = period === tab;
             return (
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 key={tab}
                 style={[styles.periodTab, isActive && styles.periodTabActive]}
                 onPress={() => setPeriod(tab)}
@@ -369,7 +369,7 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
         {/* 2. DATE NAVIGATOR CARD: <  📅 October 2026  >                  */}
         {/* ============================================================== */}
         <View style={[styles.monthNavigatorCard, (isDesktop || isTablet) && styles.monthNavigatorCardConstrained]}>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.navArrowBtn}
             onPress={handlePrev}
             activeOpacity={0.7}
@@ -386,7 +386,7 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
             </Text>
           </View>
 
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.navArrowBtn}
             onPress={handleNext}
             activeOpacity={0.7}

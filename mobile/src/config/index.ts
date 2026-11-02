@@ -21,7 +21,7 @@ const getDevApiUrl = () => {
   }
 
   // Local LAN IP fallback
-  return 'http://192.168.0.106:8000';
+  return 'http://192.168.0.111:8000';
 };
 
 export const CONFIG = {

@@ -439,7 +439,7 @@ Synchronized across all dashboards and muster reports.`,
     const isInteractive = isPH || user?.role === 'admin';
 
     return (
-      <TouchableOpacity
+      <TouchableOpacity delayPressIn={0}
         style={[
           styles.statusBadge,
           { backgroundColor: bgColor, borderColor },
@@ -473,7 +473,7 @@ Synchronized across all dashboards and muster reports.`,
       {/* ========================================================================= */}
       <View style={[styles.topHeaderBar, { paddingTop: Math.max(insets.top, 16) + 6 }]}>
         <View style={styles.topHeaderRow1}>
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.menuCircleBtn}
             onPress={handleMenuPress}
             activeOpacity={0.7}
@@ -482,7 +482,7 @@ Synchronized across all dashboards and muster reports.`,
             <Menu size={20} color="#0F172A" />
           </TouchableOpacity>
 
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.backCircleBtn}
             onPress={handleBack}
             activeOpacity={0.7}
@@ -502,7 +502,7 @@ Synchronized across all dashboards and muster reports.`,
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.topActionsRow}
         >
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.btnPrimaryGreen}
             onPress={handleDownloadMusterExcel}
             activeOpacity={0.85}
@@ -517,7 +517,7 @@ Synchronized across all dashboards and muster reports.`,
           </TouchableOpacity>
 
           {user?.role === 'admin' ? (
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.btnBlueMark}
               onPress={() => handleOpenMarkModal()}
               activeOpacity={0.8}
@@ -528,7 +528,7 @@ Synchronized across all dashboards and muster reports.`,
           ) : null}
 
           {user?.role === 'admin' ? (
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.btnPurple}
               onPress={() => navigation.navigate('Holidays')}
               activeOpacity={0.8}
@@ -538,7 +538,7 @@ Synchronized across all dashboards and muster reports.`,
             </TouchableOpacity>
           ) : null}
 
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.btnSecondary}
             onPress={() => navigation.navigate('AttendanceLogs')}
             activeOpacity={0.8}
@@ -547,7 +547,7 @@ Synchronized across all dashboards and muster reports.`,
             <Text style={styles.btnSecondaryText}>Detailed Logs</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.btnSecondary}
             onPress={handleExportPDF}
             activeOpacity={0.8}
@@ -581,7 +581,7 @@ Synchronized across all dashboards and muster reports.`,
 
             {/* Month & Year Stepper */}
             <View style={styles.monthNavRow}>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.monthNavArrow}
                 onPress={handlePrevMonth}
                 activeOpacity={0.7}
@@ -593,7 +593,7 @@ Synchronized across all dashboards and muster reports.`,
                 <Text style={styles.currentMonthText}>{monthName}</Text>
               </View>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.monthNavArrow}
                 onPress={handleNextMonth}
                 activeOpacity={0.7}
@@ -602,7 +602,7 @@ Synchronized across all dashboards and muster reports.`,
               </TouchableOpacity>
 
               {/* Jump to Today Button */}
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.todayJumpBtn}
                 onPress={handleResetToCurrentMonth}
                 activeOpacity={0.8}
@@ -633,7 +633,7 @@ Synchronized across all dashboards and muster reports.`,
 
             <View style={styles.inputCol}>
               <Text style={styles.inputLabel}>Deployment Location / Site</Text>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.inputBoxWrap}
                 onPress={() => setShowSitePickerModal(true)}
                 activeOpacity={0.8}
@@ -743,7 +743,7 @@ Synchronized across all dashboards and muster reports.`,
                 </Text>
               </View>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.registerDownloadBtn}
                 onPress={handleDownloadMusterExcel}
                 activeOpacity={0.85}
@@ -1009,7 +1009,7 @@ Synchronized across all dashboards and muster reports.`,
                 <Text style={styles.holidayModalTitle}>{holidayTooltip.name}</Text>
                 <Text style={styles.holidayModalDate}>{holidayTooltip.date}</Text>
               </View>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 onPress={() => setHolidayTooltip({ visible: false, name: '', date: '' })}
                 style={{ padding: 4 }}
               >
@@ -1031,7 +1031,7 @@ Synchronized across all dashboards and muster reports.`,
               ) : null}
             </View>
 
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.holidayModalCloseBtn}
               onPress={() => setHolidayTooltip({ visible: false, name: '', date: '' })}
             >
@@ -1053,7 +1053,7 @@ Synchronized across all dashboards and muster reports.`,
             <View style={styles.sitePickerHeader}>
               <Building2 size={18} color="#1E63F0" style={{ marginRight: 8 }} />
               <Text style={styles.sitePickerTitle}>Filter by Substation Location</Text>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 onPress={() => setShowSitePickerModal(false)}
                 style={{ padding: 4, marginLeft: 'auto' }}
               >
@@ -1062,7 +1062,7 @@ Synchronized across all dashboards and muster reports.`,
             </View>
 
             <ScrollView style={{ maxHeight: 320 }}>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={[
                   styles.siteOptionItem,
                   selectedSiteFilter === 'all' && styles.siteOptionItemActive,
@@ -1086,7 +1086,7 @@ Synchronized across all dashboards and muster reports.`,
               </TouchableOpacity>
 
               {sites.map((s) => (
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   key={s.id}
                   style={[
                     styles.siteOptionItem,
@@ -1131,7 +1131,7 @@ Synchronized across all dashboards and muster reports.`,
                   Centralized sync across Admin, Supervisor, and Employee dashboards
                 </Text>
               </View>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 onPress={() => setMarkModalVisible(false)}
                 style={styles.modalCloseBtn}
               >
@@ -1147,7 +1147,7 @@ Synchronized across all dashboards and muster reports.`,
                   {musterRecords.map((mr) => {
                     const isSelected = markEmpId === (mr.employeeCode || mr.employeeName);
                     return (
-                      <TouchableOpacity
+                      <TouchableOpacity delayPressIn={0}
                         key={mr.employeeCode || mr.sr}
                         style={[styles.empPill, isSelected && styles.empPillActive]}
                         onPress={() => {
@@ -1181,7 +1181,7 @@ Synchronized across all dashboards and muster reports.`,
                   placeholder="2026-11-01"
                   placeholderTextColor="#94A3B8"
                 />
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[
                     styles.dateCalendarIconBtn,
                     showMarkDatePicker && styles.dateCalendarIconBtnActive,
@@ -1198,7 +1198,7 @@ Synchronized across all dashboards and muster reports.`,
               {showMarkDatePicker && (
                 <View style={styles.calPickerBox}>
                   <View style={styles.calNavHeader}>
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.calNavBtn}
                       onPress={handlePrevMarkCalMonth}
                       activeOpacity={0.7}
@@ -1210,7 +1210,7 @@ Synchronized across all dashboards and muster reports.`,
                       {MONTH_NAMES[markCalMonth]} {markCalYear}
                     </Text>
 
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.calNavBtn}
                       onPress={handleNextMarkCalMonth}
                       activeOpacity={0.7}
@@ -1248,7 +1248,7 @@ Synchronized across all dashboards and muster reports.`,
                       const isSunday = (markCalFirstDayOffset + i) % 7 === 0;
 
                       return (
-                        <TouchableOpacity
+                        <TouchableOpacity delayPressIn={0}
                           key={`mark-day-${day}`}
                           style={[
                             styles.calDayCell,
@@ -1272,7 +1272,7 @@ Synchronized across all dashboards and muster reports.`,
                   </View>
 
                   <View style={styles.calFooterActions}>
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.calTodayBtn}
                       onPress={handleSelectMarkToday}
                       activeOpacity={0.7}
@@ -1280,7 +1280,7 @@ Synchronized across all dashboards and muster reports.`,
                       <Text style={styles.calTodayBtnText}>Select Today</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       style={styles.calCloseBtn}
                       onPress={() => setShowMarkDatePicker(false)}
                       activeOpacity={0.7}
@@ -1294,7 +1294,7 @@ Synchronized across all dashboards and muster reports.`,
               {/* Strict Permitted Statuses (P vs A) */}
               <Text style={[styles.inputFieldLabel, { marginTop: 12 }]}>ATTENDANCE STATUS (STRICT 4 RULES)</Text>
               <View style={styles.statusButtonsRow}>
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[styles.statusOptionBtn, markStatus === 'P' && styles.statusOptionBtnPActive]}
                   onPress={() => setMarkStatus('P')}
                   activeOpacity={0.8}
@@ -1305,7 +1305,7 @@ Synchronized across all dashboards and muster reports.`,
                   </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={[styles.statusOptionBtn, markStatus === 'A' && styles.statusOptionBtnAActive]}
                   onPress={() => setMarkStatus('A')}
                   activeOpacity={0.8}
@@ -1330,14 +1330,14 @@ Synchronized across all dashboards and muster reports.`,
             </View>
 
             <View style={styles.markModalFooter}>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.cancelBtn}
                 onPress={() => setMarkModalVisible(false)}
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.saveMarkBtn}
                 onPress={handleSaveAttendanceMark}
                 disabled={savingMark}

@@ -409,7 +409,7 @@ export const TrackingScreen: React.FC = () => {
           <Users size={17} color="#1E63F0" />
           <Text style={styles.rosterTitle}>Technicians Roster</Text>
         </View>
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.viewAllBtn}
           onPress={handleViewAllOnMap}
           activeOpacity={0.8}
@@ -429,7 +429,7 @@ export const TrackingScreen: React.FC = () => {
           onChangeText={setSearch}
         />
         {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')}>
+          <TouchableOpacity delayPressIn={0} onPress={() => setSearch('')}>
             <X size={15} color="#94A3B8" />
           </TouchableOpacity>
         )}
@@ -437,7 +437,7 @@ export const TrackingScreen: React.FC = () => {
 
       {/* Filter Tabs */}
       <View style={styles.filterTabsRow}>
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={[styles.filterTab, filterTab === 'all' && styles.filterTabActive]}
           onPress={() => setFilterTab('all')}
         >
@@ -451,7 +451,7 @@ export const TrackingScreen: React.FC = () => {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={[styles.filterTab, filterTab === 'active' && styles.filterTabActive]}
           onPress={() => setFilterTab('active')}
         >
@@ -465,7 +465,7 @@ export const TrackingScreen: React.FC = () => {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={[styles.filterTab, filterTab === 'offline' && styles.filterTabActive]}
           onPress={() => setFilterTab('offline')}
         >
@@ -501,7 +501,7 @@ export const TrackingScreen: React.FC = () => {
           const has100 = tech.batteryLevel === 100 && tech.name.includes('Neha');
 
           return (
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               key={tech.id}
               style={[
                 styles.techCard,
@@ -627,7 +627,7 @@ export const TrackingScreen: React.FC = () => {
               : `Fleet Overview: ${activeCount} Personnel Active Online`}
           </Text>
           {viewMode === 'single' && (
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.floatingShowAllBtn}
               onPress={handleViewAllOnMap}
               activeOpacity={0.7}
@@ -724,7 +724,7 @@ export const TrackingScreen: React.FC = () => {
             .map((t) => {
               const isSel = selectedTech?.id === t.id;
               return (
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   key={t.id}
                   style={[
                     styles.techQuickChip,
@@ -760,7 +760,7 @@ export const TrackingScreen: React.FC = () => {
 
           <View style={styles.telemetryHeaderActions}>
             {userLocation && (
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.myLocationBtn}
                 onPress={handleFocusUserLocation}
                 activeOpacity={0.8}
@@ -770,7 +770,7 @@ export const TrackingScreen: React.FC = () => {
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={[styles.copyBtn, copyFeedback && styles.copyBtnSuccess]}
               onPress={handleCopyGPS}
               activeOpacity={0.8}
@@ -790,7 +790,7 @@ export const TrackingScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.recenterBtn}
               onPress={handleRecenter}
               activeOpacity={0.8}
@@ -877,7 +877,7 @@ export const TrackingScreen: React.FC = () => {
         // Desktop Wide Header
         <View style={styles.desktopHeader}>
           <View style={styles.desktopHeaderLeft}>
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.backBtn}
               onPress={handleBack}
               activeOpacity={0.7}
@@ -908,7 +908,7 @@ export const TrackingScreen: React.FC = () => {
               <Text style={styles.standbyText}>{offlineCount} Standby</Text>
             </View>
 
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.syncBtn}
               onPress={() => fetchLiveTracking(true)}
               activeOpacity={0.8}
@@ -921,7 +921,7 @@ export const TrackingScreen: React.FC = () => {
               <Text style={styles.syncBtnText}>Sync GPS</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.menuBtn}
               onPress={handleMenuPress}
               activeOpacity={0.8}
@@ -936,7 +936,7 @@ export const TrackingScreen: React.FC = () => {
         <View style={styles.mobileHeader}>
           {/* Mobile Row 1: Back, Title, Sync, Menu */}
           <View style={styles.mobileHeaderRow1}>
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={styles.backBtn}
               onPress={handleBack}
               activeOpacity={0.7}
@@ -951,7 +951,7 @@ export const TrackingScreen: React.FC = () => {
             </View>
 
             <View style={styles.mobileActionButtons}>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.syncBtnCompact}
                 onPress={() => fetchLiveTracking(true)}
                 activeOpacity={0.8}
@@ -964,7 +964,7 @@ export const TrackingScreen: React.FC = () => {
                 <Text style={styles.syncBtnCompactText}>Sync</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.menuBtn}
                 onPress={handleMenuPress}
                 activeOpacity={0.8}
@@ -1004,7 +1004,7 @@ export const TrackingScreen: React.FC = () => {
 
           {/* Mobile Row 3: Tab Selector */}
           <View style={styles.mobileTabBar}>
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={[styles.mobileTabBtn, mobileTab === 'map' && styles.mobileTabBtnActive]}
               onPress={() => setMobileTab('map')}
             >
@@ -1019,7 +1019,7 @@ export const TrackingScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               style={[styles.mobileTabBtn, mobileTab === 'roster' && styles.mobileTabBtnActive]}
               onPress={() => setMobileTab('roster')}
             >

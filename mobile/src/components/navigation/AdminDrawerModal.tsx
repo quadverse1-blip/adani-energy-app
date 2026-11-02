@@ -122,20 +122,9 @@ export const AdminDrawerModal: React.FC = () => {
 
   const handleNavigate = (screenName: string) => {
     closeDrawer();
-    if (screenName === 'AdminDashboard') {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'AdminDashboard' }],
-      });
-    } else {
-      navigation.reset({
-        index: 1,
-        routes: [
-          { name: 'AdminDashboard' },
-          { name: screenName },
-        ],
-      });
-    }
+    requestAnimationFrame(() => {
+      navigation.navigate(screenName);
+    });
   };
 
   const handleLogout = () => {
@@ -192,7 +181,7 @@ export const AdminDrawerModal: React.FC = () => {
               <TouchableOpacity
                 style={styles.closeBtn}
                 onPress={closeDrawer}
-                activeOpacity={0.7}
+                activeOpacity={0.7} delayPressIn={0}
               >
                 <X size={20} color="#64748B" />
               </TouchableOpacity>
@@ -234,7 +223,7 @@ export const AdminDrawerModal: React.FC = () => {
                   key={item.key}
                   style={[styles.menuItem, isActive && styles.menuItemActive]}
                   onPress={() => handleNavigate(item.screenName)}
-                  activeOpacity={0.7}
+                  activeOpacity={0.7} delayPressIn={0}
                 >
                   <View
                     style={[
@@ -288,7 +277,7 @@ export const AdminDrawerModal: React.FC = () => {
             <TouchableOpacity
               style={styles.logoutBtn}
               onPress={handleLogout}
-              activeOpacity={0.8}
+              activeOpacity={0.7} delayPressIn={0}
             >
               <LogOut size={18} color="#EF4444" />
               <Text style={styles.logoutText}>Sign Out</Text>

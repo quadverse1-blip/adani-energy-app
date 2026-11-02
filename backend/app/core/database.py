@@ -908,6 +908,12 @@ class FirestoreCollectionDictWrapper:
                         self.fallback_dict[doc_id] = doc
         return list(merged.values())
 
+    def keys(self):
+        return [doc.get('_id') or doc.get('id') for doc in self.values() if doc.get('_id') or doc.get('id')]
+
+    def items(self):
+        return [(doc.get('_id') or doc.get('id'), doc) for doc in self.values()]
+
 
 # -------------------------------------------------------------
 # DatabaseManager (Firebase Cloud Database)
@@ -932,6 +938,71 @@ class DatabaseManager:
         self.gps_events: List[dict] = []
         self.audit_logs: List[dict] = []
 
+        # Seed initial salary configurations
+        self._raw_salary_configs: Dict[str, dict] = {
+            "b4s/adani/01": {
+                "employeeId": "b4S/Adani/01",
+                "monthlySalary": 20000.0,
+                "absentDeductionRate": 500.0,
+                "halfDayDeductionRate": 250.0,
+                "effectiveDate": "2026-01-01",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "updatedBy": "Operations Administrator",
+                "notes": "Standard field smart meter technician compensation"
+            },
+            "b4s/adani/02": {
+                "employeeId": "b4S/Adani/02",
+                "monthlySalary": 22000.0,
+                "absentDeductionRate": 500.0,
+                "halfDayDeductionRate": 250.0,
+                "effectiveDate": "2026-01-01",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "updatedBy": "Operations Administrator",
+                "notes": "Senior field technician compensation"
+            },
+            "b4s/adani/03": {
+                "employeeId": "b4S/Adani/03",
+                "monthlySalary": 20000.0,
+                "absentDeductionRate": 500.0,
+                "halfDayDeductionRate": 250.0,
+                "effectiveDate": "2026-01-01",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "updatedBy": "Operations Administrator",
+                "notes": "Field smart meter technician compensation"
+            },
+            "b4s/adani/04": {
+                "employeeId": "b4S/Adani/04",
+                "monthlySalary": 35000.0,
+                "absentDeductionRate": 800.0,
+                "halfDayDeductionRate": 400.0,
+                "effectiveDate": "2026-01-01",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "updatedBy": "Operations Administrator",
+                "notes": "Zonal workforce supervisor compensation"
+            },
+            "b4s/adani/05": {
+                "employeeId": "b4S/Adani/05",
+                "monthlySalary": 35000.0,
+                "absentDeductionRate": 800.0,
+                "halfDayDeductionRate": 400.0,
+                "effectiveDate": "2026-01-01",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "updatedBy": "Operations Administrator",
+                "notes": "Zonal workforce supervisor compensation"
+            },
+            "b4s/adani/admin": {
+                "employeeId": "b4S/Adani/admin",
+                "monthlySalary": 50000.0,
+                "absentDeductionRate": 1000.0,
+                "halfDayDeductionRate": 500.0,
+                "effectiveDate": "2026-01-01",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "updatedBy": "Operations Administrator",
+                "notes": "Operations admin executive compensation"
+            }
+        }
+        self._raw_salary_statements: Dict[str, dict] = {}
+
         # Optional firebase-admin client
         self.admin_db: Optional[Any] = None
 
@@ -940,6 +1011,8 @@ class DatabaseManager:
         self.sites = FirestoreCollectionDictWrapper(self, "sites", self._raw_sites)
         self.attendance = FirestoreCollectionDictWrapper(self, "attendance", self._raw_attendance)
         self.holidays = FirestoreCollectionDictWrapper(self, "holidays", self._raw_holidays)
+        self.salary_configs = FirestoreCollectionDictWrapper(self, "salary_configs", self._raw_salary_configs)
+        self.salary_statements = FirestoreCollectionDictWrapper(self, "salary_statements", self._raw_salary_statements)
 
         # Initialize connection
         self.connect_to_firebase()
@@ -977,15 +1050,17 @@ class DatabaseManager:
                 logger.warning(f"Firebase Admin SDK init failed: {e}")
 
         # Test Firestore REST connection
+        is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
         try:
             url = f"{self.firestore_base_url}/sites?key={self.api_key}"
-            resp = requests.get(url, timeout=3.0)
+            resp = requests.get(url, timeout=1.5 if is_serverless else 3.0)
             if resp.status_code in [200, 403, 404]:
                 # 200 = open/authorized, 403 = active rules configured, 404 = collection empty
                 self.is_connected = True
                 self.connection_status_message = f"Connected to Firebase Firestore Cloud: {self.project_id}"
                 print(f"[Firebase Firestore] {self.connection_status_message}")
-                self._seed_firebase_data_async()
+                if not is_serverless:
+                    self._seed_firebase_data_async()
             else:
                 self.is_connected = False
                 self.connection_status_message = f"Firebase responded with code {resp.status_code}"
@@ -1111,10 +1186,21 @@ class DatabaseManager:
     # Core Queries
     # ---------------------------------------------------------
     def get_employee(self, emp_id: str) -> Optional[dict]:
-        doc = self.get_firestore_document("employees", emp_id)
+        clean_id = (emp_id or "").strip()
+        if not clean_id:
+            return None
+        # Authoritative operational in-memory check first
+        if clean_id in self._raw_employees:
+            return self._raw_employees[clean_id]
+        for e in self._raw_employees.values():
+            if str(e.get("employeeId") or "").lower() == clean_id.lower() or str(e.get("_id") or "").lower() == clean_id.lower():
+                return e
+        # Remote Firestore fallback
+        doc = self.get_firestore_document("employees", clean_id)
         if doc:
+            self._raw_employees[doc.get("_id") or clean_id] = doc
             return doc
-        return self._raw_employees.get(emp_id)
+        return None
 
     def get_user_by_id(self, emp_id: str) -> Optional[dict]:
         """Lookup employee/user by document _id or employeeId identifier"""
@@ -1140,13 +1226,25 @@ class DatabaseManager:
                 if emp.get("role") == "supervisor":
                     return emp
 
+        # Check phone digits normalization (e.g. 9876543210 vs +91 98765 43210)
+        import re
+        clean_digits = re.sub(r"\D", "", clean_id)
+        if len(clean_digits) > 10 and clean_digits.startswith("91"):
+            clean_digits = clean_digits[2:]
+
         # Check in memory and cached
         for emp in self._raw_employees.values():
             e_id = (emp.get("employeeId") or "").strip().lower()
             e_phone = (emp.get("phone") or "").strip().lower()
             e_email = (emp.get("email") or "").strip().lower()
-            if clean_id == e_id or clean_id == e_phone or clean_id == e_email:
+            if clean_id == e_id or clean_id == e_phone or clean_id == e_email or clean_id == str(emp.get("_id") or "").lower():
                 return emp
+            if clean_digits and len(clean_digits) >= 10:
+                emp_phone_digits = re.sub(r"\D", "", e_phone)
+                if len(emp_phone_digits) > 10 and emp_phone_digits.startswith("91"):
+                    emp_phone_digits = emp_phone_digits[2:]
+                if emp_phone_digits and emp_phone_digits == clean_digits:
+                    return emp
 
         # Check firestore
         all_emps = self.get_all_employees()
@@ -1154,27 +1252,36 @@ class DatabaseManager:
             e_id = (emp.get("employeeId") or "").strip().lower()
             e_phone = (emp.get("phone") or "").strip().lower()
             e_email = (emp.get("email") or "").strip().lower()
-            if clean_id == e_id or clean_id == e_phone or clean_id == e_email:
+            if clean_id == e_id or clean_id == e_phone or clean_id == e_email or clean_id == str(emp.get("_id") or "").lower():
                 return emp
+            if clean_digits and len(clean_digits) >= 10:
+                emp_phone_digits = re.sub(r"\D", "", e_phone)
+                if len(emp_phone_digits) > 10 and emp_phone_digits.startswith("91"):
+                    emp_phone_digits = emp_phone_digits[2:]
+                if emp_phone_digits and emp_phone_digits == clean_digits:
+                    return emp
         return None
 
     def get_site(self, site_id: str) -> Optional[dict]:
-        doc = self.get_firestore_document("sites", site_id)
+        clean_id = (site_id or "").strip()
+        if not clean_id:
+            return None
+        if clean_id in self._raw_sites:
+            return self._raw_sites[clean_id]
+        for s in self._raw_sites.values():
+            if str(s.get("code") or "").lower() == clean_id.lower() or str(s.get("_id") or "").lower() == clean_id.lower() or str(s.get("id") or "").lower() == clean_id.lower():
+                return s
+        doc = self.get_firestore_document("sites", clean_id)
         if doc:
+            self._raw_sites[doc.get("_id") or clean_id] = doc
             return doc
-        return self._raw_sites.get(site_id)
+        return None
 
     def get_all_sites(self) -> List[dict]:
-        remote = self.list_firestore_collection("sites")
-        if remote:
-            return remote
-        return list(self._raw_sites.values())
+        return list(self.sites.values())
 
     def get_all_employees(self) -> List[dict]:
-        remote = self.list_firestore_collection("employees")
-        if remote:
-            return remote
-        return list(self._raw_employees.values())
+        return list(self.employees.values())
 
     def get_today_attendance(self, emp_id: str, today_str: Optional[str] = None) -> Optional[dict]:
         valid_ids = {str(emp_id).lower().strip()}
@@ -1288,5 +1395,90 @@ class DatabaseManager:
             self.delete_firestore_document_async("holidays", holiday_id)
             return True
         return False
+
+
+    # ---------------------------------------------------------
+    # Salary & Compensation Management
+    # ---------------------------------------------------------
+    def get_salary_config(self, emp_id: str) -> dict:
+        emp = self.get_employee(emp_id) or self.find_employee_by_identifier(emp_id)
+        c_id = emp.get("employeeId", emp_id).strip().lower() if emp else str(emp_id).strip().lower()
+        raw_id = emp.get("_id", emp_id).strip().lower() if emp else str(emp_id).strip().lower()
+
+        # Check existing configs
+        for k, cfg in self._raw_salary_configs.items():
+            clean_k = str(k).strip().lower()
+            if clean_k == c_id or clean_k == raw_id:
+                return cfg
+
+        # Default configuration by role if not explicitly set
+        role = (emp.get("role") or "technician").lower() if emp else "technician"
+        if role == "admin":
+            m_sal, a_ded, h_ded = 50000.0, 1000.0, 500.0
+        elif role == "supervisor":
+            m_sal, a_ded, h_ded = 35000.0, 800.0, 400.0
+        else:
+            m_sal, a_ded, h_ded = 20000.0, 500.0, 250.0
+
+        canonical = emp.get("employeeId", emp_id) if emp else emp_id
+        default_cfg = {
+            "employeeId": canonical,
+            "monthlySalary": m_sal,
+            "absentDeductionRate": a_ded,
+            "halfDayDeductionRate": h_ded,
+            "effectiveDate": "2026-01-01",
+            "updatedAt": datetime.utcnow().isoformat() + "Z",
+            "updatedBy": "System Default",
+            "notes": f"Default {role} compensation scale"
+        }
+        self._raw_salary_configs[canonical.lower()] = default_cfg
+        return default_cfg
+
+    def set_salary_config(self, emp_id: str, config_data: dict) -> dict:
+        emp = self.get_employee(emp_id) or self.find_employee_by_identifier(emp_id)
+        canonical = emp.get("employeeId", emp_id) if emp else emp_id
+        c_key = canonical.lower()
+
+        existing = self.get_salary_config(emp_id).copy()
+        existing.update(config_data)
+        existing["employeeId"] = canonical
+        existing["updatedAt"] = datetime.utcnow().isoformat() + "Z"
+
+        self._raw_salary_configs[c_key] = existing
+        if emp and emp.get("_id"):
+            self._raw_salary_configs[str(emp["_id"]).lower()] = existing
+
+        self.set_firestore_document_async("salary_configs", canonical.replace("/", "_"), existing)
+        return existing
+
+    def get_salary_statement(self, emp_id: str, month: int, year: int) -> Optional[dict]:
+        emp = self.get_employee(emp_id) or self.find_employee_by_identifier(emp_id)
+        canonical = emp.get("employeeId", emp_id) if emp else emp_id
+        raw_id = emp.get("_id", emp_id) if emp else emp_id
+
+        k1 = f"{canonical.lower()}_{year}_{month}"
+        k2 = f"{raw_id.lower()}_{year}_{month}"
+
+        return self._raw_salary_statements.get(k1) or self._raw_salary_statements.get(k2)
+
+    def save_salary_statement(self, statement: dict) -> dict:
+        canonical = str(statement.get("employeeId") or "").strip().lower()
+        month = statement.get("month", 10)
+        year = statement.get("year", 2026)
+
+        key = f"{canonical}_{year}_{month}"
+        doc_id = f"{canonical.replace('/', '_')}_{year}_{month}"
+
+        self._raw_salary_statements[key] = statement
+        self.set_firestore_document_async("salary_statements", doc_id, statement)
+        return statement
+
+    def list_salary_statements(self, month: int, year: int) -> List[dict]:
+        results = []
+        suffix = f"_{year}_{month}"
+        for k, v in self._raw_salary_statements.items():
+            if k.endswith(suffix):
+                results.append(v)
+        return results
 
 db = DatabaseManager()

@@ -514,7 +514,7 @@ export const AttendanceLogsScreen: React.FC = () => {
           { paddingTop: Math.max(insets.top, 20) + 8 },
         ]}
       >
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.menuBtn}
           onPress={() => openDrawer('AttendanceLogs')}
           activeOpacity={0.7}
@@ -526,7 +526,7 @@ export const AttendanceLogsScreen: React.FC = () => {
           <Text style={styles.screenTitle}>Attendance Logs & Shifts</Text>
         </View>
 
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.headerReportsBtn}
           onPress={() => navigation.navigate('Reports')}
           activeOpacity={0.85}
@@ -543,7 +543,7 @@ export const AttendanceLogsScreen: React.FC = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.actionChipsScroll}
         >
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.musterChipBtn}
             onPress={() => navigation.navigate('Reports')}
             activeOpacity={0.8}
@@ -552,7 +552,7 @@ export const AttendanceLogsScreen: React.FC = () => {
             <Text style={styles.musterChipText}>Muster Roll & Excel</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.holidaysBtn}
             onPress={handleOpenHolidays}
             activeOpacity={0.8}
@@ -561,7 +561,7 @@ export const AttendanceLogsScreen: React.FC = () => {
             <Text style={styles.holidaysBtnText}>Holidays 2026 (PDF)</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.techFilterBtn}
             onPress={() => setShowTechFilterModal(true)}
             activeOpacity={0.8}
@@ -575,7 +575,7 @@ export const AttendanceLogsScreen: React.FC = () => {
             <ChevronDown size={14} color="#64748B" style={{ marginLeft: 4 }} />
           </TouchableOpacity>
 
-          <TouchableOpacity
+          <TouchableOpacity delayPressIn={0}
             style={styles.markLateBtn}
             onPress={handleOpenNewAdjust}
             activeOpacity={0.85}
@@ -591,7 +591,7 @@ export const AttendanceLogsScreen: React.FC = () => {
         {(['Daily', 'Weekly', 'Monthly'] as const).map((tab) => {
           const isActive = period === tab;
           return (
-            <TouchableOpacity
+            <TouchableOpacity delayPressIn={0}
               key={tab}
               style={[styles.periodTab, isActive && styles.periodTabActive]}
               onPress={() => handlePeriodChange(tab)}
@@ -607,7 +607,7 @@ export const AttendanceLogsScreen: React.FC = () => {
 
       {/* Month / Week / Day Navigator Strip */}
       <View style={styles.monthNavigatorCard}>
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.navArrowBtn}
           onPress={handlePrev}
           activeOpacity={0.7}
@@ -624,7 +624,7 @@ export const AttendanceLogsScreen: React.FC = () => {
           </Text>
         </View>
 
-        <TouchableOpacity
+        <TouchableOpacity delayPressIn={0}
           style={styles.navArrowBtn}
           onPress={handleNext}
           activeOpacity={0.7}
@@ -721,7 +721,7 @@ export const AttendanceLogsScreen: React.FC = () => {
                     <View style={{ width: 130, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={styles.tdDistanceText}>{item.distanceTraveled}</Text>
                       {item.distanceTraveled !== '--' && (
-                        <TouchableOpacity
+                        <TouchableOpacity delayPressIn={0}
                           style={styles.mapPillBtn}
                           onPress={() => handleOpenMap(item)}
                           activeOpacity={0.7}
@@ -770,7 +770,7 @@ export const AttendanceLogsScreen: React.FC = () => {
 
                     <View style={{ width: 110, justifyContent: 'center', alignItems: 'center' }}>
                       {item.photoUrl ? (
-                        <TouchableOpacity
+                        <TouchableOpacity delayPressIn={0}
                           style={styles.photoThumbBtn}
                           onPress={() => setSelectedPhotoLog(item)}
                           activeOpacity={0.75}
@@ -790,7 +790,7 @@ export const AttendanceLogsScreen: React.FC = () => {
                     </View>
 
                     <View style={{ width: 100, justifyContent: 'center', alignItems: 'center' }}>
-                      <TouchableOpacity
+                      <TouchableOpacity delayPressIn={0}
                         style={styles.adjustRowBtn}
                         onPress={() => handleOpenAdjustRow(item)}
                         activeOpacity={0.8}
@@ -818,12 +818,12 @@ export const AttendanceLogsScreen: React.FC = () => {
           <View style={[styles.pickerModalCard, SHADOWS.lg]}>
             <View style={styles.pickerModalHeader}>
               <Text style={styles.pickerModalTitle}>Filter by Technician</Text>
-              <TouchableOpacity onPress={() => setShowTechFilterModal(false)}>
+              <TouchableOpacity delayPressIn={0} onPress={() => setShowTechFilterModal(false)}>
                 <X size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
             <ScrollView style={{ maxHeight: 300 }}>
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={[styles.pickerItem, selectedTechFilter === 'all' && styles.pickerItemActive]}
                 onPress={() => {
                   setSelectedTechFilter('all');
@@ -838,7 +838,7 @@ export const AttendanceLogsScreen: React.FC = () => {
               </TouchableOpacity>
 
               {technicians.map((t) => (
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   key={t.id}
                   style={[styles.pickerItem, selectedTechFilter === t.id && styles.pickerItemActive]}
                   onPress={() => {
@@ -877,7 +877,7 @@ export const AttendanceLogsScreen: React.FC = () => {
                   Mark Late Arrival, Half Day, or Present for field technicians
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setShowAdjustModal(false)}>
+              <TouchableOpacity delayPressIn={0} onPress={() => setShowAdjustModal(false)}>
                 <X size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
@@ -889,7 +889,7 @@ export const AttendanceLogsScreen: React.FC = () => {
                   const IconComp = card.icon;
                   const isSelected = selectedStatus === card.key;
                   return (
-                    <TouchableOpacity
+                    <TouchableOpacity delayPressIn={0}
                       key={card.key}
                       style={[styles.statusCard, isSelected && styles.statusCardSelected]}
                       onPress={() => handleSelectStatus(card.key)}
@@ -986,7 +986,7 @@ export const AttendanceLogsScreen: React.FC = () => {
                 />
               </View>
 
-              <TouchableOpacity
+              <TouchableOpacity delayPressIn={0}
                 style={styles.saveBtn}
                 onPress={handleSaveAdjust}
                 disabled={savingAdjust}
@@ -1053,7 +1053,7 @@ export const AttendanceLogsScreen: React.FC = () => {
                     {selectedPhotoLog.technicianName} ({selectedPhotoLog.technicianCode})
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => setSelectedPhotoLog(null)}>
+                <TouchableOpacity delayPressIn={0} onPress={() => setSelectedPhotoLog(null)}>
                   <X size={18} color="#64748B" />
                 </TouchableOpacity>
               </View>
@@ -1105,7 +1105,7 @@ export const AttendanceLogsScreen: React.FC = () => {
                   </View>
                 </View>
 
-                <TouchableOpacity
+                <TouchableOpacity delayPressIn={0}
                   style={styles.closePhotoBtn}
                   onPress={() => setSelectedPhotoLog(null)}
                   activeOpacity={0.8}

@@ -1,10 +1,9 @@
 import io
+import calendar
 from datetime import datetime
-from app.core.database import db
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
-from reportlab.pdfgen import canvas
 from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
@@ -19,7 +18,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 def generate_salary_slip_pdf(slip: dict, employee: dict = None) -> bytes:
     """
     Generates an official, beautifully styled Adani Energy Solutions Limited
-    monthly workforce compensation payslip PDF using ReportLab.
+    monthly workforce compensation payslip PDF with attendance-based salary calculations.
     """
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -32,36 +31,35 @@ def generate_salary_slip_pdf(slip: dict, employee: dict = None) -> bytes:
     )
 
     styles = getSampleStyleSheet()
-    
-    # Custom styles
+
     header_title_style = ParagraphStyle(
         'HeaderTitle',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
-        fontSize=18,
-        leading=22,
-        textColor=colors.HexColor('#0F172A'),
+        fontSize=16,
+        leading=20,
+        textColor=colors.HexColor('#1E3A8A'),
         alignment=0
     )
-    
+
     header_sub_style = ParagraphStyle(
         'HeaderSub',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=10,
-        leading=14,
+        fontSize=9,
+        leading=13,
         textColor=colors.HexColor('#475569'),
         alignment=0
     )
-    
+
     section_title_style = ParagraphStyle(
         'SectionTitle',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
-        fontSize=12,
-        leading=16,
+        fontSize=11,
+        leading=15,
         textColor=colors.HexColor('#1E3A8A'),
-        spaceAfter=6
+        spaceAfter=4
     )
 
     cell_bold_style = ParagraphStyle(
@@ -82,40 +80,65 @@ def generate_salary_slip_pdf(slip: dict, employee: dict = None) -> bytes:
         textColor=colors.HexColor('#334155')
     )
 
+    cell_right_style = ParagraphStyle(
+        'CellRight',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#334155'),
+        alignment=2
+    )
+
+    cell_right_bold = ParagraphStyle(
+        'CellRightBold',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#1E293B'),
+        alignment=2
+    )
+
     story = []
 
     period_str = slip.get('monthName') or f"{slip.get('month', 10)}/{slip.get('year', 2026)}"
+    ref_no = slip.get('referenceNumber') or f"ADN-PAY-{slip.get('year', 2026)}{slip.get('month', 10):02d}-{slip.get('employeeId', 'EMP').replace('/', '-')}"
+    status_text = str(slip.get('status', 'FINALIZED')).upper()
+
+    status_color = '#059669' if status_text in ('FINALIZED', 'PAID') else ('#2563EB' if status_text == 'REVISED' else '#D97706')
 
     # 1. Header with Adani branding
     header_data = [
         [
             Paragraph("<b>ADANI ENERGY SOLUTIONS LIMITED</b>", header_title_style),
-            Paragraph(f"<b>CONFIDENTIAL PAYSLIP</b><br/><font color='#64748B'>Period: {period_str}</font>", ParagraphStyle('RHead', parent=styles['Normal'], fontName='Helvetica', fontSize=9, alignment=2, textColor=colors.HexColor('#0F172A')))
+            Paragraph(f"<b>SALARY STATEMENT / PAYSLIP</b><br/><font color='#64748B'>Period: {period_str}</font><br/><font color='#64748B' size='8'>Ref: {ref_no}</font>", ParagraphStyle('RHead', parent=styles['Normal'], fontName='Helvetica', fontSize=9, alignment=2, textColor=colors.HexColor('#0F172A')))
         ],
         [
-            Paragraph("Smart Grid Operations • High Voltage Substation Workforce Division<br/>Adani Corporate House, Shantigram, S.G. Highway, Ahmedabad, Gujarat 382421", header_sub_style),
-            Paragraph(f"Status: <b><font color='#059669'>PAID & TRANSFERRED</font></b>", ParagraphStyle('RStatus', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=2, textColor=colors.HexColor('#059669')))
+            Paragraph("Smart Grid Operations • Substation Workforce Division<br/>Adani Corporate House, Shantigram, S.G. Highway, Ahmedabad, Gujarat 382421", header_sub_style),
+            Paragraph(f"Status: <b><font color='{status_color}'>{status_text}</font></b>", ParagraphStyle('RStatus', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=2, textColor=colors.HexColor(status_color)))
         ]
     ]
-    t_header = Table(header_data, colWidths=[360, 160])
+    t_header = Table(header_data, colWidths=[340, 180])
     t_header.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+        ('TOPPADDING', (0,0), (-1,-1), 0),
     ]))
     story.append(t_header)
     story.append(Spacer(1, 10))
-    story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#1E63F0'), spaceAfter=14))
 
-    # 2. Employee Metadata Table
-    emp_id = slip.get("employeeId", "b4S/Adani/01")
-    emp_name = slip.get("employeeName", "Technician")
-    desig = slip.get("designation", "Smart Meter Field Technician")
-    payable_days = slip.get("payableDays", 30)
-    present_days = slip.get("presentDays", 26)
-    paid_leaves = slip.get("paidLeaves", 3)
-    lop = slip.get("lossOfPay", 1)
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#1E3A8A'), spaceAfter=10))
 
-    meta_data = [
+    # 2. Employee Details Grid
+    emp_name = slip.get('employeeName') or (employee.get('name') if employee else 'Field Technician')
+    emp_id = slip.get('employeeId') or (employee.get('employeeId') if employee else 'b4S/Adani/01')
+    designation = slip.get('designation') or (employee.get('designation') if employee else 'Smart Meter Technician')
+    department = slip.get('department') or (employee.get('department') if employee else 'Smart Meter Operations')
+    circle = slip.get('circle') or (employee.get('circle') if employee else 'Gujarat Circle')
+    division = slip.get('division') or (employee.get('division') if employee else 'Surat Division')
+
+    emp_data = [
         [
             Paragraph("<b>Employee Name:</b>", cell_bold_style),
             Paragraph(emp_name, cell_style),
@@ -124,166 +147,174 @@ def generate_salary_slip_pdf(slip: dict, employee: dict = None) -> bytes:
         ],
         [
             Paragraph("<b>Designation:</b>", cell_bold_style),
-            Paragraph(desig, cell_style),
+            Paragraph(designation, cell_style),
             Paragraph("<b>Department:</b>", cell_bold_style),
-            Paragraph("Substation Field Operations", cell_style),
+            Paragraph(department, cell_style),
         ],
         [
-            Paragraph("<b>Pay Period:</b>", cell_bold_style),
-            Paragraph(slip.get("monthName", "October 2026"), cell_style),
-            Paragraph("<b>Bank Name / A/C:</b>", cell_bold_style),
-            Paragraph("State Bank of India •••• 4892", cell_style),
+            Paragraph("<b>Circle / Division:</b>", cell_bold_style),
+            Paragraph(f"{circle} / {division}", cell_style),
+            Paragraph("<b>Payroll Month:</b>", cell_bold_style),
+            Paragraph(f"{period_str}", cell_style),
         ],
-        [
-            Paragraph("<b>Present Days:</b>", cell_bold_style),
-            Paragraph(f"{present_days} Days", cell_style),
-            Paragraph("<b>Paid Leaves / Off:</b>", cell_bold_style),
-            Paragraph(f"{paid_leaves} Days (LOP: {lop}d)", cell_style),
-        ]
     ]
-    t_meta = Table(meta_data, colWidths=[105, 155, 110, 150])
-    t_meta.setStyle(TableStyle([
+    t_emp = Table(emp_data, colWidths=[110, 150, 110, 150])
+    t_emp.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')),
-        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#E2E8F0')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
         ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#E2E8F0')),
         ('TOPPADDING', (0,0), (-1,-1), 5),
         ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-        ('LEFTPADDING', (0,0), (-1,-1), 8),
-        ('RIGHTPADDING', (0,0), (-1,-1), 8),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
     ]))
-    story.append(t_meta)
+    story.append(t_emp)
     story.append(Spacer(1, 14))
 
-    # 3. Earnings & Deductions Table
-    earnings = slip.get("earnings", {})
-    deductions = slip.get("deductions", {})
+    # 3. Attendance Summary Section
+    story.append(Paragraph("<b>Attendance Summary (Centralized Real-Time Records)</b>", section_title_style))
 
-    basic = earnings.get("basicSalary", 21000.0)
-    hra = earnings.get("hra", 8400.0)
-    da = earnings.get("da", 4200.0)
-    travel = earnings.get("travelAllowance", 2500.0)
-    field_allow = earnings.get("siteFieldAllowance", 2000.0)
-    gross = earnings.get("grossEarnings", basic + hra + da + travel + field_allow)
+    pres_days = slip.get('presentDays', 25)
+    abs_days = slip.get('absentDays', 2)
+    hd_days = slip.get('halfDays', 2)
+    wo_days = slip.get('weeklyOffDays', 4)
+    ph_days = slip.get('publicHolidayDays', 1)
+    tot_days = slip.get('totalCalendarDays') or (pres_days + abs_days + wo_days + ph_days)
 
-    pf = deductions.get("pf", 2520.0)
-    esic = deductions.get("esic", 285.0)
-    pt = deductions.get("professionalTax", 200.0)
-    tds = deductions.get("tds", 0.0)
-    tot_ded = deductions.get("totalDeductions", pf + esic + pt + tds)
-    net_pay = slip.get("netPay", gross - tot_ded)
-
-    comp_table_data = [
+    att_summary_data = [
         [
-            Paragraph("<b>EARNINGS COMPONENT</b>", ParagraphStyle('EHead', parent=cell_bold_style, textColor=colors.HexColor('#1E3A8A'))),
-            Paragraph("<b>AMOUNT (INR)</b>", ParagraphStyle('EHeadR', parent=cell_bold_style, alignment=2, textColor=colors.HexColor('#1E3A8A'))),
-            Paragraph("<b>DEDUCTIONS COMPONENT</b>", ParagraphStyle('DHead', parent=cell_bold_style, textColor=colors.HexColor('#991B1B'))),
-            Paragraph("<b>AMOUNT (INR)</b>", ParagraphStyle('DHeadR', parent=cell_bold_style, alignment=2, textColor=colors.HexColor('#991B1B'))),
+            Paragraph("<b>Category</b>", cell_bold_style),
+            Paragraph("<b>Days Count</b>", cell_right_bold),
+            Paragraph("<b>Salary Impact</b>", cell_style)
         ],
         [
-            Paragraph("Basic Salary", cell_style),
-            Paragraph(f"₹ {basic:,.2f}", ParagraphStyle('R', parent=cell_style, alignment=2)),
-            Paragraph("Provident Fund (PF - Employee)", cell_style),
-            Paragraph(f"₹ {pf:,.2f}", ParagraphStyle('R', parent=cell_style, alignment=2)),
+            Paragraph("P – Present (Full Days Worked)", cell_style),
+            Paragraph(str(max(0, pres_days - hd_days)), cell_right_style),
+            Paragraph("Full salary for the day (No deduction)", cell_style)
         ],
         [
-            Paragraph("House Rent Allowance (HRA)", cell_style),
-            Paragraph(f"₹ {hra:,.2f}", ParagraphStyle('R', parent=cell_style, alignment=2)),
-            Paragraph("ESIC Medical Insurance Contribution", cell_style),
-            Paragraph(f"₹ {esic:,.2f}", ParagraphStyle('R', parent=cell_style, alignment=2)),
+            Paragraph("Half Day (Partial Shift < 8 hrs)", cell_style),
+            Paragraph(str(hd_days), cell_right_style),
+            Paragraph("Configured half-day deduction applied", cell_style)
         ],
         [
-            Paragraph("Dearness Allowance (DA)", cell_style),
-            Paragraph(f"₹ {da:,.2f}", ParagraphStyle('R', parent=cell_style, alignment=2)),
-            Paragraph("Professional Tax (PT)", cell_style),
-            Paragraph(f"₹ {pt:,.2f}", ParagraphStyle('R', parent=cell_style, alignment=2)),
+            Paragraph("A – Absent (Unauthorized / No Check-in)", cell_style),
+            Paragraph(str(abs_days), cell_right_style),
+            Paragraph("Configured absent deduction applied", cell_style)
         ],
         [
-            Paragraph("Field Travel Reimbursement", cell_style),
-            Paragraph(f"₹ {travel:,.2f}", ParagraphStyle('R', parent=cell_style, alignment=2)),
-            Paragraph("Income Tax / TDS", cell_style),
-            Paragraph(f"₹ {tds:,.2f}", ParagraphStyle('R', parent=cell_style, alignment=2)),
+            Paragraph("WO – Weekly Off (Scheduled Sundays)", cell_style),
+            Paragraph(str(wo_days), cell_right_style),
+            Paragraph("Paid weekly off (No deduction)", cell_style)
         ],
         [
-            Paragraph("Substation Shift Site Allowance", cell_style),
-            Paragraph(f"₹ {field_allow:,.2f}", ParagraphStyle('R', parent=cell_style, alignment=2)),
-            Paragraph("Other Regulatory Deductions", cell_style),
-            Paragraph("₹ 0.00", ParagraphStyle('R', parent=cell_style, alignment=2)),
+            Paragraph("PH – Public Holiday (Gazetted)", cell_style),
+            Paragraph(str(ph_days), cell_right_style),
+            Paragraph("Paid holiday (No deduction)", cell_style)
         ],
         [
-            Paragraph("<b>Total Gross Earnings:</b>", cell_bold_style),
-            Paragraph(f"<b>₹ {gross:,.2f}</b>", ParagraphStyle('R', parent=cell_bold_style, alignment=2)),
-            Paragraph("<b>Total Statutory Deductions:</b>", cell_bold_style),
-            Paragraph(f"<b>₹ {tot_ded:,.2f}</b>", ParagraphStyle('R', parent=cell_bold_style, alignment=2, textColor=colors.HexColor('#DC2626'))),
-        ],
+            Paragraph("<b>Total Calendar Days in Month</b>", cell_bold_style),
+            Paragraph(f"<b>{tot_days} Days</b>", cell_right_bold),
+            Paragraph("<b>Total Payable Days: " + str(slip.get('payableDays', pres_days + wo_days + ph_days)) + " Days</b>", cell_bold_style)
+        ]
     ]
 
-    t_comp = Table(comp_table_data, colWidths=[170, 90, 170, 90])
-    t_comp.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (1,0), colors.HexColor('#EFF6FF')),
-        ('BACKGROUND', (2,0), (3,0), colors.HexColor('#FEF2F2')),
-        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#CBD5E1')),
+    t_att = Table(att_summary_data, colWidths=[200, 100, 220])
+    t_att.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#EFF6FF')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
         ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#E2E8F0')),
-        ('BACKGROUND', (0,-1), (1,-1), colors.HexColor('#F1F5F9')),
-        ('BACKGROUND', (2,-1), (3,-1), colors.HexColor('#F1F5F9')),
-        ('TOPPADDING', (0,0), (-1,-1), 6),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-        ('LEFTPADDING', (0,0), (-1,-1), 8),
-        ('RIGHTPADDING', (0,0), (-1,-1), 8),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#F1F5F9')),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
     ]))
-    story.append(t_comp)
+    story.append(t_att)
     story.append(Spacer(1, 14))
 
-    # 4. Net Salary Highlight Banner
-    net_data = [
+    # 4. Salary & Deduction Calculation Section
+    story.append(Paragraph("<b>Salary & Deduction Calculation</b>", section_title_style))
+
+    monthly_sal = float(slip.get('monthlySalary') or slip.get('earnings', {}).get('grossEarnings') or 20000.0)
+    daily_rate = float(slip.get('dailySalaryRate') or round(monthly_sal / float(tot_days or 30), 2))
+    abs_rate = float(slip.get('absentDeductionRate', 500.0))
+    hd_rate = float(slip.get('halfDayDeductionRate', 250.0))
+
+    abs_total = float(slip.get('absentDeductionTotal', abs_days * abs_rate))
+    hd_total = float(slip.get('halfDayDeductionTotal', hd_days * hd_rate))
+    tot_ded = float(slip.get('totalDeductionAmount', abs_total + hd_total))
+    net_pay = float(slip.get('netPay', max(0.0, monthly_sal - tot_ded)))
+
+    calc_data = [
         [
-            Paragraph("<b>NET TAKE-HOME SALARY DISBURSED</b><br/><font size=8 color='#166534'>Directly credited to verified employee salary bank account via NEFT/RTGS</font>", ParagraphStyle('NetL', parent=styles['Normal'], fontName='Helvetica', fontSize=10, textColor=colors.HexColor('#14532D'))),
-            Paragraph(f"<b>₹ {net_pay:,.2f}</b>", ParagraphStyle('NetR', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=16, alignment=2, textColor=colors.HexColor('#15803D')))
+            Paragraph("<b>Description</b>", cell_bold_style),
+            Paragraph("<b>Calculation Basis</b>", cell_style),
+            Paragraph("<b>Amount (INR)</b>", cell_right_bold)
+        ],
+        [
+            Paragraph("<b>Monthly Assigned Base Salary</b>", cell_bold_style),
+            Paragraph(f"Per-day Rate: Rs. {daily_rate:,.2f} ({tot_days} calendar days)", cell_style),
+            Paragraph(f"<b>Rs. {monthly_sal:,.2f}</b>", cell_right_bold)
+        ],
+        [
+            Paragraph("Absent Deduction", cell_style),
+            Paragraph(f"{abs_days} Absent Day(s) × Rs. {abs_rate:,.2f} / day", cell_style),
+            Paragraph(f"- Rs. {abs_total:,.2f}", cell_right_style)
+        ],
+        [
+            Paragraph("Half-Day Deduction", cell_style),
+            Paragraph(f"{hd_days} Half Day(s) × Rs. {hd_rate:,.2f} / day", cell_style),
+            Paragraph(f"- Rs. {hd_total:,.2f}", cell_right_style)
+        ],
+        [
+            Paragraph("<b>Total Salary Deductions</b>", cell_bold_style),
+            Paragraph("Cumulative absent + half-day attendance penalties", cell_style),
+            Paragraph(f"<b><font color='#DC2626'>- Rs. {tot_ded:,.2f}</font></b>", cell_right_bold)
+        ],
+        [
+            Paragraph("<b>FINAL PAYABLE SALARY (NET TAKE-HOME)</b>", ParagraphStyle('NetLbl', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#065F46'))),
+            Paragraph("Monthly Salary minus Attendance Deductions", ParagraphStyle('NetSub', parent=styles['Normal'], fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#065F46'))),
+            Paragraph(f"<b><font size='11' color='#059669'>Rs. {net_pay:,.2f}</font></b>", ParagraphStyle('NetVal', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, alignment=2, textColor=colors.HexColor('#059669')))
         ]
     ]
-    t_net = Table(net_data, colWidths=[350, 170])
-    t_net.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#DCFCE7')),
-        ('BOX', (0,0), (-1,-1), 1.5, colors.HexColor('#86EFAC')),
-        ('TOPPADDING', (0,0), (-1,-1), 8),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-        ('LEFTPADDING', (0,0), (-1,-1), 10),
-        ('RIGHTPADDING', (0,0), (-1,-1), 10),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-    ]))
-    story.append(t_net)
-    story.append(Spacer(1, 16))
 
-    # 5. Signatures and Verification Footer
-    footer_data = [
-        [
-            Paragraph("<b>Verified By Operations Administrator:</b><br/>HR & Payroll Division<br/>Adani Energy Solutions Limited", cell_style),
-            Paragraph("<b>Authorized Digital Signature:</b><br/>Digitally stamped & cryptographically certified<br/>Stamp: AESL-WFM-2026-VERIFIED", ParagraphStyle('FRight', parent=cell_style, alignment=2))
-        ]
-    ]
-    t_footer = Table(footer_data, colWidths=[260, 260])
-    t_footer.setStyle(TableStyle([
-        ('LINEABOVE', (0,0), (-1,0), 1, colors.HexColor('#CBD5E1')),
-        ('TOPPADDING', (0,0), (-1,-1), 8),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    t_calc = Table(calc_data, colWidths=[200, 180, 140])
+    t_calc.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#EFF6FF')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#E2E8F0')),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#ECFDF5')),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
     ]))
-    story.append(t_footer)
-    story.append(Spacer(1, 10))
+    story.append(t_calc)
+    story.append(Spacer(1, 14))
 
-    disclaimer = Paragraph(
-        "<font size=7 color='#94A3B8'>This document is an electronically generated and digitally authenticated payslip issued under the Adani Workforce Management System. No physical signature is required. For discrepancies, contact payroll@adani.com.</font>",
-        ParagraphStyle('Disc', parent=styles['Normal'], alignment=1)
-    )
-    story.append(disclaimer)
+    # 5. Verification & Audit Trail Footer
+    finalized_by = slip.get('finalizedBy') or 'Operations Administrator'
+    finalized_at = slip.get('finalizedAt') or datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+    notes = slip.get('notes') or 'Verified against centralized GPS radar attendance records.'
+
+    audit_text = f"<b>Statement Verification & Audit:</b> Verified by {finalized_by} on {finalized_at}.<br/>" \
+                 f"<b>Remarks:</b> {notes}<br/>" \
+                 "<i>This is a computer-generated official compensation statement authorized by Adani Energy Solutions Limited. No physical signature is required.</i>"
+
+    story.append(Paragraph(audit_text, ParagraphStyle('AuditText', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor('#64748B'))))
 
     doc.build(story)
+    buffer.seek(0)
     return buffer.getvalue()
 
 
 def generate_holidays_pdf(year: int = 2026) -> bytes:
     """
-    Generates an official, beautifully styled Adani Energy Solutions Limited
-    Gazetted & Field Operations Holiday Calendar PDF.
+    Generates an official Adani Energy Solutions Limited official holiday calendar PDF.
     """
+    from app.core.database import db
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -297,25 +328,27 @@ def generate_holidays_pdf(year: int = 2026) -> bytes:
     styles = getSampleStyleSheet()
 
     header_title_style = ParagraphStyle(
-        'HeaderTitle',
+        'HolidayHeaderTitle',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
         fontSize=18,
         leading=22,
         textColor=colors.HexColor('#0F172A'),
+        alignment=0
     )
 
     header_sub_style = ParagraphStyle(
-        'HeaderSub',
+        'HolidayHeaderSub',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=10,
-        leading=14,
-        textColor=colors.HexColor('#475569'),
+        fontSize=9,
+        leading=13,
+        textColor=colors.HexColor('#64748B'),
+        alignment=0
     )
 
     cell_bold_style = ParagraphStyle(
-        'CellBold',
+        'HolidayCellBold',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
         fontSize=9,
@@ -324,7 +357,7 @@ def generate_holidays_pdf(year: int = 2026) -> bytes:
     )
 
     cell_style = ParagraphStyle(
-        'CellRegular',
+        'HolidayCellRegular',
         parent=styles['Normal'],
         fontName='Helvetica',
         fontSize=9,
@@ -337,12 +370,12 @@ def generate_holidays_pdf(year: int = 2026) -> bytes:
     # 1. Header
     header_data = [
         [
-            Paragraph("<b>ADANI ENERGY SOLUTIONS LIMITED</b>", header_title_style),
-            Paragraph(f"<b>OFFICIAL CALENDAR</b><br/><font color='#64748B'>Year: {year}</font>", ParagraphStyle('RHead', parent=styles['Normal'], fontName='Helvetica', fontSize=9, alignment=2, textColor=colors.HexColor('#0F172A')))
+            Paragraph(f"<b>ADANI ENERGY SOLUTIONS LIMITED</b>", header_title_style),
+            Paragraph(f"<b>OFFICIAL HOLIDAY CALENDAR {year}</b><br/><font color='#64748B'>Workforce Operations & Payroll</font>", ParagraphStyle('RHeadHol', parent=styles['Normal'], fontName='Helvetica', fontSize=9, alignment=2, textColor=colors.HexColor('#0F172A')))
         ],
         [
-            Paragraph("Smart Grid Operations • Field Workforce & High-Voltage Transmission Division<br/>Approved Gazetted & Regional Operations Holiday Schedule", header_sub_style),
-            Paragraph("Circular: <b><font color='#1E63F0'>AESL/HR/CAL-2026</font></b>", ParagraphStyle('RCir', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=2, textColor=colors.HexColor('#1E63F0')))
+            Paragraph("Smart Grid Operations • Transmission & Distribution Infrastructure<br/>Adani Corporate House, Shantigram, Ahmedabad, Gujarat 382421", header_sub_style),
+            Paragraph("Circular: <b><font color='#1E63F0'>AESL/HR/CAL-2026</font></b>", ParagraphStyle('RCirHol', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=2, textColor=colors.HexColor('#1E63F0')))
         ]
     ]
     t_header = Table(header_data, colWidths=[360, 160])
@@ -369,7 +402,7 @@ def generate_holidays_pdf(year: int = 2026) -> bytes:
     story.append(t_policy)
     story.append(Spacer(1, 14))
 
-    # 3. Holidays Table (Dynamically loaded from centralized Holiday Database)
+    # 3. Holidays Table
     db_holidays = db.get_all_holidays(year=year)
     holidays_list = []
     if db_holidays:
@@ -389,8 +422,17 @@ def generate_holidays_pdf(year: int = 2026) -> bytes:
     if not holidays_list:
         holidays_list = [
             ("26 Jan 2026", "Monday", "Republic Day", "National Gazetted", "Paid Holiday"),
+            ("15 Feb 2026", "Sunday", "Maha Shivaratri", "Gazetted", "Paid Holiday / Sunday"),
+            ("03 Mar 2026", "Tuesday", "Holi (Dhulivandan)", "Gazetted", "Paid Holiday"),
+            ("20 Mar 2026", "Friday", "Eid-ul-Fitr (Ramzan Eid)", "Gazetted", "Paid Holiday"),
+            ("14 Apr 2026", "Tuesday", "Dr. Ambedkar Jayanti", "Gazetted", "Paid Holiday"),
+            ("01 May 2026", "Friday", "Maharashtra / Gujarat Day", "Regional Gazetted", "Paid Holiday"),
             ("15 Aug 2026", "Saturday", "Independence Day", "National Gazetted", "Paid Holiday"),
+            ("04 Sep 2026", "Friday", "Janmashtami (Gokulashtami)", "Gazetted", "Paid Holiday"),
             ("02 Oct 2026", "Friday", "Mahatma Gandhi Jayanti", "National Gazetted", "Paid Holiday"),
+            ("20 Oct 2026", "Tuesday", "Dussehra (Vijayadashami)", "Gazetted", "Paid Holiday"),
+            ("08 Nov 2026", "Sunday", "Diwali (Deepavali Laxmi Pujan)", "Gazetted", "Paid Holiday / Sunday"),
+            ("09 Nov 2026", "Monday", "Diwali Balipratipada", "Gazetted", "Paid Holiday"),
             ("25 Dec 2026", "Friday", "Christmas Day", "Gazetted", "Paid Holiday"),
         ]
 
@@ -427,11 +469,10 @@ def generate_holidays_pdf(year: int = 2026) -> bytes:
     story.append(t_holidays)
     story.append(Spacer(1, 16))
 
-    # 4. Signatures
     footer_data = [
         [
             Paragraph("<b>Issued by:</b><br/>Head of Human Resources & Corporate Operations<br/>Adani Energy Solutions Limited", cell_style),
-            Paragraph("<b>Approved by:</b><br/>Director - Power & Transmission Grid Infrastructure<br/>Adani Group", ParagraphStyle('FRight', parent=cell_style, alignment=2))
+            Paragraph("<b>Approved by:</b><br/>Director - Power & Transmission Grid Infrastructure<br/>Adani Group", ParagraphStyle('FRightHol', parent=cell_style, alignment=2))
         ]
     ]
     t_footer = Table(footer_data, colWidths=[260, 260])
@@ -443,4 +484,6 @@ def generate_holidays_pdf(year: int = 2026) -> bytes:
     story.append(t_footer)
 
     doc.build(story)
+    buffer.seek(0)
     return buffer.getvalue()
+
