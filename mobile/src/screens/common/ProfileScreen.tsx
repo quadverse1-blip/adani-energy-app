@@ -20,11 +20,20 @@ import {
   ChevronRight,
   Menu,
   ArrowLeft,
+  Bell,
+  CheckCircle2,
+  Radio,
+  Sliders,
+  Building,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useTechnicianDrawerStore } from '../../store/useTechnicianDrawerStore';
+import { useSupervisorDrawerStore } from '../../store/useSupervisorDrawerStore';
+import { useAdminDrawerStore } from '../../store/useAdminDrawerStore';
 import { TechnicianDrawerModal } from '../../components/navigation/TechnicianDrawerModal';
+import { SupervisorDrawerModal } from '../../components/navigation/SupervisorDrawerModal';
+import { AdminDrawerModal } from '../../components/navigation/AdminDrawerModal';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useAttendanceStore } from '../../store/useAttendanceStore';
 import { CONFIG } from '../../config';
@@ -37,9 +46,25 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 export const ProfileScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { openDrawer } = useTechnicianDrawerStore();
+  const techDrawer = useTechnicianDrawerStore();
+  const supDrawer = useSupervisorDrawerStore();
+  const adminDrawer = useAdminDrawerStore();
   const { user, logout } = useAuthStore();
   const { pendingSyncCount, syncOfflineQueue } = useAttendanceStore();
+
+  const userRole = user?.role || 'technician';
+  const isAdmin = userRole === 'admin';
+  const isSupervisor = userRole === 'supervisor';
+
+  const handleOpenDrawer = () => {
+    if (isAdmin) {
+      adminDrawer.openDrawer('Profile');
+    } else if (isSupervisor) {
+      supDrawer.openDrawer('Profile');
+    } else {
+      techDrawer.openDrawer('Profile');
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to log out of the Adani platform?', [
@@ -52,6 +77,12 @@ export const ProfileScreen: React.FC = () => {
     ]);
   };
 
+  const profileHeaderTitle = isAdmin
+    ? 'Administrator Profile'
+    : isSupervisor
+    ? 'Supervisor Profile'
+    : 'Employee Profile';
+
   return (
     <View style={[styles.screen, { paddingTop: Math.max(insets.top, 16) }]}>
       {/* Top Navigation Bar */}
@@ -60,121 +91,187 @@ export const ProfileScreen: React.FC = () => {
           <AppBackButton />
           <TouchableOpacity
             style={styles.navHeaderBtn}
-            onPress={() => openDrawer('Profile')}
+            onPress={handleOpenDrawer}
             activeOpacity={0.7}
           >
             <Menu size={20} color="#0F172A" />
           </TouchableOpacity>
         </View>
-        <Text style={styles.navHeaderTitle}>Engineer Profile</Text>
+        <Text style={styles.navHeaderTitle}>{profileHeaderTitle}</Text>
         <View style={{ width: 38 }} />
       </View>
 
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* Profile Hero Card */}
-      <AppCard style={styles.heroCard}>
-        <Image
-          source={{
-            uri:
-              user?.avatar ||
-              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-          }}
-          style={styles.avatar}
-        />
-        <Text style={styles.name}>{user?.name}</Text>
-        <Text style={styles.desig}>{user?.designation}</Text>
-        <View style={styles.badgeRow}>
-          <StatusBadge status={user?.role || 'technician'} size="sm" />
-          <View style={styles.empIdBadge}>
-            <Text style={styles.empIdText}>{user?.employeeId}</Text>
-          </View>
-        </View>
-      </AppCard>
-
-      {/* Contact & Department Information */}
-      <AppCard style={styles.card}>
-        <Text style={styles.sectionTitle}>ORGANIZATION DETAILS</Text>
-        
-        <View style={styles.infoRow}>
-          <Shield size={16} color={COLORS.primary} />
-          <View style={styles.infoCol}>
-            <Text style={styles.infoLabel}>Department</Text>
-            <Text style={styles.infoVal}>{user?.department || 'Smart Meter Operations'}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Phone size={16} color={COLORS.primary} />
-          <View style={styles.infoCol}>
-            <Text style={styles.infoLabel}>Registered Mobile</Text>
-            <Text style={styles.infoVal}>{user?.phone || '+91 98765 43210'}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Mail size={16} color={COLORS.primary} />
-          <View style={styles.infoCol}>
-            <Text style={styles.infoLabel}>Company Email</Text>
-            <Text style={styles.infoVal}>{user?.email || 'ramesh.kumar@adani.com'}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Zap size={16} color={COLORS.primary} />
-          <View style={styles.infoCol}>
-            <Text style={styles.infoLabel}>Assigned Primary Substation</Text>
-            <Text style={styles.infoVal}>{user?.assignedSiteId || 'Pune Phase 1 Substation'}</Text>
-          </View>
-        </View>
-      </AppCard>
-
-      {/* System & Telemetry Diagnostics */}
-      <AppCard style={styles.card}>
-        <Text style={styles.sectionTitle}>SYSTEM & TELEMETRY</Text>
-
-        <View style={styles.infoRow}>
-          <Database size={16} color={COLORS.textSecondary} />
-          <View style={styles.infoCol}>
-            <Text style={styles.infoLabel}>FastAPI REST Backend</Text>
-            <Text style={styles.infoVal}>{CONFIG.API_BASE_URL}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Smartphone size={16} color={COLORS.textSecondary} />
-          <View style={styles.infoCol}>
-            <Text style={styles.infoLabel}>Offline Queue Telemetry</Text>
-            <Text style={styles.infoVal}>
-              {pendingSyncCount > 0
-                ? `${pendingSyncCount} pending transactions (Offline Cache Active)`
-                : 'All transactions synchronized with cloud'}
-            </Text>
-          </View>
-        </View>
-
-        {pendingSyncCount > 0 ? (
-          <AppButton
-            title="Force Synchronize Pending Queue"
-            onPress={syncOfflineQueue}
-            variant="outline"
-            size="sm"
-            style={{ marginTop: 10 }}
+        <AppCard style={styles.heroCard}>
+          <Image
+            source={{
+              uri:
+                user?.avatar ||
+                'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+            }}
+            style={styles.avatar}
           />
-        ) : null}
-      </AppCard>
+          <Text style={styles.name}>{user?.name || 'Authorized User'}</Text>
+          <Text style={styles.desig}>{user?.designation || (isAdmin ? 'Operations Admin' : isSupervisor ? 'Zonal Supervisor' : 'Field Technician')}</Text>
+          <View style={styles.badgeRow}>
+            <StatusBadge status={userRole} size="sm" />
+            <View style={styles.empIdBadge}>
+              <Text style={styles.empIdText}>{user?.employeeId || '--'}</Text>
+            </View>
+          </View>
+        </AppCard>
 
-      {/* Logout Action */}
-      <View style={{ marginTop: 10, marginBottom: 30 }}>
-        <AppButton
-          title="Sign Out of Platform"
-          onPress={handleLogout}
-          variant="danger"
-          size="lg"
-          icon={<LogOut size={18} color="#FFFFFF" />}
-        />
-      </View>
+        {/* NOTIFICATION & FIELD STATUS (Role-Aware) */}
+        <AppCard style={styles.card}>
+          <Text style={styles.sectionTitle}>NOTIFICATION & FIELD STATUS</Text>
+
+          <View style={styles.infoRow}>
+            <Bell size={16} color="#2563EB" />
+            <View style={styles.infoCol}>
+              <Text style={styles.infoLabel}>Push & In-App Alerts</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                <View style={styles.statusDotLive} />
+                <Text style={[styles.infoVal, { color: '#16A34A' }]}>Active • Instant Cloud Delivery</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Radio size={16} color="#059669" />
+            <View style={styles.infoCol}>
+              <Text style={styles.infoLabel}>Field Operational Status</Text>
+              <Text style={styles.infoVal}>
+                {isAdmin
+                  ? 'HQ Central Command • Full Authority'
+                  : isSupervisor
+                  ? 'Zonal Oversight • Shift Clearance Active'
+                  : 'On-Field Operational • Geofence Monitoring'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Sliders size={16} color="#7C3AED" />
+            <View style={styles.infoCol}>
+              <Text style={styles.infoLabel}>Alert Preferences</Text>
+              <Text style={styles.infoVal}>
+                {isAdmin
+                  ? 'System Audits, Roster Updates & Salary Reports'
+                  : isSupervisor
+                  ? 'Shift Authorizations, Attendance Alerts & Team Logs'
+                  : 'Check-in Reminders, Shift Timers & Slip Uploads'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.infoRow}>
+            <CheckCircle2 size={16} color="#0284C7" />
+            <View style={styles.infoCol}>
+              <Text style={styles.infoLabel}>Notification Channel Status</Text>
+              <Text style={styles.infoVal}>FCM Connected • Live Synchronized</Text>
+            </View>
+          </View>
+        </AppCard>
+
+        {/* Contact & Department Information */}
+        <AppCard style={styles.card}>
+          <Text style={styles.sectionTitle}>ORGANIZATION DETAILS</Text>
+          
+          <View style={styles.infoRow}>
+            <Shield size={16} color={COLORS.primary} />
+            <View style={styles.infoCol}>
+              <Text style={styles.infoLabel}>Department</Text>
+              <Text style={styles.infoVal}>
+                {user?.department || (isAdmin ? 'Executive Management' : isSupervisor ? 'Zonal Workforce Coordination' : 'Smart Meter Operations')}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Phone size={16} color={COLORS.primary} />
+            <View style={styles.infoCol}>
+              <Text style={styles.infoLabel}>Registered Mobile</Text>
+              <Text style={styles.infoVal}>{user?.phone || '--'}</Text>
+            </View>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Mail size={16} color={COLORS.primary} />
+            <View style={styles.infoCol}>
+              <Text style={styles.infoLabel}>Company Email</Text>
+              <Text style={styles.infoVal}>{user?.email || '--'}</Text>
+            </View>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Zap size={16} color={COLORS.primary} />
+            <View style={styles.infoCol}>
+              <Text style={styles.infoLabel}>Assigned Scope</Text>
+              <Text style={styles.infoVal}>
+                {isAdmin
+                  ? 'Enterprise Multi-Site Command'
+                  : user?.assignedSiteId || (user?.assignedSiteIds && user.assignedSiteIds.length > 0 ? `${user.assignedSiteIds.length} Assigned Sites` : 'All Zonal Sites')}
+              </Text>
+            </View>
+          </View>
+        </AppCard>
+
+        {/* System & Telemetry Diagnostics */}
+        <AppCard style={styles.card}>
+          <Text style={styles.sectionTitle}>SYSTEM & TELEMETRY</Text>
+
+          <View style={styles.infoRow}>
+            <Database size={16} color={COLORS.textSecondary} />
+            <View style={styles.infoCol}>
+              <Text style={styles.infoLabel}>FastAPI REST Backend</Text>
+              <Text style={styles.infoVal}>{CONFIG.API_BASE_URL}</Text>
+            </View>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Smartphone size={16} color={COLORS.textSecondary} />
+            <View style={styles.infoCol}>
+              <Text style={styles.infoLabel}>Offline Queue Telemetry</Text>
+              <Text style={styles.infoVal}>
+                {pendingSyncCount > 0
+                  ? `${pendingSyncCount} pending transactions (Offline Cache Active)`
+                  : 'All transactions synchronized with cloud'}
+              </Text>
+            </View>
+          </View>
+
+          {pendingSyncCount > 0 ? (
+            <AppButton
+              title="Force Synchronize Pending Queue"
+              onPress={syncOfflineQueue}
+              variant="outline"
+              size="sm"
+              style={{ marginTop: 10 }}
+            />
+          ) : null}
+        </AppCard>
+
+        {/* Logout Action */}
+        <View style={{ marginTop: 10, marginBottom: 30 }}>
+          <AppButton
+            title="Sign Out of Platform"
+            onPress={handleLogout}
+            variant="danger"
+            size="lg"
+            icon={<LogOut size={18} color="#FFFFFF" />}
+          />
+        </View>
       </ScrollView>
-      <TechnicianDrawerModal />
+
+      {/* Render appropriate drawer based on role */}
+      {isAdmin ? (
+        <AdminDrawerModal />
+      ) : isSupervisor ? (
+        <SupervisorDrawerModal />
+      ) : (
+        <TechnicianDrawerModal />
+      )}
     </View>
   );
 };
@@ -286,5 +383,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
     marginTop: 1,
+  },
+  statusDotLive: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#16A34A',
   },
 });

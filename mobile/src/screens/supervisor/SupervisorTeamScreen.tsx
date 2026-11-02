@@ -134,47 +134,59 @@ export const SupervisorTeamScreen: React.FC = () => {
 
       {/* Team Members List */}
       <Text style={styles.sectionTitle}>FIELD WORKFORCE ({team.length})</Text>
-      {team.map((member) => (
-        <AppCard key={member.id} style={styles.memberCard}>
-          <View style={styles.memberRow}>
-            <Image
-              source={{
-                uri:
-                  member.avatar ||
-                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-              }}
-              style={styles.avatar}
-            />
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <View style={styles.nameRow}>
-                <Text style={styles.memberName}>{member.name}</Text>
-                <StatusBadge status="active" size="sm" />
-              </View>
-              <Text style={styles.memberDesig}>{member.designation}</Text>
-              <Text style={styles.memberEmpId}>{member.employeeId}</Text>
-            </View>
-          </View>
-
-          <View style={styles.actionRow}>
-            <AppButton
-              title="Shift Override"
-              onPress={() => handleShiftOverride(member)}
-              variant="outline"
-              size="sm"
-              icon={<Clock size={14} color={COLORS.primary} />}
-              style={{ flex: 1, marginRight: 8 }}
-            />
-            <AppButton
-              title="Change Sites"
-              onPress={() => navigation.navigate('Sites')}
-              variant="primary"
-              size="sm"
-              icon={<Zap size={14} color="#FFF" />}
-              style={{ flex: 1 }}
-            />
-          </View>
+      {team.length === 0 ? (
+        <AppCard style={{ padding: 24, alignItems: 'center', marginBottom: 16 }}>
+          <Users size={36} color={COLORS.textMuted} />
+          <Text style={{ marginTop: 12, fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>
+            No Field Workforce Members Found
+          </Text>
+          <Text style={{ marginTop: 4, fontSize: 12, color: COLORS.textMuted, textAlign: 'center' }}>
+            Employees registered by Admin will appear here for shift oversight.
+          </Text>
         </AppCard>
-      ))}
+      ) : (
+        team.map((member) => (
+          <AppCard key={member.id} style={styles.memberCard}>
+            <View style={styles.memberRow}>
+              <Image
+                source={{
+                  uri:
+                    member.avatar ||
+                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+                }}
+                style={styles.avatar}
+              />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <View style={styles.nameRow}>
+                  <Text style={styles.memberName}>{member.name}</Text>
+                  <StatusBadge status="active" size="sm" />
+                </View>
+                <Text style={styles.memberDesig}>{member.designation}</Text>
+                <Text style={styles.memberEmpId}>{member.employeeId}</Text>
+              </View>
+            </View>
+
+            <View style={styles.actionRow}>
+              <AppButton
+                title="Shift Override"
+                onPress={() => handleShiftOverride(member)}
+                variant="outline"
+                size="sm"
+                icon={<Clock size={14} color={COLORS.primary} />}
+                style={{ flex: 1, marginRight: 8 }}
+              />
+              <AppButton
+                title="Change Sites"
+                onPress={() => navigation.navigate('Sites')}
+                variant="primary"
+                size="sm"
+                icon={<Zap size={14} color="#FFF" />}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </AppCard>
+        ))
+      )}
       </ScrollView>
       <SupervisorDrawerModal />
     </View>

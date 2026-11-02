@@ -347,12 +347,12 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
       }
 
       await attendanceService.checkIn({
-        siteId: selectedSite?.id || 'site_st_joseph',
+        siteId: selectedSite?.id || '',
         latitude,
         longitude,
         accuracy,
         photoUrl: uploadedUrl,
-        remarks: `Field Technician Shift Check-In (${distanceFormatted} from ${selectedSite?.name})`,
+        remarks: `Field Technician Shift Check-In (${distanceFormatted} from ${selectedSite?.name || 'Assigned Site'})`,
       });
 
       await fetchTodayAttendance();
@@ -362,7 +362,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
 
       Alert.alert(
         'Check-In Successful',
-        `Welcome, ${user?.name || 'Rohit Sharma'}!\n\n✓ Location: ${selectedSite?.name}\n✓ Verified In-Range: ${distanceFormatted}\n✓ Photo Uploaded & Logged\n✓ Time: ${shiftInfo.formattedTimeIST}`,
+        `Welcome, ${user?.name || 'Engineer'}!\n\n✓ Location: ${selectedSite?.name || 'Assigned Site'}\n✓ Verified In-Range: ${distanceFormatted}\n✓ Photo Uploaded & Logged\n✓ Time: ${shiftInfo.formattedTimeIST}`,
         [
           {
             text: 'Return to Dashboard',

@@ -73,15 +73,15 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
         if (isMounted) {
           setAllSites(sites || []);
 
-          // Determine initial selected site (Default: Surat ST-1 or Rohit's assigned site)
+          // Determine initial selected site
           const userSiteIds =
             user?.assignedSiteIds && user.assignedSiteIds.length > 0
               ? user.assignedSiteIds
               : user?.assignedSiteId
               ? [user.assignedSiteId]
-              : ['site_surat_01', 'site_st_joseph'];
+              : [];
 
-          const targetId = route.params?.siteId || user?.assignedSiteId || userSiteIds[0];
+          const targetId = route.params?.siteId || user?.assignedSiteId || (userSiteIds.length > 0 ? userSiteIds[0] : allSites[0]?.id || '');
           setActiveSiteId(targetId);
         }
 
@@ -115,7 +115,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
         ? user.assignedSiteIds
         : user?.assignedSiteId
         ? [user.assignedSiteId]
-        : ['site_surat_01', 'site_st_joseph'];
+        : [];
 
     const matched = allSites.filter(
       (s) =>
@@ -123,6 +123,8 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
         userSiteIds.includes((s as any)._id) ||
         userSiteIds.includes(s.code)
     );
+
+    return matched.length > 0 ? matched : allSites;
 
     return matched.length > 0 ? matched : allSites.slice(0, 2);
   }, [allSites, user]);
@@ -174,32 +176,20 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
   // Authentic high-voltage substation imagery (No graduation photos!)
   const heroImageUrl = useMemo(() => {
     if (!site) return 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=1000&q=85';
-    const sId = site.id || (site as any)._id;
-
     if (heroImgFailed) {
       return 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=1000&q=85';
     }
-
-    if (sId === 'site_st_joseph') {
-      return 'https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=1000&q=85';
-    }
-    // High-voltage electrical substation equipment, transformers and power grid
+    if (site.photoUrl) return site.photoUrl;
     return 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=1000&q=85';
   }, [site, heroImgFailed]);
 
   // Professional manager photo
   const managerPhotoUrl = useMemo(() => {
     if (!site) return 'https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&w=600&q=85';
-    const sId = site.id || (site as any)._id;
-
     if (mgrImgFailed) {
       return 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=600&q=85';
     }
-
-    if (sId === 'site_st_joseph') {
-      return 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=85';
-    }
-    // Professional corporate engineering executive Dhaval Patel in formal business suit
+    if (site.manager?.photoUrl) return site.manager.photoUrl;
     return 'https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&w=600&q=85';
   }, [site, mgrImgFailed]);
 

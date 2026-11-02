@@ -69,7 +69,7 @@ export const SalaryScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
   // STRICT EMPLOYEE ISOLATION: Technicians can ONLY retrieve their own salary records
-  const currentUserId = user?.id || (user as any)?._id || (isSupervisor ? 'emp_05' : 'emp_01');
+  const currentUserId = user?.id || (user as any)?._id || '';
 
   const fetchSalary = async () => {
     if (!currentUserId) return;

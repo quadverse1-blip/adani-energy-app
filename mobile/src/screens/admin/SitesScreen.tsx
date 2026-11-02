@@ -110,23 +110,23 @@ export const SitesScreen: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingSite, setEditingSite] = useState<Substation | null>(null);
 
-  // Form Fields matching user image
-  const [name, setName] = useState('Surat ST-1');
-  const [code, setCode] = useState('ADN-SITE-010');
-  const [address, setAddress] = useState('Surat ST-1');
-  const [latitude, setLatitude] = useState('21.1926');
-  const [longitude, setLongitude] = useState('72.7997');
+  // Form Fields
+  const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [address, setAddress] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
   const [radiusMeters, setRadiusMeters] = useState('500');
-  const [managerName, setManagerName] = useState('Dhaval Patel');
-  const [managerPhone, setManagerPhone] = useState('+91 98251 98765');
-  const [managerEmail, setManagerEmail] = useState('dhaval.patel@adani.com');
+  const [managerName, setManagerName] = useState('');
+  const [managerPhone, setManagerPhone] = useState('');
+  const [managerEmail, setManagerEmail] = useState('');
   const [workingHours, setWorkingHours] = useState('09:00 AM - 06:00 PM');
   const [status, setStatus] = useState<'Active' | 'Inactive'>('Active');
   const [showStatusPicker, setShowStatusPicker] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Search & Map Navigation States
-  const [searchLocation, setSearchLocation] = useState('Surat ST-1');
+  const [searchLocation, setSearchLocation] = useState('');
   const [searchingLocation, setSearchingLocation] = useState(false);
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);

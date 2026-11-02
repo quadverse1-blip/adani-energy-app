@@ -219,9 +219,13 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
       // Load personal attendance-based salary overview
       try {
-        const currentEmpId = (freshUser || user)?.id || ((freshUser || user) as any)?._id || 'emp_01';
-        const slip = await salaryService.getSalarySlip(currentEmpId, 10, 2026);
-        if (slip) setDashboardSalarySlip(slip);
+        const currentEmpId = (freshUser || user)?.id || ((freshUser || user) as any)?._id || '';
+        if (currentEmpId) {
+          const currentMonth = new Date().getMonth() + 1;
+          const currentYear = new Date().getFullYear();
+          const slip = await salaryService.getSalarySlip(currentEmpId, currentMonth, currentYear);
+          if (slip) setDashboardSalarySlip(slip);
+        }
       } catch (salErr) {
         // Silently use defaults
       }

@@ -116,120 +116,7 @@ const STATUS_CARDS: {
   },
 ];
 
-const FALLBACK_LOGS: AttendanceLogItem[] = [
-  {
-    id: 'att_rohit_21',
-    date: '2026-10-21',
-    formattedDate: '21 Oct 2026',
-    employeeId: 'emp_01',
-    technicianName: 'Rohit Sharma',
-    technicianCode: 'b4S/Adani/01',
-    siteId: 'site_st_joseph',
-    siteName: 'st. joseph university',
-    checkInSiteName: 'st. joseph university',
-    checkOutSiteName: 'Jain sos',
-    checkInTime: '09:12 AM',
-    checkOutTime: '06:15 PM',
-    duration: '9h 03m',
-    workingMinutes: 543,
-    distanceTraveled: '1.26 km',
-    status: 'present',
-    adminRemarks: 'Regular shift completed on schedule',
-    latitude: 12.962590,
-    longitude: 77.593617,
-    checkInLatitude: 12.962590,
-    checkInLongitude: 77.593617,
-    checkOutLatitude: 12.960500,
-    checkOutLongitude: 77.584500,
-  },
-  {
-    id: 'att_rohit_22',
-    date: '2026-10-22',
-    formattedDate: '22 Oct 2026',
-    employeeId: 'emp_01',
-    technicianName: 'Rohit Sharma',
-    technicianCode: 'b4S/Adani/01',
-    siteId: 'site_st_joseph',
-    siteName: 'st. joseph university',
-    checkInSiteName: 'st. joseph university',
-    checkOutSiteName: 'Jain sos',
-    checkInTime: '10:14 AM',
-    checkOutTime: '06:00 PM',
-    duration: '7h 46m',
-    workingMinutes: 466,
-    distanceTraveled: '1.26 km',
-    status: 'late',
-    adminRemarks: 'Auto-checked out at 06:00 PM (Shift End)',
-    latitude: 12.962590,
-    longitude: 77.593617,
-    checkInLatitude: 12.962590,
-    checkInLongitude: 77.593617,
-    checkOutLatitude: 12.960500,
-    checkOutLongitude: 77.584500,
-  },
-  {
-    id: 'att_suresh_22',
-    date: '2026-10-22',
-    formattedDate: '22 Oct 2026',
-    employeeId: 'emp_suresh',
-    technicianName: 'Suresh Patil',
-    technicianCode: 'SUPER01',
-    siteId: 'site_pune_01',
-    siteName: 'Pune - Phase 1',
-    checkInSiteName: 'Pune - Phase 1',
-    checkOutSiteName: 'Pune - Phase 2',
-    checkInTime: '10:43 AM',
-    checkOutTime: '10:44 AM',
-    duration: '0h 01m',
-    workingMinutes: 1,
-    distanceTraveled: '736.0 km',
-    status: 'half_day',
-    adminRemarks: 'Partial shift recorded',
-    latitude: 18.5913,
-    longitude: 73.7389,
-    checkInLatitude: 18.5913,
-    checkInLongitude: 73.7389,
-    checkOutLatitude: 18.5500,
-    checkOutLongitude: 73.7870,
-  },
-  {
-    id: 'att_amit_21',
-    date: '2026-10-21',
-    formattedDate: '21 Oct 2026',
-    employeeId: 'emp_02',
-    technicianName: 'Amit Kumar',
-    technicianCode: 'b4S/Adani/02',
-    siteId: 'site_pune_01',
-    siteName: 'Office',
-    checkInTime: '09:02 AM',
-    checkOutTime: '06:05 PM',
-    duration: '9h 03m',
-    workingMinutes: 543,
-    distanceTraveled: '1.2 km',
-    status: 'present',
-    adminRemarks: 'Regular shift completed on schedule',
-    latitude: 18.5913,
-    longitude: 73.7389,
-  },
-  {
-    id: 'att_sandeep_20',
-    date: '2026-10-20',
-    formattedDate: '20 Oct 2026',
-    employeeId: 'emp_03',
-    technicianName: 'Sandeep Yadav',
-    technicianCode: 'b4S/Adani/03',
-    siteId: 'site_pune_02',
-    siteName: 'Pune - Phase 2',
-    checkInTime: '09:15 AM',
-    checkOutTime: '06:00 PM',
-    duration: '8h 45m',
-    workingMinutes: 525,
-    distanceTraveled: '--',
-    status: 'present',
-    latitude: 18.5204,
-    longitude: 73.8567,
-  },
-];
+const FALLBACK_LOGS: AttendanceLogItem[] = [];
 
 export const AttendanceLogsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -259,15 +146,15 @@ export const AttendanceLogsScreen: React.FC = () => {
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
 
   // Form Fields
-  const [selectedStatus, setSelectedStatus] = useState<AttendanceStatusType>('late');
-  const [formEmployeeId, setFormEmployeeId] = useState('b4S/Adani/01');
-  const [formEmployeeName, setFormEmployeeName] = useState('Rohit Sharma (b4S/Adani/01)');
-  const [formDate, setFormDate] = useState('22-10-2026');
-  const [formSiteName, setFormSiteName] = useState('st. joseph university');
-  const [formCheckIn, setFormCheckIn] = useState('10:14 AM');
+  const [selectedStatus, setSelectedStatus] = useState<AttendanceStatusType>('present');
+  const [formEmployeeId, setFormEmployeeId] = useState('');
+  const [formEmployeeName, setFormEmployeeName] = useState('');
+  const [formDate, setFormDate] = useState('');
+  const [formSiteName, setFormSiteName] = useState('');
+  const [formCheckIn, setFormCheckIn] = useState('09:00 AM');
   const [formCheckOut, setFormCheckOut] = useState('06:00 PM');
-  const [formDuration, setFormDuration] = useState('7h 46m');
-  const [formRemarks, setFormRemarks] = useState('Auto-checked out at 06:00 PM (Shift End)');
+  const [formDuration, setFormDuration] = useState('9h 00m');
+  const [formRemarks, setFormRemarks] = useState('');
   const [savingAdjust, setSavingAdjust] = useState(false);
 
   // Shift Route Modal State
@@ -417,15 +304,17 @@ export const AttendanceLogsScreen: React.FC = () => {
   const handleOpenNewAdjust = () => {
     setEditingLogId(null);
     setSelectedStatus('present');
-    const defaultTech = technicians[0] || { id: 'emp_01', name: 'Rohit Sharma', employeeId: 'b4S/Adani/01' };
-    setFormEmployeeId(defaultTech.id);
-    setFormEmployeeName(`${defaultTech.name} (${defaultTech.employeeId})`);
-    setFormDate('22-10-2026');
-    setFormSiteName('st. joseph university');
-    setFormCheckIn('10:14 AM');
+    const defaultTech = technicians[0] || null;
+    setFormEmployeeId(defaultTech ? defaultTech.id : '');
+    setFormEmployeeName(defaultTech ? `${defaultTech.name} (${defaultTech.employeeId})` : '');
+    const nowD = new Date();
+    const dStr = `${String(nowD.getDate()).padStart(2, '0')}-${String(nowD.getMonth() + 1).padStart(2, '0')}-${nowD.getFullYear()}`;
+    setFormDate(dStr);
+    setFormSiteName(sites[0]?.name || '');
+    setFormCheckIn('09:00 AM');
     setFormCheckOut('06:00 PM');
-    setFormDuration('7h 46m');
-    setFormRemarks('Auto-checked out at 06:00 PM (Shift End)');
+    setFormDuration('9h 00m');
+    setFormRemarks('');
     setShowAdjustModal(true);
   };
 

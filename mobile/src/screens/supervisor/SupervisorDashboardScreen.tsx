@@ -408,42 +408,25 @@ export const SupervisorDashboardScreen: React.FC = () => {
         {/* SECTION 1: SUPERVISOR PROFILE HEADER CARD (IMAGE 1)           */}
         {/* ============================================================== */}
         <View style={styles.headerCard}>
-          <View style={styles.headerTopRow}>
-            {/* 3-Line Hamburger Menu Icon Button */}
-            <TouchableOpacity delayPressIn={0}
-              style={styles.hamburgerBtn}
-              onPress={() => openDrawer('SupervisorDashboard')}
-              activeOpacity={0.7}
-              accessibilityLabel="Open Navigation Menu"
-            >
-              <Menu size={20} color="#0F172A" />
-            </TouchableOpacity>
+          {/* Top Row: Hamburger + Live Status + Alerts + Logout */}
+          <View style={styles.headerNavRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity delayPressIn={0}
+                style={styles.hamburgerBtn}
+                onPress={() => openDrawer('SupervisorDashboard')}
+                activeOpacity={0.7}
+                accessibilityLabel="Open Navigation Menu"
+              >
+                <Menu size={20} color="#0F172A" />
+              </TouchableOpacity>
 
-            {/* Initials Avatar Box */}
-            <View style={styles.initialsBox}>
-              <Text style={styles.initialsText}>{supervisorInitials}</Text>
-            </View>
-
-            {/* Greeting & Assignment */}
-            <View style={styles.headerInfoCol}>
-              <View style={styles.nameRow}>
-                <Text style={styles.greetingText}>
-                  Hello, {user?.name || 'Suresh Patil'}
-                </Text>
-                <View style={styles.rolePill}>
-                  <Text style={styles.rolePillText}>
-                    {user?.designation || 'Area Operations Supervisor'}
-                  </Text>
-                </View>
+              <View style={styles.statusPillActive}>
+                <View style={styles.greenLiveDot} />
+                <Text style={styles.statusPillActiveText}>Field Active</Text>
               </View>
-
-              <Text style={styles.employeeSubText} numberOfLines={1}>
-                Employee ID: <Text style={styles.boldSub}>{user?.employeeId || 'SUPER01'}</Text> • 🏢 Assignment: <Text style={styles.boldSub}>Pune - Phase 1</Text>
-              </Text>
             </View>
 
-            {/* Right Action Pills */}
-            <View style={styles.headerActionsWrap}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               {/* Notification Button */}
               <TouchableOpacity delayPressIn={0}
                 style={[styles.headerPillBtn, styles.notifPillBtn]}
@@ -472,36 +455,58 @@ export const SupervisorDashboardScreen: React.FC = () => {
                 <LogOut size={13} color="#DC2626" />
                 <Text style={styles.logoutPillBtnText}>Logout</Text>
               </TouchableOpacity>
+            </View>
+          </View>
 
-              <View style={styles.statusPillActive}>
-                <View style={styles.greenLiveDot} />
-                <Text style={styles.statusPillActiveText}>Field Portal Active</Text>
+          {/* Supervisor Profile Summary Row */}
+          <View style={styles.supervisorProfileRow}>
+            <View style={styles.initialsBox}>
+              <Text style={styles.initialsText}>{supervisorInitials}</Text>
+            </View>
+
+            <View style={styles.headerInfoCol}>
+              <View style={styles.nameRow}>
+                <Text style={styles.greetingText}>
+                  Hello, {user?.name || 'Supervisor'}
+                </Text>
+                <View style={styles.rolePill}>
+                  <Text style={styles.rolePillText}>
+                    {user?.designation || 'Area Operations Supervisor'}
+                  </Text>
+                </View>
               </View>
 
-              <TouchableOpacity delayPressIn={0}
-                style={styles.headerPillBtn}
-                onPress={async () => {
-                  try {
-                    await holidayService.downloadHolidaysPdf(2026);
-                  } catch (e: any) {
-                    Alert.alert('Holiday Calendar', e.message || 'Unable to download holiday calendar.');
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Calendar size={13} color="#475569" />
-                <Text style={styles.headerPillBtnText}>Holidays 2026 (PDF)</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity delayPressIn={0}
-                style={styles.headerPillBtn}
-                onPress={fetchDashboardData}
-                activeOpacity={0.7}
-              >
-                <RefreshCw size={13} color="#475569" />
-                <Text style={styles.headerPillBtnText}>Refresh Status</Text>
-              </TouchableOpacity>
+              <Text style={styles.employeeSubText} numberOfLines={1}>
+                Employee ID: <Text style={styles.boldSub}>{user?.employeeId || '--'}</Text>
+              </Text>
             </View>
+          </View>
+
+          {/* Quick Tools Row */}
+          <View style={styles.headerToolsRow}>
+            <TouchableOpacity delayPressIn={0}
+              style={styles.headerToolBtn}
+              onPress={async () => {
+                try {
+                  await holidayService.downloadHolidaysPdf(2026);
+                } catch (e: any) {
+                  Alert.alert('Holiday Calendar', e.message || 'Unable to download holiday calendar.');
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Calendar size={13} color="#475569" />
+              <Text style={styles.headerPillBtnText}>Holidays 2026 (PDF)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity delayPressIn={0}
+              style={styles.headerToolBtn}
+              onPress={fetchDashboardData}
+              activeOpacity={0.7}
+            >
+              <RefreshCw size={13} color="#475569" />
+              <Text style={styles.headerPillBtnText}>Refresh Status</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -622,14 +627,14 @@ export const SupervisorDashboardScreen: React.FC = () => {
         {/* SECTION 3: LIVE SHIFT VERIFICATION BLUE BANNER (IMAGE 1)       */}
         {/* ============================================================== */}
         <View style={styles.liveBanner}>
-          <View style={styles.bannerMainContent}>
+          <View style={styles.bannerHeaderRow}>
             {/* Verification Icon Box */}
             <View style={styles.bannerIconSquare}>
-              <CheckCircle2 size={26} color="#FFFFFF" />
+              <CheckCircle2 size={24} color="#FFFFFF" />
             </View>
 
             {/* Banner Titles */}
-            <View style={{ flex: 1, marginRight: 8 }}>
+            <View style={{ flex: 1 }}>
               <Text style={styles.bannerTagText}>LIVE SHIFT VERIFICATION</Text>
               <Text style={styles.bannerTitleText}>
                 {isShiftActive
@@ -642,16 +647,18 @@ export const SupervisorDashboardScreen: React.FC = () => {
                       : 'Check-In Closed • Opens 9:00 AM')
                   : 'Ready to Check In'}
               </Text>
-              <Text style={styles.bannerSubtitleText} numberOfLines={1}>
+              <Text style={styles.bannerSubtitleText} numberOfLines={2}>
                 {isShiftActive
-                  ? 'Active shift in progress • GPS verified at Pune - Phase 1'
+                  ? 'Active shift in progress • GPS verified at assigned site'
                   : !shiftInfo.isCheckInAllowed
                   ? shiftInfo.windowMessage
-                  : 'GPS verified at your current device location • Pune - Phase 1'}
+                  : 'GPS verified at your current device location'}
               </Text>
             </View>
+          </View>
 
-            {/* Action Check In / Check Out Button */}
+          {/* Action Check In / Check Out Button Row */}
+          <View style={styles.bannerActionRow}>
             {isShiftActive ? (
               <TouchableOpacity delayPressIn={0}
                 style={styles.normalCheckOutBtn}
@@ -1260,11 +1267,38 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  headerTopRow: {
+  headerNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  supervisorProfileRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  headerToolsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     flexWrap: 'wrap',
+    paddingTop: 8,
+  },
+  headerToolBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   hamburgerBtn: {
     width: 40,
@@ -1490,11 +1524,15 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  bannerMainContent: {
+  bannerHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    flexWrap: 'wrap',
+    gap: 12,
+  },
+  bannerActionRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
   },
   bannerIconSquare: {
     width: 46,

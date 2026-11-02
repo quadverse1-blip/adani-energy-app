@@ -52,78 +52,7 @@ const MONTHS = [
 
 const YEARS = [2024, 2025, 2026, 2027];
 
-const FALLBACK_EMPLOYEES: User[] = [
-  {
-    id: 'emp_01',
-    employeeId: 'b4S/Adani/01',
-    name: 'Rohit Sharma',
-    role: 'technician',
-    designation: 'Junior Engineer',
-    department: 'Smart Meter Operations',
-    phone: '9876543210',
-    status: 'active',
-  },
-  {
-    id: 'emp_02',
-    employeeId: 'b4S/Adani/02',
-    name: 'Amit Kumar',
-    role: 'technician',
-    designation: 'Junior Engineer',
-    department: 'Smart Meter Operations',
-    phone: '9876543211',
-    status: 'active',
-  },
-  {
-    id: 'emp_03',
-    employeeId: 'b4S/Adani/03',
-    name: 'Sandeep Yadav',
-    role: 'technician',
-    designation: 'Junior Engineer',
-    department: 'Smart Meter Operations',
-    phone: '9876543212',
-    status: 'active',
-  },
-  {
-    id: 'emp_04',
-    employeeId: 'b4S/Adani/04',
-    name: 'Vikash Singh',
-    role: 'technician',
-    designation: 'Junior Engineer',
-    department: 'Transmission & Distribution',
-    phone: '9876543213',
-    status: 'active',
-  },
-  {
-    id: 'emp_05',
-    employeeId: 'b4S/Adani/05',
-    name: 'Neha Patil',
-    role: 'supervisor',
-    designation: 'Supervisor',
-    department: 'Workforce Coordination',
-    phone: '9876543215',
-    status: 'active',
-  },
-  {
-    id: 'emp_06',
-    employeeId: 'b4S/Adani/06',
-    name: 'Harsh Parmar',
-    role: 'technician',
-    designation: 'Junior Engineer',
-    department: 'Smart Meter Operations',
-    phone: '9876543216',
-    status: 'active',
-  },
-  {
-    id: 'emp_suresh',
-    employeeId: 'SUPER01',
-    name: 'Suresh Patil',
-    role: 'supervisor',
-    designation: 'Area Operations Supervisor',
-    department: 'Smart Meter Operations',
-    phone: '9876543214',
-    status: 'active',
-  },
-];
+const FALLBACK_EMPLOYEES: User[] = [];
 
 export const UploadSalarySlipModal: React.FC<UploadSalarySlipModalProps> = ({
   visible,
@@ -134,13 +63,13 @@ export const UploadSalarySlipModal: React.FC<UploadSalarySlipModalProps> = ({
   initialMonth = 10,
   initialYear = 2026,
 }) => {
-  const employees = propEmployees && propEmployees.length > 0 ? propEmployees : FALLBACK_EMPLOYEES;
+  const employees = propEmployees || [];
 
   const [selectedEmpId, setSelectedEmpId] = useState<string>('');
   const [month, setMonth] = useState<number>(initialMonth);
   const [year, setYear] = useState<number>(initialYear);
-  const [netAmount, setNetAmount] = useState<string>('28000');
-  const [notes, setNotes] = useState<string>('Monthly verified technician salary payout');
+  const [netAmount, setNetAmount] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
   const [pickedFile, setPickedFile] = useState<{
     name: string;
     size?: number;

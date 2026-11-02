@@ -80,22 +80,20 @@ export const EmployeesScreen: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingEmp, setEditingEmp] = useState<User | null>(null);
 
-  // Form Fields matching Image 2
-  const [employeeId, setEmployeeId] = useState('b4S/Adani/01');
-  const [name, setName] = useState('Rohit Sharma');
-  const [email, setEmail] = useState('rahul.sharma@adani.com');
-  const [phone, setPhone] = useState('9876543210');
+  // Form Fields
+  const [employeeId, setEmployeeId] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [designation, setDesignation] = useState('Junior Engineer');
   const [role, setRole] = useState<UserRole>('technician');
-  const [circle, setCircle] = useState('Gujarat Circle');
-  const [division, setDivision] = useState('Surat Division');
+  const [circle, setCircle] = useState('');
+  const [division, setDivision] = useState('');
   const [assignedSiteIds, setAssignedSiteIds] = useState<string[]>([]);
-  const [latitude, setLatitude] = useState('12.962879');
-  const [longitude, setLongitude] = useState('77.5968');
-  const [locationName, setLocationName] = useState(
-    "St. Joseph's University, Richmond Circle Flyover, Langford Road"
-  );
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [locationName, setLocationName] = useState('');
   const [shiftStatus, setShiftStatus] = useState<string>('Present');
   const [saving, setSaving] = useState(false);
 
@@ -234,12 +232,12 @@ export const EmployeesScreen: React.FC = () => {
     setPassword('Adani@2026');
     setDesignation('Junior Engineer');
     setRole('technician');
-    setCircle('Gujarat Circle');
-    setDivision('Surat Division');
+    setCircle('');
+    setDivision('');
     setAssignedSiteIds(sites.length > 0 ? [sites[0].id] : []);
-    setLatitude(sites[0] ? String(sites[0].latitude) : '12.962879');
-    setLongitude(sites[0] ? String(sites[0].longitude) : '77.5968');
-    setLocationName("St. Joseph's University, Richmond Circle Flyover, Langford Road");
+    setLatitude(sites[0] ? String(sites[0].latitude) : '');
+    setLongitude(sites[0] ? String(sites[0].longitude) : '');
+    setLocationName(sites[0]?.address || sites[0]?.name || '');
     setShiftStatus('Present');
     setShowModal(true);
   };
