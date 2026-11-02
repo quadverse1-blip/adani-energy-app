@@ -181,12 +181,14 @@ class AttendanceService:
 
         # Auto-process and persist Base64 photos if not already stored on disk
         photo_path = None
+        firebase_url = None
         if clean_photo_url and clean_photo_url.startswith("data:"):
             try:
                 from app.services.storage_service import storage_service
                 saved = storage_service.save_base64_photo(clean_photo_url, subfolder="selfie")
                 clean_photo_url = saved.get("photoUrl") or clean_photo_url
                 photo_path = saved.get("photoPath")
+                firebase_url = saved.get("firebaseUrl")
             except Exception as e:
                 logger.warning(f"Auto-process base64 photo notice: {e}")
 
@@ -202,6 +204,7 @@ class AttendanceService:
             "date": today_str,
             "photoUrl": clean_photo_url,
             "photoPath": photo_path,
+            "firebaseUrl": firebase_url,
             "checkIn": {
                 "time": now.isoformat() + "Z",
                 "timeIST": time_ist,

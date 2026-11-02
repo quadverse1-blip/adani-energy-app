@@ -108,11 +108,35 @@ class StorageService:
         except Exception:
             pass
 
+        # 5. Attempt Firebase Storage REST upload (succeeds when Storage Rules permit write)
+        if not firebase_url:
+            try:
+                safe_path = urllib.parse.quote(object_path, safe="")
+                upload_url = f"https://firebasestorage.googleapis.com/v0/b/{self.bucket_name}/o?uploadType=media&name={safe_path}"
+                if settings.FIREBASE_API_KEY:
+                    upload_url += f"&key={settings.FIREBASE_API_KEY}"
+                headers = {"Content-Type": "image/jpeg"}
+                resp = requests.post(upload_url, data=compressed_bytes, headers=headers, timeout=6)
+                if resp.status_code in [200, 201]:
+                    data = resp.json()
+                    token = data.get("downloadTokens")
+                    token_param = f"&token={token}" if token else ""
+                    firebase_url = f"https://firebasestorage.googleapis.com/v0/b/{self.bucket_name}/o/{safe_path}?alt=media{token_param}"
+                    logger.info(f"[Firebase Storage] Uploaded to {self.bucket_name}/{object_path}")
+                else:
+                    logger.debug(f"[Firebase Storage] REST upload returned {resp.status_code}: {resp.text[:120]}")
+            except Exception as rest_err:
+                logger.debug(f"[Firebase Storage] REST notice: {rest_err}")
+
+        # Choose primary photo URL: if Firebase Cloud Storage upload succeeded, prefer it, otherwise use robust Base64 data URI
+        primary_photo_url = firebase_url if firebase_url else data_uri
+
         return {
-            "photoUrl": data_uri,
+            "photoUrl": primary_photo_url,
             "photoPath": f"/uploads/{filename}",
             "filename": filename,
             "firebaseUrl": firebase_url,
+            "dataUri": data_uri,
             "sizeBytes": len(compressed_bytes)
         }
 
