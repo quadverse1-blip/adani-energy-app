@@ -109,8 +109,8 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
   const isTablet = screenWidth >= 640 && screenWidth < 960;
 
   const [period, setPeriod] = useState<PeriodType>('Monthly');
-  const [currentMonth, setCurrentMonth] = useState(10);
-  const [currentYear, setCurrentYear] = useState(2026);
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [selectedDay, setSelectedDay] = useState(22);
   const [selectedWeek, setSelectedWeek] = useState(4);
 

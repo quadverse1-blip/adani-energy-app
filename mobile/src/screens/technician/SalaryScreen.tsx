@@ -55,8 +55,8 @@ export const SalaryScreen: React.FC = () => {
   const isSupervisor = user?.role === 'supervisor';
 
   // Date selection states (Defaulting to October 2026)
-  const [selectedMonth, setSelectedMonth] = useState<number>(10);
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   // Dropdown Picker Modals
   const [showMonthModal, setShowMonthModal] = useState<boolean>(false);

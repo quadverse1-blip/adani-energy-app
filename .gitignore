@@ -10,4 +10,11 @@ node_modules/
 .expo/
 dist/
 build/
-
+.idea/
+.vscode/
+venv/
+backend/venv/
+*.db
+*.sqlite
+*.sqlite3
+backend/verify_site_assignment.py

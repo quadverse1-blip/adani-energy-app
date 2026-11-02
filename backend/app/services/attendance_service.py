@@ -179,6 +179,17 @@ class AttendanceService:
                 detail="Check-in photo is compulsory. Please take and upload a photo to check in."
             )
 
+        # Auto-process and persist Base64 photos if not already stored on disk
+        photo_path = None
+        if clean_photo_url and clean_photo_url.startswith("data:"):
+            try:
+                from app.services.storage_service import storage_service
+                saved = storage_service.save_base64_photo(clean_photo_url, subfolder="selfie")
+                clean_photo_url = saved.get("photoUrl") or clean_photo_url
+                photo_path = saved.get("photoPath")
+            except Exception as e:
+                logger.warning(f"Auto-process base64 photo notice: {e}")
+
         # 10. Create attendance record
         record_id = f"att_{uuid.uuid4().hex[:12]}"
         record = {
@@ -190,6 +201,7 @@ class AttendanceService:
             "siteName": site.get("name"),
             "date": today_str,
             "photoUrl": clean_photo_url,
+            "photoPath": photo_path,
             "checkIn": {
                 "time": now.isoformat() + "Z",
                 "timeIST": time_ist,

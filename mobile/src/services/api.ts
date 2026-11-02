@@ -44,6 +44,7 @@ export function getCachedTokenSync(): string | null {
 
 export async function setStoredToken(token: string): Promise<void> {
   cachedAuthToken = token;
+  apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   if (Platform.OS === 'web') {
     try {
       localStorage.setItem(CONFIG.TOKEN_KEY, token);
@@ -59,6 +60,7 @@ export async function setStoredToken(token: string): Promise<void> {
 
 export async function clearStoredToken(): Promise<void> {
   cachedAuthToken = null;
+  delete apiClient.defaults.headers.common['Authorization'];
   if (Platform.OS === 'web') {
     try {
       localStorage.removeItem(CONFIG.TOKEN_KEY);

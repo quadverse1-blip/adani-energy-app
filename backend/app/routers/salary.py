@@ -60,8 +60,8 @@ def _verify_employee_access(requested_emp_id: str, token_data: dict) -> None:
 @router.get("/slip/{employeeId:path}", response_model=SalarySlipResponse)
 async def get_salary_slip(
     employeeId: str,
-    month: int = Query(10, ge=1, le=12),
-    year: int = Query(2026, ge=2020, le=2030),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    year: Optional[int] = Query(None, ge=2020, le=2030),
     token_data: dict = Depends(get_current_user_token)
 ):
     """
@@ -69,20 +69,26 @@ async def get_salary_slip(
     - Technicians can ONLY retrieve their own salary statement.
     - Admins/Supervisors can view any employee statement.
     """
+    now_dt = datetime.utcnow()
+    resolved_month = month or now_dt.month
+    resolved_year = year or now_dt.year
     _verify_employee_access(employeeId, token_data)
-    slip = salary_service.get_salary_slip(employeeId, month, year)
+    slip = salary_service.get_salary_slip(employeeId, resolved_month, resolved_year)
     return slip
 
 @router.get("/summary", response_model=SalarySummaryResponse)
 async def get_salary_summary(
-    month: int = Query(10, ge=1, le=12),
-    year: int = Query(2026, ge=2020, le=2030),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    year: Optional[int] = Query(None, ge=2020, le=2030),
     token_data: dict = Depends(require_roles(["admin", "supervisor"]))
 ):
     """
     Admin & Supervisor endpoint to retrieve compensation summary and all employee calculations.
     """
-    summary = salary_service.get_salary_summary(month, year)
+    now_dt = datetime.utcnow()
+    resolved_month = month or now_dt.month
+    resolved_year = year or now_dt.year
+    summary = salary_service.get_salary_summary(resolved_month, resolved_year)
     return summary
 
 @router.get("/config/{employeeId:path}", response_model=SalaryConfigResponse)
@@ -195,11 +201,14 @@ async def revise_salary_statement(
 @router.get("/download/{employeeId:path}")
 async def download_payslip_pdf(
     employeeId: str,
-    month: int = 10,
-    year: int = 2026,
+    month: Optional[int] = Query(None, ge=1, le=12),
+    year: Optional[int] = Query(None, ge=2020, le=2030),
     token: Optional[str] = Query(None),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer)
 ):
+    now_dt = datetime.utcnow()
+    month = month or now_dt.month
+    year = year or now_dt.year
     """
     Generates and downloads the official Adani salary slip PDF.
     - Technicians can only download their own payslip.

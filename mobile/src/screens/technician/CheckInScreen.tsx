@@ -305,11 +305,20 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
   const handleCapturePhoto = async () => {
     if (cameraRef.current) {
       try {
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.7,
-          skipProcessing: false,
-          base64: true,
-        });
+        let photo: any;
+        try {
+          photo = await cameraRef.current.takePictureAsync({
+            quality: 0.7,
+            skipProcessing: true,
+            base64: true,
+          });
+        } catch {
+          photo = await cameraRef.current.takePictureAsync({
+            quality: 0.7,
+            skipProcessing: false,
+            base64: true,
+          });
+        }
         const photoData = photo.base64
           ? (photo.base64.startsWith('data:') ? photo.base64 : `data:image/jpeg;base64,${photo.base64}`)
           : photo.uri;

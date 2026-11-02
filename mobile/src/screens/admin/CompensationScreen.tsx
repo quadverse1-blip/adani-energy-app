@@ -54,8 +54,8 @@ export const CompensationScreen: React.FC = () => {
   const { openDrawer } = useAdminDrawerStore();
 
   // Period Selection
-  const [selectedMonth, setSelectedMonth] = useState<number>(10);
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [showMonthModal, setShowMonthModal] = useState<boolean>(false);
   const [showYearModal, setShowYearModal] = useState<boolean>(false);
 

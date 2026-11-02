@@ -104,8 +104,8 @@ export const SupervisorTeamScreen: React.FC = () => {
           >
             <Menu size={20} color="#0F172A" />
           </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>Team & Shift Authorization</Text>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">Team & Shifts</Text>
           </View>
           <TouchableOpacity delayPressIn={0}
             style={styles.manageSitesBtn}
@@ -113,7 +113,7 @@ export const SupervisorTeamScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <Zap size={13} color="#FFFFFF" />
-            <Text style={styles.manageSitesBtnText}>Manage Sites</Text>
+            <Text style={styles.manageSitesBtnText}>Sites</Text>
           </TouchableOpacity>
         </View>
 
