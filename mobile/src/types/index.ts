@@ -27,8 +27,8 @@ export interface User {
 
 export interface ManagerInfo {
   name: string;
-  phone: string;
-  email: string;
+  phone?: string;
+  email?: string;
   designation?: string;
   photoUrl?: string;
   avatar?: string;
@@ -38,12 +38,12 @@ export interface Substation {
   id: string;
   name: string;
   code: string;
-  address: string;
+  address?: string;
   latitude: number;
   longitude: number;
   radiusMeters: number;
-  voltageClass: string;
-  manager: ManagerInfo;
+  voltageClass?: string;
+  manager?: ManagerInfo;
   photoUrl?: string;
   activeEngineersCount?: number;
   status: 'active' | 'inactive';

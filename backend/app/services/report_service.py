@@ -85,8 +85,8 @@ class ReportService:
             emp_code = emp.get("employeeId") or emp.get("code") or f"b4S/Adani/{sr:02d}"
             emp_name = emp.get("name", "Field Technician")
             designation = emp.get("designation", "Junior Engineer")
-            circle = emp.get("circle", "Gujarat Circle")
-            division = emp.get("division", "Surat Division")
+            circle = emp.get("circle") or ""
+            division = emp.get("division") or ""
 
             # Query employee attendance records for this month
             emp_att_list = db.get_attendance_history(emp_id, month=month, year=year)

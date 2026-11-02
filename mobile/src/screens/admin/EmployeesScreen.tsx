@@ -246,29 +246,25 @@ export const EmployeesScreen: React.FC = () => {
     setEditingEmp(emp);
     setEmployeeId(emp.employeeId || '');
     setName(emp.name || '');
-    setEmail(emp.email || `${emp.employeeId?.toLowerCase().replace('/', '.')}@adani.com`);
+    setEmail(emp.email || '');
     setPhone(emp.phone || '');
     setPassword('');
     setDesignation(emp.designation || 'Junior Engineer');
     setRole(emp.role || 'technician');
-    setCircle(emp.circle || 'Gujarat Circle');
-    setDivision(emp.division || 'Surat Division');
+    setCircle(emp.circle || '');
+    setDivision(emp.division || '');
 
     const assigned =
       emp.assignedSiteIds && emp.assignedSiteIds.length > 0
         ? emp.assignedSiteIds
         : emp.assignedSiteId
         ? [emp.assignedSiteId]
-        : sites.length > 0
-        ? [sites[0].id]
         : [];
     setAssignedSiteIds(assigned);
 
-    setLatitude(emp.latitude ? String(emp.latitude) : '12.962879');
-    setLongitude(emp.longitude ? String(emp.longitude) : '77.5968');
-    setLocationName(
-      emp.locationName || "St. Joseph's University, Richmond Circle Flyover, Langford Road"
-    );
+    setLatitude(emp.latitude ? String(emp.latitude) : '');
+    setLongitude(emp.longitude ? String(emp.longitude) : '');
+    setLocationName(emp.locationName || '');
     setShiftStatus(emp.shiftStatus || 'Present');
     setShowModal(true);
   };
@@ -345,19 +341,19 @@ export const EmployeesScreen: React.FC = () => {
     setSaving(true);
     try {
       const payload: Partial<User> = {
-        name,
-        employeeId,
-        phone,
-        email,
+        name: name.trim(),
+        employeeId: employeeId.trim(),
+        phone: phone.trim(),
+        email: email.trim() || undefined,
         role,
         designation,
-        circle,
-        division,
+        circle: circle.trim() || undefined,
+        division: division.trim() || undefined,
         assignedSiteIds,
         assignedSiteId: assignedSiteIds[0] || undefined,
         latitude: parseFloat(latitude) || undefined,
         longitude: parseFloat(longitude) || undefined,
-        locationName,
+        locationName: locationName.trim() || undefined,
         shiftStatus,
       };
 
@@ -643,7 +639,7 @@ export const EmployeesScreen: React.FC = () => {
                     style={styles.inputBox}
                     value={circle}
                     onChangeText={setCircle}
-                    placeholder="Gujarat Circle"
+                    placeholder="e.g. Gujarat Circle"
                     placeholderTextColor="#94A3B8"
                   />
                 </View>
@@ -655,7 +651,7 @@ export const EmployeesScreen: React.FC = () => {
                     style={styles.inputBox}
                     value={division}
                     onChangeText={setDivision}
-                    placeholder="Surat Division"
+                    placeholder="e.g. Surat Division"
                     placeholderTextColor="#94A3B8"
                   />
                 </View>
@@ -787,7 +783,7 @@ export const EmployeesScreen: React.FC = () => {
                       value={latitude}
                       onChangeText={setLatitude}
                       keyboardType="numeric"
-                      placeholder="12.962879"
+                      placeholder="e.g. 12.962879"
                       placeholderTextColor="#94A3B8"
                     />
                   </View>
@@ -798,7 +794,7 @@ export const EmployeesScreen: React.FC = () => {
                       value={longitude}
                       onChangeText={setLongitude}
                       keyboardType="numeric"
-                      placeholder="77.5968"
+                      placeholder="e.g. 77.5968"
                       placeholderTextColor="#94A3B8"
                     />
                   </View>
@@ -810,7 +806,7 @@ export const EmployeesScreen: React.FC = () => {
                   style={[styles.inputBox, { marginBottom: 12 }]}
                   value={locationName}
                   onChangeText={setLocationName}
-                  placeholder="St. Joseph's University, Richmond Circle Flyover, Langford..."
+                  placeholder="e.g. Area, Grid, Substation Address"
                   placeholderTextColor="#94A3B8"
                 />
 
@@ -823,7 +819,7 @@ export const EmployeesScreen: React.FC = () => {
                   >
                     <Building2 size={13} color="#2563EB" />
                     <Text style={styles.saveToSiteBtnText}>
-                      Save Coordinates to "{primarySite?.name || 'Surat ST-1'}"
+                      Save Coordinates to "{primarySite?.name || 'Selected Site'}"
                     </Text>
                   </TouchableOpacity>
                   <Text style={styles.saveToSiteHelpText}>Updates site profile permanently</Text>

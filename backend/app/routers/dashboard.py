@@ -84,8 +84,8 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
         emp_name = emp.get("name", "Field Technician")
         emp_code = emp.get("employeeId", "b4S/Adani/--")
         emp_avatar = emp.get("avatar", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80")
-        site_name = site.get("name", "Pune Substation")
-        site_code = site.get("code", "ADN-PS-001")
+        site_name = site.get("name", "")
+        site_code = site.get("code", "")
         radius = site.get("radiusMeters", 500)
 
         in_time_formatted = "--:--"

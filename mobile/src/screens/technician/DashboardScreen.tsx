@@ -164,7 +164,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
   // Derive user initials
   const initials = useMemo(() => {
-    const name = user?.name || 'Rohit Sharma';
+    const name = user?.name || 'Technician';
     return name
       .split(' ')
       .map((n) => n[0])
@@ -366,7 +366,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
     try {
       const currentShift = getShiftInfo();
-      const siteId = user?.assignedSiteId || 'site_pune_01';
+      const siteId = user?.assignedSiteId || substation?.id || '';
 
       // 1. Upload live captured photo to server
       let uploadedPhotoUrl: string | undefined = undefined;
@@ -394,7 +394,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
       Alert.alert(
         'Check-In Successful',
-        `Welcome, ${user?.name || 'Rohit Sharma'}!\n\n✓ Photo Verified & Submitted\n✓ Location: ${substation?.name || 'st. joseph university'}\n✓ Time: ${currentShift.formattedTimeIST}\n✓ Status: ${currentShift.punctualityLabel}`,
+        `Welcome, ${user?.name || 'Technician'}!\n\n✓ Photo Verified & Submitted\n✓ Location: ${substation?.name || 'Assigned Site'}\n✓ Time: ${currentShift.formattedTimeIST}\n✓ Status: ${currentShift.punctualityLabel}`,
         [{ text: 'Continue to Field Desk' }]
       );
     } catch (err: any) {
@@ -521,7 +521,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
   // Shows ONLY notifications belonging to the logged-in technician
   const employeeNotifications = useMemo(() => {
     const currentEmpId = (user?.employeeId || 'b4s/adani/01').toLowerCase();
-    const currentName = (user?.name || 'Rohit Sharma').toLowerCase();
+    const currentName = (user?.name || '').toLowerCase();
     const firstName = currentName.split(' ')[0];
 
     // Seeded personal notifications for this employee to match professional standards
@@ -531,10 +531,10 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         type: 'success',
         category: 'Geofence Verified',
         title: 'Geofence Verified (500m)',
-        message: `You are inside the authorized 500m geofence perimeter at ${substation?.name || 'st. joseph university'} (Lat: 12.9625, Long: 77.5937).`,
+        message: `You are inside the authorized 500m geofence perimeter at ${substation?.name || 'Assigned Site'} (Lat: 12.9625, Long: 77.5937).`,
         timestamp: '10:14 AM',
         employeeId: user?.employeeId || 'b4S/Adani/01',
-        employeeName: user?.name || 'Rohit Sharma',
+        employeeName: user?.name || 'Technician',
         isRead: false,
         source: 'employee',
       },
@@ -546,7 +546,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         message: 'Daily check-in window opens at 09:00 AM IST. Check-in is disabled after 06:00 PM IST with auto check-out at 06:00 PM.',
         timestamp: '09:00 AM',
         employeeId: user?.employeeId || 'b4S/Adani/01',
-        employeeName: user?.name || 'Rohit Sharma',
+        employeeName: user?.name || 'Technician',
         isRead: false,
         source: 'admin',
       },
@@ -558,7 +558,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         message: 'Mandatory Level-2 electrical insulation gloves and helmet required for substation transformer diagnostics.',
         timestamp: 'Yesterday',
         employeeId: user?.employeeId || 'b4S/Adani/01',
-        employeeName: user?.name || 'Rohit Sharma',
+        employeeName: user?.name || 'Technician',
         isRead: true,
         source: 'admin',
       },
@@ -640,7 +640,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
             {/* Name, Designation & Site Info */}
             <View style={styles.headerIdentityWrap}>
               <View style={styles.nameRow}>
-                <Text style={styles.greetingTitle}>Hello, {user?.name || 'Rohit Sharma'}</Text>
+                <Text style={styles.greetingTitle}>Hello, {user?.name || 'Technician'}</Text>
                 <View style={styles.techPillBadge}>
                   <Text style={styles.techPillText}>Field Technician</Text>
                 </View>
@@ -831,7 +831,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
               <Text style={styles.bannerSubtitleText} numberOfLines={1}>
                 {isShiftConcluded
                   ? 'Shift recorded for today • Re-check in is not allowed'
-                  : `GPS verified at your current device location • ${substation?.name || 'st. joseph university'}`}
+                  : `GPS verified at your current device location • ${substation?.name || 'Assigned Site'}`}
               </Text>
             </View>
 
@@ -1209,7 +1209,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
                   </View>
                 </View>
                 <Text style={styles.modalSubtitle}>
-                  Directives & telemetry alerts for {user?.name || 'Rohit Sharma'} ({user?.employeeId || 'b4S/Adani/01'})
+                  Directives & telemetry alerts for {user?.name || 'Technician'} ({user?.employeeId || ''})
                 </Text>
               </View>
 

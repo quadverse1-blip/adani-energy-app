@@ -212,16 +212,16 @@ export const SitesScreen: React.FC = () => {
     setEditingSite(site);
     setName(site.name);
     setCode(site.code);
-    setAddress(site.address);
+    setAddress(site.address || '');
     setLatitude(site.latitude.toString());
     setLongitude(site.longitude.toString());
     setRadiusMeters((site.radiusMeters || 500).toString());
-    setManagerName(site.manager?.name || 'Executive Lead');
-    setManagerPhone(site.manager?.phone || '+91 98251 98765');
-    setManagerEmail(site.manager?.email || 'manager@adani.com');
+    setManagerName(site.manager?.name || '');
+    setManagerPhone(site.manager?.phone || '');
+    setManagerEmail(site.manager?.email || '');
     setWorkingHours(site.workingHours || '09:00 AM - 06:00 PM');
     setStatus(site.status === 'inactive' ? 'Inactive' : 'Active');
-    setSearchLocation(site.name || site.address);
+    setSearchLocation(site.name || site.address || '');
     setSuggestions([]);
     setShowSuggestions(false);
 
@@ -375,7 +375,7 @@ export const SitesScreen: React.FC = () => {
       sites.map((s) => ({
         name: s.name,
         code: s.code,
-        address: s.address,
+        address: s.address || '',
         latitude: s.latitude,
         longitude: s.longitude,
         managerName: s.manager?.name || '',
@@ -568,21 +568,22 @@ export const SitesScreen: React.FC = () => {
 
     setSaving(true);
     try {
+      const hasManager = managerName.trim().length > 0;
       const sitePayload = {
-        name,
-        code,
-        address: address || `${name}, Gujarat, India`,
-        latitude: parseFloat(latitude) || 21.1926,
-        longitude: parseFloat(longitude) || 72.7997,
+        name: name.trim(),
+        code: code.trim().toUpperCase(),
+        address: address.trim() || undefined,
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
         radiusMeters: rad,
-        voltageClass: editingSite?.voltageClass || '220 kV GIS',
-        manager: {
-          name: managerName || 'Dhaval Patel',
-          phone: managerPhone || '+91 98251 98765',
-          email: managerEmail || 'dhaval.patel@adani.com',
+        voltageClass: editingSite?.voltageClass || undefined,
+        manager: hasManager ? {
+          name: managerName.trim(),
+          phone: managerPhone.trim() || undefined,
+          email: managerEmail.trim() || undefined,
           designation: 'Site Manager',
-        },
-        workingHours: workingHours || '09:00 AM - 06:00 PM',
+        } : undefined,
+        workingHours: workingHours.trim() || undefined,
         status: status.toLowerCase() as 'active' | 'inactive',
       };
 

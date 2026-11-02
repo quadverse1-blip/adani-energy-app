@@ -160,8 +160,8 @@ class SalaryService:
         name = employee.get("name", "Field Technician") if employee else "Field Technician"
         desig = employee.get("designation", "Smart Meter Technician") if employee else "Smart Meter Technician"
         dept = employee.get("department", "Smart Meter Operations") if employee else "Smart Meter Operations"
-        circle = employee.get("circle", "Gujarat Circle") if employee else "Gujarat Circle"
-        division = employee.get("division", "Surat Division") if employee else "Surat Division"
+        circle = (employee.get("circle") if employee else "") or ""
+        division = (employee.get("division") if employee else "") or ""
 
         # 1. Check if finalized statement is already recorded
         frozen_statement = db.get_salary_statement(employee_id, month, year)

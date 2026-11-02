@@ -248,7 +248,7 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
   const siteName =
     assignedSite?.name ||
     effectiveRecord?.siteName ||
-    'st. joseph university';
+    assignedSite?.name || effectiveRecord?.siteName || 'Assigned Site';
 
   // Coordinates
   const checkInCoords = checkIn?.latitude && checkIn?.longitude

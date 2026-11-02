@@ -135,8 +135,8 @@ def generate_salary_slip_pdf(slip: dict, employee: dict = None) -> bytes:
     emp_id = slip.get('employeeId') or (employee.get('employeeId') if employee else 'b4S/Adani/01')
     designation = slip.get('designation') or (employee.get('designation') if employee else 'Smart Meter Technician')
     department = slip.get('department') or (employee.get('department') if employee else 'Smart Meter Operations')
-    circle = slip.get('circle') or (employee.get('circle') if employee else 'Gujarat Circle')
-    division = slip.get('division') or (employee.get('division') if employee else 'Surat Division')
+    circle = slip.get('circle') or (employee.get('circle') if employee else '') or ''
+    division = slip.get('division') or (employee.get('division') if employee else '') or ''
 
     emp_data = [
         [

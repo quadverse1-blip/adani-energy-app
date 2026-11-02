@@ -26,8 +26,8 @@ SEED_EMPLOYEES = [
         "avatar": "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=400&q=80",
         "status": "active",
         "email": "anita.sharma@adani.com",
-        "circle": "Corporate Operations",
-        "division": "HQ Central Command",
+        "circle": None,
+        "division": None,
         "department": "Executive Management",
         "shiftStatus": "present",
         "createdAt": "2023-01-01T09:00:00Z"
@@ -318,18 +318,7 @@ class DatabaseManager:
         self.audit_logs: List[dict] = []
 
         # Seed initial salary configurations
-        self._raw_salary_configs: Dict[str, dict] = {
-            "b4s/adani/admin": {
-                "employeeId": "b4S/Adani/Admin",
-                "monthlySalary": 50000.0,
-                "absentDeductionRate": 1000.0,
-                "halfDayDeductionRate": 500.0,
-                "effectiveDate": "2026-01-01",
-                "updatedAt": "2026-01-01T00:00:00Z",
-                "updatedBy": "Operations Administrator",
-                "notes": "Operations admin executive compensation"
-            }
-        }
+        self._raw_salary_configs: Dict[str, dict] = {}
         self._raw_salary_statements: Dict[str, dict] = {}
 
         # Optional firebase-admin client
@@ -500,16 +489,15 @@ class DatabaseManager:
 
     def _seed_firebase_data(self):
         try:
-            logger.info("Synchronizing initial Adani workforce dataset to Firebase Firestore...")
-            for s in self._raw_sites.values():
-                self.set_firestore_document("sites", s["_id"], s)
-            for e in self._raw_employees.values():
-                self.set_firestore_document("employees", e["_id"], e)
-            for a in list(self._raw_attendance.values())[:30]:
-                self.set_firestore_document("attendance", a["_id"], a)
-            logger.info("Firebase Firestore synchronization complete.")
+            logger.info("Verifying Adani workforce database connection...")
+            admin_doc = self._raw_employees.get("emp_admin")
+            if admin_doc:
+                remote_admin = self.get_firestore_document("employees", "emp_admin")
+                if not remote_admin:
+                    self.set_firestore_document("employees", "emp_admin", admin_doc)
+            logger.info("Database connection to Firebase Firestore confirmed.")
         except Exception as e:
-            logger.warning(f"Error seeding Firebase data: {e}")
+            logger.warning(f"Error verifying Firebase connection: {e}")
 
     # ---------------------------------------------------------
     # Core Queries

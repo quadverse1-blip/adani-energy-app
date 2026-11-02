@@ -279,7 +279,7 @@ export const SalaryScreen: React.FC = () => {
               <View style={styles.docDetailRow}>
                 <Text style={styles.detailLabel}>Employee</Text>
                 <Text style={styles.detailValue}>
-                  {slip?.employeeName || user?.name || 'Rohit Sharma'} ({slip?.employeeId || user?.employeeId || 'b4S/Adani/01'})
+                  {slip?.employeeName || user?.name || 'Employee'} ({slip?.employeeId || user?.employeeId || ''})
                 </Text>
               </View>
 

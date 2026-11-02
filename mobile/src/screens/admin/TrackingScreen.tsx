@@ -395,7 +395,7 @@ export const TrackingScreen: React.FC = () => {
   const activeLon = selectedTech?.longitude !== null && selectedTech?.longitude !== undefined
     ? Number(selectedTech.longitude).toFixed(6)
     : userLocation?.longitude ? Number(userLocation.longitude).toFixed(6) : '77.593617';
-  const activeSiteName = selectedTech?.assignedSiteName || 'st. joseph university';
+  const activeSiteName = selectedTech?.assignedSiteName || 'Assigned Site';
   const activeTime = selectedTech?.checkInTime && selectedTech.checkInTime !== '--'
     ? selectedTech.checkInTime
     : '10:14 AM';

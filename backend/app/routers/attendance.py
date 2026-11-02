@@ -291,12 +291,12 @@ async def get_all_attendance_logs(
 
             emp_key = str(r.get("employeeId") or "")
             user = db.get_user_by_id(emp_key) if emp_key else None
-            user_name = user.get("name", "Field Technician") if user else (r.get("technicianName") or "Rohit Sharma")
-            user_emp_id = user.get("employeeId", "b4S/Adani/01") if user else (r.get("technicianCode") or "b4S/Adani/01")
+            user_name = user.get("name", "Field Technician") if user else (r.get("technicianName") or "")
+            user_emp_id = user.get("employeeId", "") if user else (r.get("technicianCode") or "")
 
             site_key = str(r.get("siteId") or "")
             site = db.get_site(site_key) if site_key else None
-            site_name = site.get("name") if site else (r.get("siteName") or "st. joseph university")
+            site_name = site.get("name") if site else (r.get("siteName") or "")
 
             # Format times in Indian Standard Time (IST)
             ci_str = "--:--"

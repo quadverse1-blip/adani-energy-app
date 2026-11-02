@@ -133,7 +133,7 @@ export const TechnicianDrawerModal: React.FC = () => {
     );
   };
 
-  const initials = (user?.name || 'Rohit Sharma')
+  const initials = (user?.name || 'Employee')
     .split(' ')
     .map((n) => n[0])
     .join('')
@@ -195,7 +195,7 @@ export const TechnicianDrawerModal: React.FC = () => {
             <View style={styles.userInfoWrap}>
               <View style={styles.userNameBadgeRow}>
                 <Text style={styles.userNameText} numberOfLines={1}>
-                  {user?.name || 'Rohit Sharma'}
+                  {user?.name || 'Employee'}
                 </Text>
               </View>
               <View style={styles.roleBadge}>

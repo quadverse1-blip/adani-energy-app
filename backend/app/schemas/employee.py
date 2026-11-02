@@ -7,10 +7,10 @@ class EmployeeCreate(BaseModel):
     phone: str
     password: str
     role: str = "technician"  # technician, supervisor, admin
-    designation: str = "Field Technician"
+    designation: Optional[str] = "Field Technician"
     assignedSiteIds: List[str] = []
     email: Optional[str] = None
-    department: Optional[str] = "Smart Meter Operations"
+    department: Optional[str] = None
     circle: Optional[str] = None
     division: Optional[str] = None
     latitude: Optional[float] = None
@@ -80,7 +80,7 @@ class BulkEmployeeItem(BaseModel):
     email: Optional[str] = None
     circle: Optional[str] = None
     division: Optional[str] = None
-    department: Optional[str] = "Smart Meter Operations"
+    department: Optional[str] = None
     assignedBy: Optional[str] = None
     assignedByPhone: Optional[str] = None
     assignedByRole: Optional[str] = None

@@ -133,11 +133,11 @@ async def create_site(
         "latitude": site_in.latitude,
         "longitude": site_in.longitude,
         "radiusMeters": site_in.radiusMeters,
-        "voltageClass": site_in.voltageClass or "220 kV GIS",
-        "manager": site_in.manager.dict(),
-        "photoUrl": site_in.photoUrl or "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80",
+        "voltageClass": site_in.voltageClass or None,
+        "manager": site_in.manager.dict() if site_in.manager else None,
+        "photoUrl": site_in.photoUrl or None,
         "activeEngineersCount": 0,
-        "workingHours": site_in.workingHours or "09:00 AM - 06:00 PM",
+        "workingHours": site_in.workingHours or None,
         "status": site_in.status or "active"
     }
     db.sites[site_id] = new_site

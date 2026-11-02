@@ -755,7 +755,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                 <Text style={styles.substationSummaryLabel}>Checked In From:</Text>
                 <Text style={[styles.substationSummaryValue, { color: isAlreadyCheckedIn ? '#059669' : '#1E63F0' }]}>
                   {isAlreadyCheckedIn
-                    ? (todayRecord?.siteName || (todayRecord?.checkIn as any)?.siteName || selectedSite?.name || 'st. joseph university')
+                    ? (todayRecord?.siteName || (todayRecord?.checkIn as any)?.siteName || selectedSite?.name || 'Assigned Site')
                     : (selectedSite?.name || 'Select a site')}
                 </Text>
               </View>
@@ -935,9 +935,9 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                       <View style={styles.assignedBadgeRow}>
                         <Text style={styles.managerBoxLabel}>SUBSTATION MANAGER & IN-CHARGE</Text>
                       </View>
-                      <Text style={styles.managerNameText}>{String(selectedSite!.manager.name || 'Site In-Charge')}</Text>
+                      <Text style={styles.managerNameText}>{String(selectedSite?.manager?.name || 'Site In-Charge')}</Text>
                       <Text style={styles.managerDesigText}>
-                        {String(selectedSite!.manager.designation || 'Zonal Grid Operations Lead')}
+                        {String(selectedSite?.manager?.designation || 'Zonal Grid Operations Lead')}
                       </Text>
                     </View>
                   </View>
@@ -945,11 +945,11 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                   {/* Manager Contact Details List */}
                   <View style={styles.managerContactList}>
                     {/* Phone Row */}
-                    {Boolean(selectedSite!.manager.phone) ? (
+                    {Boolean(selectedSite?.manager?.phone) ? (
                       <View style={styles.managerContactRow}>
                         <View style={styles.managerContactLeft}>
                           <Phone size={13} color="#4338CA" />
-                          <Text style={styles.managerContactVal}>{String(selectedSite!.manager.phone)}</Text>
+                          <Text style={styles.managerContactVal}>{String(selectedSite?.manager?.phone)}</Text>
                         </View>
                         <TouchableOpacity delayPressIn={0}
                           style={styles.managerActionBtn}
@@ -967,12 +967,12 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                     ) : null}
 
                     {/* Email Row */}
-                    {Boolean(selectedSite!.manager.email) ? (
+                    {Boolean(selectedSite?.manager?.email) ? (
                       <View style={styles.managerContactRow}>
                         <View style={styles.managerContactLeft}>
                           <Mail size={13} color="#4338CA" />
                           <Text style={styles.managerContactVal} numberOfLines={1}>
-                            {String(selectedSite!.manager.email)}
+                            {String(selectedSite?.manager?.email)}
                           </Text>
                         </View>
                         <TouchableOpacity delayPressIn={0}

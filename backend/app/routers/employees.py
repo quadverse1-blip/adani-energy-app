@@ -205,11 +205,11 @@ def process_bulk_employee_records(
                 "assignedSiteIds": assigned_site_ids,
                 "assignedSiteId": primary_site,
                 "status": "active",
-                "email": r.get("email") or f"{raw_emp_id.lower().replace('/', '.')}@adani.com",
-                "department": r.get("department") or "Smart Meter Operations",
+                "email": r.get("email") or None,
+                "department": r.get("department") or None,
                 "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-                "circle": r.get("circle") or "Gujarat Circle",
-                "division": r.get("division") or "Surat Division",
+                "circle": r.get("circle") or None,
+                "division": r.get("division") or None,
                 "shiftStatus": "present"
             }
             db.employees[new_id] = new_emp
@@ -426,9 +426,9 @@ async def create_employee(
         assigner = db.get_employee(token_data["employeeId"]) or db.find_employee_by_identifier(token_data["employeeId"])
 
     assigner_role = (assigner.get("role") if assigner else None) or token_data.get("role") or "admin"
-    default_name = "Anita Sharma" if assigner_role == "admin" else "Operations Supervisor"
+    default_name = assigner.get("name") if assigner else None
     assigner_name = (assigner.get("name") if assigner else None) or token_data.get("name") or default_name
-    assigner_phone = (assigner.get("phone") or assigner.get("mobileNumber") if assigner else None) or token_data.get("phone") or ("9876543299" if assigner_role == "admin" else "9876543214")
+    assigner_phone = (assigner.get("phone") or assigner.get("mobileNumber") if assigner else None) or token_data.get("phone") or None
     now_iso = datetime.utcnow().isoformat()
 
     new_emp = {
@@ -442,8 +442,8 @@ async def create_employee(
         "assignedSiteIds": assigned_ids,
         "assignedSiteId": assigned_primary,
         "status": emp_in.status or "active",
-        "email": emp_in.email or f"{emp_in.employeeId.lower().replace('/', '.')}@adani.com",
-        "department": emp_in.department or "Smart Meter Operations",
+        "email": emp_in.email or None,
+        "department": emp_in.department or None,
         "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
         "circle": emp_in.circle,
         "division": emp_in.division,
@@ -509,7 +509,7 @@ async def update_employee(
         assigner_role = (assigner.get("role") if assigner else None) or token_data.get("role") or "supervisor"
         default_name = "Anita Sharma" if assigner_role == "admin" else "Supervisor"
         assigner_name = (assigner.get("name") if assigner else None) or token_data.get("name") or default_name
-        assigner_phone = (assigner.get("phone") or assigner.get("mobileNumber") if assigner else None) or token_data.get("phone") or ("9876543299" if assigner_role == "admin" else "9876543214")
+        assigner_phone = (assigner.get("phone") or assigner.get("mobileNumber") if assigner else None) or token_data.get("phone") or None
         now_iso = datetime.utcnow().isoformat()
 
         if site_ids or primary_site:

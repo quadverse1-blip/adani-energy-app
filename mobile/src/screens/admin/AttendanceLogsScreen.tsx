@@ -293,7 +293,7 @@ export const AttendanceLogsScreen: React.FC = () => {
     } else {
       setFormDate('22-10-2026');
     }
-    setFormSiteName(log.siteName || 'st. joseph university');
+    setFormSiteName(log.siteName || '');
     setFormCheckIn(log.checkInTime || '10:14 AM');
     setFormCheckOut(log.checkOutTime || '06:00 PM');
     setFormDuration(log.duration || '7h 46m');
