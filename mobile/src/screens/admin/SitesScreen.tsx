@@ -73,12 +73,12 @@ const QUICK_PINS = [
     workingHours: '09:00 AM - 06:00 PM',
   },
   {
-    name: 'Pune Phase 2',
-    code: 'ADN-PS-002',
-    address: 'EON Free Zone Rd, Kharadi, Pune, Maharashtra 411014',
-    latitude: 18.5204,
-    longitude: 73.8567,
-    managerName: 'Rajeev Nambiar',
+    name: 'BKC Smart Grid',
+    code: 'ADN-BKC-001',
+    address: 'Bandra Kurla Complex, G Block, Mumbai, Maharashtra 400051',
+    latitude: 19.0657,
+    longitude: 72.8679,
+    managerName: 'Anand Rao',
     workingHours: '09:00 AM - 06:00 PM',
   },
   {
@@ -88,6 +88,24 @@ const QUICK_PINS = [
     latitude: 23.0225,
     longitude: 72.5714,
     managerName: 'Kirit Patel',
+    workingHours: '09:00 AM - 06:00 PM',
+  },
+  {
+    name: 'Mundra Energy Port',
+    code: 'ADN-MUN-001',
+    address: 'APSEZ Mundra Port Zone, Kutch, Gujarat 370421',
+    latitude: 22.7533,
+    longitude: 69.7042,
+    managerName: 'Hitesh Sharma',
+    workingHours: '09:00 AM - 06:00 PM',
+  },
+  {
+    name: 'Bengaluru Tech Grid',
+    code: 'ADN-BLR-001',
+    address: 'Electronic City Phase 1, Bengaluru, Karnataka 560100',
+    latitude: 12.8452,
+    longitude: 77.6602,
+    managerName: 'Suresh Gowda',
     workingHours: '09:00 AM - 06:00 PM',
   },
 ];
@@ -126,6 +144,7 @@ export const SitesScreen: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   // Search & Map Navigation States
+  const searchDebounceTimer = useRef<any>(null);
   const [searchLocation, setSearchLocation] = useState('');
   const [searchingLocation, setSearchingLocation] = useState(false);
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
@@ -337,18 +356,22 @@ export const SitesScreen: React.FC = () => {
     }
   };
 
-  // Autocomplete Suggestions on Input Change
-  const handleSearchTextChange = async (text: string) => {
+  // Autocomplete Suggestions on Input Change (Real-Time Indian Geocoding + Quick Pins)
+  const handleSearchTextChange = (text: string) => {
     setSearchLocation(text);
-    if (!text.trim() || text.length < 2) {
+    if (!text || text.trim().length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
+      setSearchingLocation(false);
+      if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
       return;
     }
 
-    // 1. Match local preset sites & quick pins
-    const query = text.toLowerCase();
-    const local = QUICK_PINS.concat(
+    const query = text.trim().toLowerCase();
+
+    // 1. Instantly match preset hubs and created sites
+    const localMatches: LocationSuggestion[] = [];
+    const allPresets = QUICK_PINS.concat(
       sites.map((s) => ({
         name: s.name,
         code: s.code,
@@ -358,48 +381,125 @@ export const SitesScreen: React.FC = () => {
         managerName: s.manager?.name || '',
         workingHours: s.workingHours || '09:00 AM - 06:00 PM',
       }))
-    )
-      .filter(
-        (p) =>
-          p.name.toLowerCase().includes(query) ||
-          p.address.toLowerCase().includes(query)
-      )
-      .slice(0, 3)
-      .map((p) => ({
-        title: p.name,
-        subtitle: p.address,
-        lat: p.latitude,
-        lng: p.longitude,
-      }));
+    );
 
-    setSuggestions(local);
-    setShowSuggestions(local.length > 0);
-
-    // 2. Fetch geocoded suggestions
-    try {
-      const geo = await Location.geocodeAsync(text);
-      if (geo && geo.length > 0) {
-        const geoMatches = geo.slice(0, 3).map((g, idx) => ({
-          title: text,
-          subtitle: `Lat: ${g.latitude.toFixed(4)}, Lng: ${g.longitude.toFixed(4)}`,
-          lat: g.latitude,
-          lng: g.longitude,
-        }));
-        setSuggestions([...local, ...geoMatches].slice(0, 5));
-        setShowSuggestions(true);
+    for (const p of allPresets) {
+      if (
+        p.name.toLowerCase().includes(query) ||
+        p.address.toLowerCase().includes(query) ||
+        p.code.toLowerCase().includes(query)
+      ) {
+        localMatches.push({
+          title: p.name,
+          subtitle: p.address,
+          lat: p.latitude,
+          lng: p.longitude,
+        });
       }
-    } catch (e) {
-      // Local matches suffice
     }
+
+    if (localMatches.length > 0) {
+      setSuggestions(localMatches.slice(0, 4));
+      setShowSuggestions(true);
+    }
+
+    // 2. Debounce online Nominatim & Expo Geocoding lookup
+    if (searchDebounceTimer.current) {
+      clearTimeout(searchDebounceTimer.current);
+    }
+
+    setSearchingLocation(true);
+    searchDebounceTimer.current = setTimeout(async () => {
+      try {
+        const onlineSuggestions: LocationSuggestion[] = [];
+
+        // Real-time OpenStreetMap Nominatim search
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+          const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            text.trim()
+          )}&limit=5`;
+          const res = await fetch(url, {
+            signal: controller.signal,
+            headers: { 'User-Agent': 'AdaniWorkforceApp/1.0' },
+          });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+              for (const item of data) {
+                const displayName = item.display_name || '';
+                const parts = displayName.split(',');
+                const title = parts[0]?.trim() || text.trim();
+                const lat = parseFloat(item.lat);
+                const lng = parseFloat(item.lon);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                  onlineSuggestions.push({
+                    title,
+                    subtitle: displayName,
+                    lat,
+                    lng,
+                  });
+                }
+              }
+            }
+          }
+        } catch (fetchErr) {
+          // Nominatim fetch notice
+        }
+
+        // Native Expo Geocoder fallback
+        if (onlineSuggestions.length < 3) {
+          try {
+            const geo = await Location.geocodeAsync(text.trim());
+            if (geo && geo.length > 0) {
+              for (const g of geo.slice(0, 3)) {
+                onlineSuggestions.push({
+                  title: text.trim(),
+                  subtitle: `GPS: ${g.latitude.toFixed(5)}, ${g.longitude.toFixed(5)}`,
+                  lat: g.latitude,
+                  lng: g.longitude,
+                });
+              }
+            }
+          } catch (geoErr) {}
+        }
+
+        // Merge without duplicates
+        const combined = [...localMatches];
+        for (const item of onlineSuggestions) {
+          const exists = combined.some(
+            (c) => Math.abs(c.lat - item.lat) < 0.001 && Math.abs(c.lng - item.lng) < 0.001
+          );
+          if (!exists) {
+            combined.push(item);
+          }
+        }
+
+        if (combined.length > 0) {
+          setSuggestions(combined.slice(0, 6));
+          setShowSuggestions(true);
+        }
+      } catch (err) {
+        console.warn('Autocomplete search notice:', err);
+      } finally {
+        setSearchingLocation(false);
+      }
+    }, 250);
   };
 
-  // Select a suggestion
+  // Select a suggestion and auto-populate site specifications
   const handleSelectSuggestion = (item: LocationSuggestion) => {
     setSearchLocation(item.title);
     setAddress(item.subtitle);
+    if (!name.trim()) {
+      setName(item.title);
+    }
     setLatitude(item.lat.toFixed(6));
     setLongitude(item.lng.toFixed(6));
     setShowSuggestions(false);
+    setSuggestions([]);
 
     const nextRegion = {
       latitude: item.lat,
@@ -703,7 +803,7 @@ export const SitesScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll} keyboardShouldPersistTaps="handled">
               {/* Row 1: Site Name & Site Code */}
               <View style={styles.formRow}>
                 <View style={styles.colHalf}>
@@ -786,27 +886,44 @@ export const SitesScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
 
-              {/* Autocomplete Suggestions Dropdown */}
+              {/* Autocomplete Suggestions Dropdown with Immediate Pinning */}
               {showSuggestions && suggestions.length > 0 && (
                 <View style={[styles.suggestionsBox, SHADOWS.md]}>
-                  {suggestions.map((item, index) => (
-                    <TouchableOpacity delayPressIn={0}
-                      key={`${item.title}-${index}`}
-                      style={styles.suggestionItem}
-                      onPress={() => handleSelectSuggestion(item)}
-                      activeOpacity={0.7}
-                    >
-                      <MapPin size={14} color="#2563EB" style={{ marginRight: 8, marginTop: 2 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.suggestionTitle} numberOfLines={1}>
-                          {item.title}
-                        </Text>
-                        <Text style={styles.suggestionSub} numberOfLines={1}>
-                          {item.subtitle}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                  <View style={styles.suggestionsHeader}>
+                    <Text style={styles.suggestionsHeaderText}>
+                      SELECT LOCATION SUGGESTION ({suggestions.length})
+                    </Text>
+                  </View>
+                  <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    {suggestions.map((item, index) => (
+                      <TouchableOpacity delayPressIn={0}
+                        key={`${item.title}-${index}`}
+                        style={[
+                          styles.suggestionItem,
+                          index === suggestions.length - 1 && { borderBottomWidth: 0 },
+                        ]}
+                        onPress={() => handleSelectSuggestion(item)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.suggestionIconWrap}>
+                          <MapPin size={15} color="#2563EB" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.suggestionTitle} numberOfLines={1}>
+                            {item.title}
+                          </Text>
+                          <Text style={styles.suggestionSub} numberOfLines={2}>
+                            {item.subtitle}
+                          </Text>
+                          <View style={styles.coordTag}>
+                            <Text style={styles.coordTagText}>
+                              GPS: {item.lat.toFixed(5)}, {item.lng.toFixed(5)}
+                            </Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
               )}
 
@@ -1432,30 +1549,73 @@ const styles = StyleSheet.create({
   suggestionsBox: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
+    borderColor: '#BFDBFE',
+    borderRadius: 10,
     marginTop: -4,
-    marginBottom: 10,
-    maxHeight: 160,
-    zIndex: 50,
+    marginBottom: 12,
+    maxHeight: 240,
+    overflow: 'hidden',
+    shadowColor: '#1E63F0',
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 100,
+  },
+  suggestionsHeader: {
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  suggestionsHeaderText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
   },
   suggestionItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
+  suggestionIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+    marginTop: 2,
+  },
   suggestionTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
   },
   suggestionSub: {
     fontSize: 11,
     color: '#64748B',
-    marginTop: 1,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  coordTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  coordTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
   },
   mapContainer: {
     height: 200,

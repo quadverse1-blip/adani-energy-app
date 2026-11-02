@@ -7,6 +7,7 @@ import { TechnicianNavigator } from './TechnicianNavigator';
 import { AdminNavigator } from './AdminNavigator';
 import { SupervisorNavigator } from './SupervisorNavigator';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { requestRequiredAppPermissions } from '../utils/permissionUtils';
 
 export const RootNavigator: React.FC = () => {
   const { user, isInitialized, initialize } = useAuthStore();
@@ -14,6 +15,15 @@ export const RootNavigator: React.FC = () => {
   useEffect(() => {
     initialize();
   }, []);
+
+  // Ensure required permissions (Location & Camera) are granted after login
+  useEffect(() => {
+    if (user) {
+      requestRequiredAppPermissions(false).catch((err) => {
+        console.warn('[RootNavigator] Permission check error:', err);
+      });
+    }
+  }, [user?.id]);
 
   if (!isInitialized) {
     return <LoadingSpinner message="Initializing Adani Enterprise Platform..." />;

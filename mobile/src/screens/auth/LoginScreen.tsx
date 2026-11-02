@@ -24,6 +24,7 @@ import { apiClient, setApiBaseUrl } from '../../services/api';
 import { COLORS, RADII, SHADOWS } from '../../constants/theme';
 import { AppButton } from '../../components/common/AppButton';
 import { AppInput } from '../../components/common/AppInput';
+import { requestRequiredAppPermissions } from '../../utils/permissionUtils';
 
 interface LoginScreenProps {
   navigation: any;
@@ -31,7 +32,7 @@ interface LoginScreenProps {
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const [username, setUsername] = useState('b4S/Adani/01'); // Default demo: Rohit Sharma
+  const [username, setUsername] = useState('b4S/Adani/Admin');
   const [password, setPassword] = useState('password');
   const [rememberMe, setRememberMe] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
@@ -57,6 +58,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
     try {
       await login(username.trim(), password);
+      // Immediately take required permissions (Location & Camera) right after login
+      try {
+        await requestRequiredAppPermissions(true);
+      } catch (permErr) {
+        console.warn('Post-login permissions notice:', permErr);
+      }
     } catch (err: any) {
       const msg = err.message || 'Authentication failed.';
       if (
