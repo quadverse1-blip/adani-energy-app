@@ -44,7 +44,10 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
   },
 
   fetchTodayAttendance: async () => {
-    set({ isLoading: true, error: null });
+    // Only set global isLoading on initial cold fetch to prevent UI flashing during background sync
+    if (!get().todayRecord) {
+      set({ isLoading: true, error: null });
+    }
     try {
       const data = await attendanceService.getTodayAttendance();
       const elapsedSec = (data.liveElapsedMinutes || 0) * 60;

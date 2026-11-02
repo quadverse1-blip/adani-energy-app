@@ -50,7 +50,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshProfile: async () => {
     try {
       const profile = await authService.getProfile();
-      set({ user: profile });
+      const current = get().user;
+      if (!current || JSON.stringify(current) !== JSON.stringify(profile)) {
+        set({ user: profile });
+      }
       return profile;
     } catch (e) {
       console.warn('refreshProfile error:', e);

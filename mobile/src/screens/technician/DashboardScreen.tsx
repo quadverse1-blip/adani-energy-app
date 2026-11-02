@@ -248,7 +248,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
   useEffect(() => {
     loadData();
-  }, [user]);
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);

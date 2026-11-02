@@ -74,6 +74,7 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
     isLoading,
   } = useAttendanceStore();
 
+  const [initialLoading, setInitialLoading] = useState(!todayRecord);
   const [refreshing, setRefreshing] = useState(false);
   const [showHolidaysModal, setShowHolidaysModal] = useState(false);
   const [downloadingHolidays, setDownloadingHolidays] = useState(false);
@@ -120,7 +121,13 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
   };
 
   useEffect(() => {
-    fetchTodayAttendance();
+    let isMounted = true;
+    fetchTodayAttendance().finally(() => {
+      if (isMounted) setInitialLoading(false);
+    });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const onRefresh = async () => {
@@ -264,7 +271,7 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
     effectiveRecord?.adminRemarks ||
     (checkOut?.remarks ? checkOut.remarks : effectiveRecord ? 'Auto-checked out at 06:00 PM (Shift End)' : 'No shift notes for today');
 
-  if (isLoading && !effectiveRecord) {
+  if (initialLoading && !effectiveRecord && !todayRecord) {
     return <LoadingSpinner message="Loading attendance status..." />;
   }
 
