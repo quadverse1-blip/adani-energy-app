@@ -19,12 +19,20 @@ class VercelPathMiddleware:
             matched_path = headers.get(b"x-matched-path")
             if matched_path:
                 scope["path"] = matched_path.decode("utf-8")
-            elif scope.get("path", "").startswith("/api/index.py"):
-                rem = scope["path"][len("/api/index.py"):]
-                scope["path"] = rem if rem.startswith("/") else ("/" + rem)
-            elif scope.get("path", "").startswith("/api/index"):
-                rem = scope["path"][len("/api/index"):]
-                scope["path"] = rem if rem.startswith("/") else ("/" + rem)
+            else:
+                path = scope.get("path", "")
+                prefixes = [
+                    "/backend/api/index.py",
+                    "/backend/api/index",
+                    "/backend/api",
+                    "/api/index.py",
+                    "/api/index"
+                ]
+                for p in prefixes:
+                    if path.startswith(p):
+                        rem = path[len(p):]
+                        scope["path"] = rem if rem.startswith("/") else ("/" + rem)
+                        break
         await self.asgi_app(scope, receive, send)
 
 app.add_middleware(VercelPathMiddleware)
