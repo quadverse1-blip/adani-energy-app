@@ -34,8 +34,11 @@ app.add_middleware(
 )
 
 # Ensure upload directory exists and mount static files
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+try:
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+except Exception as e:
+    print(f"[Warning] Could not mount /uploads: {e}")
 
 # Include Routers under API_V1_STR
 app.include_router(auth.router, prefix=settings.API_V1_STR)

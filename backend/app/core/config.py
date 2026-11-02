@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # Storage & Automatic 24-Hour Cleanup
     STORAGE_MODE: str = os.getenv("STORAGE_MODE", "local")
-    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads"))
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/tmp/uploads" if (os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME")) else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads"))
     AUTO_DELETE_PHOTOS_AFTER_24H: bool = os.getenv("AUTO_DELETE_PHOTOS_AFTER_24H", "true").lower() == "true"
     PHOTO_RETENTION_HOURS: int = int(os.getenv("PHOTO_RETENTION_HOURS", "24"))
     
