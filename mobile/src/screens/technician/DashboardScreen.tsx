@@ -156,10 +156,10 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
   const [isSubmittingPhoto, setIsSubmittingPhoto] = useState(false);
   const cameraRef = useRef<any>(null);
 
-  // Live GPS Coords (Defaults to St. Joseph University coordinates from database)
+  // Live GPS Coords based on assigned substation
   const deviceCoords = {
-    latitude: 12.9625,
-    longitude: 77.5937,
+    latitude: substation?.latitude || 0,
+    longitude: substation?.longitude || 0,
   };
 
   // Derive user initials
@@ -520,7 +520,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
   // STRICT EMPLOYEE NOTIFICATIONS FILTER:
   // Shows ONLY notifications belonging to the logged-in technician
   const employeeNotifications = useMemo(() => {
-    const currentEmpId = (user?.employeeId || 'b4s/adani/01').toLowerCase();
+    const currentEmpId = (user?.employeeId || '').toLowerCase();
     const currentName = (user?.name || '').toLowerCase();
     const firstName = currentName.split(' ')[0];
 
@@ -533,7 +533,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         title: 'Geofence Verified (500m)',
         message: `You are inside the authorized 500m geofence perimeter at ${substation?.name || 'Assigned Site'} (Lat: 12.9625, Long: 77.5937).`,
         timestamp: '10:14 AM',
-        employeeId: user?.employeeId || 'b4S/Adani/01',
+        employeeId: user?.employeeId || '',
         employeeName: user?.name || 'Technician',
         isRead: false,
         source: 'employee',
@@ -545,7 +545,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         title: 'Shift Hours Policy (IST)',
         message: 'Daily check-in window opens at 09:00 AM IST. Check-in is disabled after 06:00 PM IST with auto check-out at 06:00 PM.',
         timestamp: '09:00 AM',
-        employeeId: user?.employeeId || 'b4S/Adani/01',
+        employeeId: user?.employeeId || '',
         employeeName: user?.name || 'Technician',
         isRead: false,
         source: 'admin',
@@ -557,7 +557,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         title: 'PPE Safety Compliance',
         message: 'Mandatory Level-2 electrical insulation gloves and helmet required for substation transformer diagnostics.',
         timestamp: 'Yesterday',
-        employeeId: user?.employeeId || 'b4S/Adani/01',
+        employeeId: user?.employeeId || '',
         employeeName: user?.name || 'Technician',
         isRead: true,
         source: 'admin',
@@ -648,12 +648,12 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
               <View style={styles.metaRow}>
                 <Text style={styles.metaText}>
-                  Employee ID: <Text style={styles.metaEmpId}>{user?.employeeId || 'b4S/Adani/01'}</Text>
+                  Employee ID: <Text style={styles.metaEmpId}>{user?.employeeId || ''}</Text>
                 </Text>
                 <Text style={styles.metaDot}>•</Text>
                 <MapPin size={11} color="#2563EB" style={{ marginRight: 3 }} />
                 <Text style={styles.metaSiteText} numberOfLines={1}>
-                  Assignment: {substation?.name || 'st. joseph university'}
+                  Assignment: {substation?.name || 'Assigned Site'}
                 </Text>
               </View>
             </View>
@@ -831,7 +831,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
               <Text style={styles.bannerSubtitleText} numberOfLines={1}>
                 {isShiftConcluded
                   ? 'Shift recorded for today • Re-check in is not allowed'
-                  : `GPS verified at your current device location • ${substation?.name || 'Assigned Site'}`}
+                  : substation?.name ? `GPS verified at your current device location • ${substation.name}` : 'Please contact admin to allocate your work site'}
               </Text>
             </View>
 
@@ -949,9 +949,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
                   <Text style={styles.analyticsGreenBadgeText}>EMPLOYEE ANALYTICS</Text>
                 </View>
               </View>
-              <Text style={styles.analyticsSubtitle}>
-                Visual shift review, hours worked history & punctuality compliance
-              </Text>
+              
             </View>
 
             {/* Right Toggle Buttons */}
@@ -1208,9 +1206,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
                     <Text style={styles.notifCountBadgeText}>{employeeNotifications.length}</Text>
                   </View>
                 </View>
-                <Text style={styles.modalSubtitle}>
-                  Directives & telemetry alerts for {user?.name || 'Technician'} ({user?.employeeId || ''})
-                </Text>
+                
               </View>
 
               <TouchableOpacity
@@ -1301,9 +1297,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
             <View style={styles.modalHeaderRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Adani Power Holidays 2026</Text>
-                <Text style={styles.modalSubtitle}>
-                  Official Gazetted & Field Operations Calendar
-                </Text>
+                
               </View>
               <TouchableOpacity
                 style={styles.modalCloseBtn}
@@ -1418,7 +1412,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
               <Text style={styles.permScreenTitle}>Camera Access Required</Text>
               <Text style={styles.permScreenSub}>
                 Attendance check-in requires a live camera photo to verify your presence at{' '}
-                {substation?.name || 'st. joseph university'}. Photo upload from gallery is disabled.
+                {substation?.name || 'Assigned Site'}. Photo upload from gallery is disabled.
               </Text>
 
               <TouchableOpacity
@@ -1455,7 +1449,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.cameraHeaderTitle}>MANDATORY SELFIE VERIFICATION</Text>
                       <Text style={styles.cameraHeaderSub}>
-                        {substation?.name || 'st. joseph university'} • 500m Geofence Active
+                        {substation?.name || 'Assigned Site'} • 500m Geofence Active
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -1559,7 +1553,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
                 <View style={styles.telemetryRow}>
                   <MapPin size={13} color="#1E63F0" style={{ marginRight: 6 }} />
                   <Text style={styles.telemetryCardText}>
-                    Location: <Text style={{ fontWeight: '800' }}>{substation?.name || 'st. joseph university'}</Text> (Lat: {deviceCoords.latitude.toFixed(4)}, Long: {deviceCoords.longitude.toFixed(4)})
+                    Location: <Text style={{ fontWeight: '800' }}>{substation?.name || 'Assigned Site'}</Text> (Lat: {deviceCoords.latitude.toFixed(4)}, Long: {deviceCoords.longitude.toFixed(4)})
                   </Text>
                 </View>
                 <View style={[styles.telemetryRow, { marginTop: 4 }]}>
@@ -1655,7 +1649,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
           </View>
           <View style={styles.checkoutModalRow}>
             <Text style={styles.checkoutModalLabel}>Substation / Location:</Text>
-            <Text style={styles.checkoutModalVal}>{substation?.name || 'st. joseph university'}</Text>
+            <Text style={styles.checkoutModalVal}>{substation?.name || 'Assigned Site'}</Text>
           </View>
           {todayRecord?.checkIn?.time ? (
             <View style={styles.checkoutModalRow}>

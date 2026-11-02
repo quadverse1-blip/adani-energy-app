@@ -290,9 +290,6 @@ export const HolidayManagementScreen: React.FC = () => {
 
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.headerTitle}>Holiday Management</Text>
-            <Text style={styles.headerSubtitle}>
-              Centralized Public Holidays • Auto-sync with PH Attendance
-            </Text>
           </View>
 
           <TouchableOpacity delayPressIn={0}

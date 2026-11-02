@@ -305,9 +305,6 @@ export const CompensationScreen: React.FC = () => {
           </TouchableOpacity>
           <View>
             <Text style={styles.headerTitle}>Salary Slip</Text>
-            <Text style={styles.headerSubtitle}>
-              Upload workforce salary slips for retrieval
-            </Text>
           </View>
         </View>
 
@@ -371,9 +368,7 @@ export const CompensationScreen: React.FC = () => {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.uploadCardTitle}>Upload Salary Slip</Text>
-              <Text style={styles.uploadCardSub}>
-                Upload the monthly salary slip document so it can be retrieved by the employee and supervisor
-              </Text>
+              
             </View>
           </View>
 
@@ -520,9 +515,7 @@ export const CompensationScreen: React.FC = () => {
               <Text style={styles.listCardTitle}>
                 Uploaded Slips ({MONTH_NAMES[selectedMonth - 1]} {selectedYear})
               </Text>
-              <Text style={styles.listCardSub}>
-                Verify documents uploaded and retrievable by employees and supervisors
-              </Text>
+              
             </View>
           </View>
 

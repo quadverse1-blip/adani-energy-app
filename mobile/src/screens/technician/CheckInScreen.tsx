@@ -96,8 +96,8 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
   // GPS State (Defaults to St. Joseph's University device coordinates: 12.962506, 77.593736)
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
-  const [latitude, setLatitude] = useState<number>(12.962506);
-  const [longitude, setLongitude] = useState<number>(77.593736);
+  const [latitude, setLatitude] = useState<number>(0);
+  const [longitude, setLongitude] = useState<number>(0);
   const [accuracy, setAccuracy] = useState<number>(8.5);
 
   // Camera & Photo Verification State
@@ -529,7 +529,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
               <View>
                 <Text style={styles.radarTitle}>Live Location Radar</Text>
                 <Text style={styles.radarSubtitle}>
-                  Assignment: <Text style={{ fontWeight: '800' }}>{selectedSite?.name || 'Surat ST-1'}</Text>
+                  Assignment: <Text style={{ fontWeight: '800' }}>{selectedSite?.name || 'No Site Assigned'}</Text>
                 </Text>
               </View>
 
@@ -748,7 +748,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
               <View style={styles.substationSummaryRow}>
                 <Text style={styles.substationSummaryLabel}>Assigned Substation:</Text>
                 <Text style={styles.substationSummaryValue}>
-                  {(user as any)?.assignedSiteName || sites.find(s => s.id === user?.assignedSiteId)?.name || 'Surat ST-1'}
+                  {(user as any)?.assignedSiteName || sites.find(s => s.id === user?.assignedSiteId)?.name || 'Not Assigned'}
                 </Text>
               </View>
               <View style={styles.substationSummaryRow}>
@@ -839,7 +839,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                   onPress={() =>
                     Alert.alert(
                       'Shift Check-In Active',
-                      `You are already checked in at ${todayRecord?.siteName || selectedSite?.name} for today.\n\nAssigned Substation: ${(user as any)?.assignedSiteName || sites.find(s => s.id === user?.assignedSiteId)?.name || 'Surat ST-1'}\nChecked-In From: ${todayRecord?.siteName || selectedSite?.name}`
+                      `You are already checked in at ${todayRecord?.siteName || selectedSite?.name} for today.\n\nAssigned Substation: ${(user as any)?.assignedSiteName || sites.find(s => s.id === user?.assignedSiteId)?.name || 'Not Assigned'}\nChecked-In From: ${todayRecord?.siteName || selectedSite?.name}`
                     )
                   }
                   activeOpacity={0.7}

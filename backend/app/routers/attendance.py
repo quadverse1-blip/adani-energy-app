@@ -105,7 +105,7 @@ async def get_today_attendance(
             s_assigned_role = specific_assign.get("assignedByRole") or (emp.get("assignedByRole") if emp else None)
             s_assigned_at = specific_assign.get("assignedAt") or (emp.get("assignedAt") if emp else None)
 
-            # Fallback if seed or uninitialized: use site manager
+            # Fallback if uninitialized: use site manager
             if not s_assigned_by:
                 mgr = raw.get("manager") or {}
                 if mgr.get("name"):
@@ -113,9 +113,9 @@ async def get_today_attendance(
                     s_assigned_phone = mgr.get("phone", "")
                     s_assigned_role = "supervisor"
                 else:
-                    s_assigned_by = "Anita Sharma"
-                    s_assigned_phone = "9876543299"
-                    s_assigned_role = "admin"
+                    s_assigned_by = None
+                    s_assigned_phone = None
+                    s_assigned_role = None
 
             s_obj["assignedBy"] = s_assigned_by
             s_obj["assignedByPhone"] = s_assigned_phone

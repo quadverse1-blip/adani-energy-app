@@ -262,7 +262,6 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
           </TouchableOpacity>
 
           <View style={{ flex: 1, marginHorizontal: 10 }}>
-            <Text style={styles.brandSubtitle}>ADANI POWER & SMART METERS</Text>
             <Text style={styles.brandTitle}>Operations Center</Text>
             <View style={styles.liveTagRow}>
               <View style={styles.pulsingDot} />

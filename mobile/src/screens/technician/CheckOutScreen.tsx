@@ -110,8 +110,8 @@ export const CheckOutScreen: React.FC<CheckOutScreenProps> = ({ navigation }) =>
     setSubmitting(true);
     try {
       const record = await attendanceService.checkOut({
-        latitude: latitude || 18.5913,
-        longitude: longitude || 73.7389,
+        latitude: latitude || (assignedSite?.latitude || 0),
+        longitude: longitude || (assignedSite?.longitude || 0),
         accuracy: accuracy || 15,
         remarks: isEarlyCheckout ? 'Early checkout requested' : 'Standard checkout',
       });
@@ -229,7 +229,7 @@ export const CheckOutScreen: React.FC<CheckOutScreenProps> = ({ navigation }) =>
           <View style={{ marginLeft: 10, flex: 1 }}>
             <Text style={styles.locationLabel}>Assigned Substation</Text>
             <Text style={styles.locationValue}>
-              {assignedSite?.name || 'Pune Phase 1 Substation'}
+              {assignedSite?.name || 'Assigned Substation'}
             </Text>
           </View>
         </View>
@@ -243,7 +243,7 @@ export const CheckOutScreen: React.FC<CheckOutScreenProps> = ({ navigation }) =>
                 ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)} (±${accuracy?.toFixed(0)}m)`
                 : gpsLoading
                 ? 'Acquiring GPS fix...'
-                : '18.591270, 73.738910 (High Accuracy)'}
+                : 'GPS position pending'}
             </Text>
           </View>
         </View>

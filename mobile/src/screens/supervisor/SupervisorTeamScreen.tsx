@@ -105,7 +105,6 @@ export const SupervisorTeamScreen: React.FC = () => {
             <Menu size={20} color="#0F172A" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={styles.headerSub}>ZONAL SUPERVISOR DESK</Text>
             <Text style={styles.headerTitle}>Team & Shift Authorization</Text>
           </View>
           <TouchableOpacity delayPressIn={0}

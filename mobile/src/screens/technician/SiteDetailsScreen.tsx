@@ -106,7 +106,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
     };
   }, [user]);
 
-  // Compute all assigned sites for the logged-in technician (e.g. Rohit has 2 sites: Surat ST-1 & st. joseph)
+  // Compute all assigned sites strictly for the logged-in employee
   const assignedSites = useMemo(() => {
     if (!allSites || allSites.length === 0) return [];
 
@@ -117,27 +117,25 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
         ? [user.assignedSiteId]
         : [];
 
-    const matched = allSites.filter(
+    if (userSiteIds.length === 0) return [];
+
+    return allSites.filter(
       (s) =>
         userSiteIds.includes(s.id) ||
         userSiteIds.includes((s as any)._id) ||
         userSiteIds.includes(s.code)
     );
-
-    return matched.length > 0 ? matched : allSites;
-
-    return matched.length > 0 ? matched : allSites.slice(0, 2);
   }, [allSites, user]);
 
-  // Active selected substation
+  // Active selected substation (Strictly null if employee has no assigned site)
   const site: Substation | null = useMemo(() => {
-    if (!allSites || allSites.length === 0) return null;
+    if (assignedSites.length === 0) return null;
     return (
-      allSites.find((s) => s.id === activeSiteId || (s as any)._id === activeSiteId) ||
+      assignedSites.find((s) => s.id === activeSiteId || (s as any)._id === activeSiteId) ||
       assignedSites[0] ||
-      allSites[0]
+      null
     );
-  }, [allSites, activeSiteId, assignedSites]);
+  }, [activeSiteId, assignedSites]);
 
   const handleCall = () => {
     if (site?.manager?.phone) {
@@ -412,8 +410,41 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
 </html>`;
   }, [site, userCoords]);
 
-  if (loading || !site) {
+  if (loading) {
     return <LoadingSpinner message="Loading substation specifications..." />;
+  }
+
+  if (!site) {
+    return (
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
+        <View style={styles.topNavHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <AppBackButton />
+            <TouchableOpacity delayPressIn={0}
+              style={styles.navHeaderBtn}
+              onPress={() => openDrawer('SiteDetails')}
+              activeOpacity={0.7}
+            >
+              <Menu size={20} color="#0F172A" />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.navHeaderTitle}>Assigned Substation</Text>
+          <View style={{ width: 38 }} />
+        </View>
+
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+            <Building size={32} color="#1E63F0" />
+          </View>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 8, textAlign: 'center' }}>
+            No Substation Assigned
+          </Text>
+          <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20, maxWidth: 320 }}>
+            You do not have an active work site assigned yet. Please contact your Supervisor or Operations Admin to allocate your designated substation.
+          </Text>
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -434,7 +465,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
         <View style={{ width: 38 }} />
       </View>
 
-      {/* Multiple Assigned Sites Switcher Bar (Rohit's 2 assigned sites: Surat ST-1 & st. joseph) */}
+      {/* Multiple Assigned Sites Switcher Bar */}
       {assignedSites.length > 1 && (
         <View style={styles.siteSwitcherSection}>
           <Text style={styles.siteSwitcherHeader}>
@@ -489,7 +520,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
           />
           <View style={styles.voltageOverlay}>
             <Zap size={14} color="#FFFFFF" />
-            <Text style={styles.voltageText}>{site.voltageClass || '220 kV GIS Substation'}</Text>
+            <Text style={styles.voltageText}>{site.voltageClass || 'Substation Grid'}</Text>
           </View>
         </View>
 
