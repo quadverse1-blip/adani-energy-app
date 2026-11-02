@@ -1066,9 +1066,12 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
                 {/* Bars Container */}
                 <View style={styles.barsContainer}>
                   {WEEKLY_HOURS_DATA.map((item, index) => {
-                    const maxHeight = 160; // Max bar container px
+                    const maxHeight = 135; // Max bar container px
                     const heightPct = Math.min((item.hours / 14) * 100, 100);
                     const isSelected = selectedBar?.day === item.day;
+                    const parts = item.day.trim().split(/\s+/);
+                    const dayName = parts[0] || '';
+                    const dayDate = parts[1] || '';
 
                     return (
                       <TouchableOpacity
@@ -1097,16 +1100,31 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
                           />
                         </View>
 
-                        {/* X-Axis Label */}
-                        <Text
-                          style={[
-                            styles.xAxisLabel,
-                            item.isToday && styles.xAxisLabelToday,
-                            isSelected && styles.xAxisLabelSelected,
-                          ]}
-                        >
-                          {item.day}
-                        </Text>
+                        {/* X-Axis Day & Date Label */}
+                        <View style={styles.xAxisLabelContainer}>
+                          <Text
+                            style={[
+                              styles.xAxisDayLabel,
+                              item.isToday && styles.xAxisDayLabelToday,
+                              isSelected && styles.xAxisDayLabelSelected,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {dayName}
+                          </Text>
+                          {dayDate ? (
+                            <Text
+                              style={[
+                                styles.xAxisDateLabel,
+                                item.isToday && styles.xAxisDateLabelToday,
+                                isSelected && styles.xAxisDateLabelSelected,
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {dayDate}
+                            </Text>
+                          ) : null}
+                        </View>
                       </TouchableOpacity>
                     );
                   })}
@@ -2448,17 +2466,17 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   chartCanvas: {
-    height: 190,
+    height: 205,
     position: 'relative',
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     paddingLeft: 30,
-    paddingBottom: 20,
+    paddingTop: 8,
     marginTop: 8,
   },
   targetDottedLine: {
     position: 'absolute',
-    top: 60,
+    top: 66,
     left: 30,
     right: 0,
     borderTopWidth: 1.5,
@@ -2468,7 +2486,7 @@ const styles = StyleSheet.create({
   },
   targetBadge: {
     position: 'absolute',
-    top: 48,
+    top: 54,
     right: 0,
     backgroundColor: '#ECFDF5',
     paddingHorizontal: 6,
@@ -2486,8 +2504,8 @@ const styles = StyleSheet.create({
   yAxisCol: {
     position: 'absolute',
     left: 0,
-    top: 10,
-    bottom: 25,
+    top: 8,
+    height: 135,
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
@@ -2499,18 +2517,22 @@ const styles = StyleSheet.create({
   barsContainer: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     justifyContent: 'space-around',
-    height: 160,
+    height: 185,
   },
   barCol: {
     alignItems: 'center',
-    width: 38,
+    justifyContent: 'flex-start',
+    width: 40,
   },
   barPillarWrap: {
     width: 22,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
     justifyContent: 'flex-end',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   barFill: {
     width: '100%',
@@ -2519,11 +2541,49 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#0F172A',
   },
+  xAxisLabelContainer: {
+    marginTop: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  xAxisDayLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 13,
+  },
+  xAxisDayLabelToday: {
+    color: '#1E63F0',
+    fontWeight: '900',
+  },
+  xAxisDayLabelSelected: {
+    color: '#0F172A',
+    fontWeight: '900',
+  },
+  xAxisDateLabel: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#334155',
+    textAlign: 'center',
+    lineHeight: 14,
+    marginTop: 2,
+  },
+  xAxisDateLabelToday: {
+    color: '#1E63F0',
+    fontWeight: '900',
+  },
+  xAxisDateLabelSelected: {
+    color: '#0F172A',
+    fontWeight: '900',
+  },
   xAxisLabel: {
     fontSize: 10,
     fontWeight: '700',
     color: '#64748B',
-    marginTop: 8,
+    textAlign: 'center',
+    marginTop: 6,
   },
   xAxisLabelToday: {
     color: '#1E63F0',

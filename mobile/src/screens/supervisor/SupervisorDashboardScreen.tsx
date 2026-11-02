@@ -961,6 +961,9 @@ export const SupervisorDashboardScreen: React.FC = () => {
                   {weeklyBars.map((bar, idx) => {
                     const maxH = 140;
                     const barHeight = Math.max(8, (bar.hours / 12) * maxH);
+                    const parts = bar.day.trim().split(/\s+/);
+                    const dayName = parts[0] || '';
+                    const dayDate = parts[1] || '';
 
                     return (
                       <View key={idx} style={styles.barCol}>
@@ -977,14 +980,28 @@ export const SupervisorDashboardScreen: React.FC = () => {
                             <View style={styles.barEmptyPill} />
                           )}
                         </View>
-                        <Text
-                          style={[
-                            styles.barDayText,
-                            bar.isToday && styles.barDayTextToday,
-                          ]}
-                        >
-                          {bar.day}
-                        </Text>
+                        <View style={styles.barDayWrap}>
+                          <Text
+                            style={[
+                              styles.barDayText,
+                              bar.isToday && styles.barDayTextToday,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {dayName}
+                          </Text>
+                          {dayDate ? (
+                            <Text
+                              style={[
+                                styles.barDateText,
+                                bar.isToday && styles.barDateTextToday,
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {dayDate}
+                            </Text>
+                          ) : null}
+                        </View>
                       </View>
                     );
                   })}
@@ -1944,13 +1961,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#CBD5E1',
     marginBottom: 4,
   },
+  barDayWrap: {
+    marginTop: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
   barDayText: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '700',
     color: '#64748B',
-    marginTop: 6,
+    textAlign: 'center',
+    lineHeight: 13,
   },
   barDayTextToday: {
+    color: '#1E63F0',
+    fontWeight: '900',
+  },
+  barDateText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#334155',
+    textAlign: 'center',
+    lineHeight: 14,
+    marginTop: 2,
+  },
+  barDateTextToday: {
     color: '#1E63F0',
     fontWeight: '900',
   },
