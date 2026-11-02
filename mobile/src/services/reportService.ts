@@ -14,6 +14,19 @@ export interface MusterDay {
   isToday: boolean;
 }
 
+export interface MusterCompensation {
+  monthlySalary: number;
+  dailyRate: number;
+  absentDeductionRate: number;
+  halfDayDeductionRate: number;
+  absentDeductionTotal: number;
+  halfDayDeductionTotal: number;
+  totalDeductions: number;
+  netPayableSalary: number;
+  status: string;
+  referenceNumber?: string | null;
+}
+
 export interface MusterRecord {
   sr: number;
   employeeId?: string;
@@ -32,6 +45,7 @@ export interface MusterRecord {
     PH: number;
     Total: number;
   };
+  compensation?: MusterCompensation;
 }
 
 export interface MusterRollResponse {

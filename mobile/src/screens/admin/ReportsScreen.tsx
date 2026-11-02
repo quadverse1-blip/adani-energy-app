@@ -108,11 +108,13 @@ export const ReportsScreen: React.FC = () => {
   const [musterStats, setMusterStats] = useState({
     totalShifts: 0,
     present: 0,
+    halfDays: 0,
     absent: 0,
     weeklyOff: 0,
     publicHolidays: 0,
     compliance: '0%',
   });
+  const [selectedEmpComp, setSelectedEmpComp] = useState<MusterRecord | null>(null);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -276,6 +278,7 @@ Synchronized across all dashboards and muster reports.`,
           setMusterStats({
             totalShifts: musterRes.stats.totalShifts,
             present: musterRes.stats.present,
+            halfDays: musterRes.stats.halfDays || 0,
             absent: musterRes.stats.absent,
             weeklyOff: musterRes.stats.weeklyOff,
             publicHolidays: musterRes.stats.publicHolidays,
@@ -306,6 +309,7 @@ Synchronized across all dashboards and muster reports.`,
           setMusterStats({
             totalShifts: musterRes.stats.totalShifts,
             present: musterRes.stats.present,
+            halfDays: musterRes.stats.halfDays || 0,
             absent: musterRes.stats.absent,
             weeklyOff: musterRes.stats.weeklyOff,
             publicHolidays: musterRes.stats.publicHolidays,
@@ -663,6 +667,13 @@ Synchronized across all dashboards and muster reports.`,
               <Text style={styles.kpiSub}>On-duty completed shifts</Text>
             </View>
 
+            {/* HALF DAY (HD) */}
+            <View style={[styles.kpiCardWide, styles.kpiCardBorderOrange, SHADOWS.sm]}>
+              <Text style={[styles.kpiLabel, { color: '#C2410C' }]}>HALF DAY (HD)</Text>
+              <Text style={[styles.kpiValueDark, { color: '#C2410C' }]}>{musterStats.halfDays}</Text>
+              <Text style={styles.kpiSub}>Partial shift (&lt; 8 hrs)</Text>
+            </View>
+
             {/* ABSENT (A) */}
             <View style={[styles.kpiCardWide, styles.kpiCardBorderRed, SHADOWS.sm]}>
               <Text style={[styles.kpiLabel, { color: '#DC2626' }]}>ABSENT (A)</Text>
@@ -701,6 +712,12 @@ Synchronized across all dashboards and muster reports.`,
               <Text style={[styles.kpiLabel, { color: '#059669' }]}>PRESENT (P)</Text>
               <Text style={[styles.kpiValueDark, { color: '#059669' }]}>{musterStats.present}</Text>
               <Text style={styles.kpiSub}>On-duty completed</Text>
+            </View>
+
+            <View style={[styles.kpiCard, styles.kpiCardBorderOrange, SHADOWS.sm]}>
+              <Text style={[styles.kpiLabel, { color: '#C2410C' }]}>HALF DAY (HD)</Text>
+              <Text style={[styles.kpiValueDark, { color: '#C2410C' }]}>{musterStats.halfDays}</Text>
+              <Text style={styles.kpiSub}>Partial shift (&lt; 8 hrs)</Text>
             </View>
 
             <View style={[styles.kpiCard, styles.kpiCardBorderRed, SHADOWS.sm]}>
@@ -788,13 +805,15 @@ Synchronized across all dashboards and muster reports.`,
                 </View>
               ) : (
                 musterRecords.map((row, index) => (
-                  <View
+                  <TouchableOpacity delayPressIn={0}
                     key={row.sr || index}
                     style={[
                       styles.frozenRowCell,
                       { height: 46 },
                       index % 2 === 1 && { backgroundColor: '#F8FAFC' },
                     ]}
+                    onPress={() => setSelectedEmpComp(row)}
+                    activeOpacity={0.7}
                   >
                     <Text style={styles.frozenEmpName} numberOfLines={1}>
                       {row.sr}. {row.employeeName}
@@ -802,7 +821,7 @@ Synchronized across all dashboards and muster reports.`,
                     <Text style={styles.frozenEmpSub} numberOfLines={1}>
                       {row.employeeCode} • {row.designation}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 ))
               )}
             </View>
@@ -1014,6 +1033,124 @@ Synchronized across all dashboards and muster reports.`,
           </View>
         </View>
       </ScrollView>
+
+      {/* Employee Attendance & Compensation Detail Modal */}
+      <Modal
+        visible={selectedEmpComp !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedEmpComp(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.markModalCard, { maxWidth: 520 }]}>
+            <View style={styles.markModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.markModalTitle}>Attendance & Compensation</Text>
+                <Text style={styles.markModalSub}>
+                  {selectedEmpComp?.employeeName} ({selectedEmpComp?.employeeCode}) • {monthName}
+                </Text>
+              </View>
+              <TouchableOpacity delayPressIn={0}
+                style={styles.modalCloseBtn}
+                onPress={() => setSelectedEmpComp(null)}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              {/* Monthly Attendance Breakdown */}
+              <Text style={[styles.inputFieldLabel, { marginTop: 8 }]}>MONTHLY ATTENDANCE TOTALS</Text>
+              <View style={styles.legendGrid}>
+                <View style={[styles.legendItem, { width: '48%', backgroundColor: '#F0FDF4', padding: 8, borderRadius: 8 }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#166534' }}>Present (P)</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#166534', marginTop: 2 }}>
+                    {selectedEmpComp?.summary.P || 0} Days
+                  </Text>
+                </View>
+                <View style={[styles.legendItem, { width: '48%', backgroundColor: '#FFEDD5', padding: 8, borderRadius: 8 }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#C2410C' }}>Half Days (HD)</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#C2410C', marginTop: 2 }}>
+                    {selectedEmpComp?.summary.HD || 0} Days
+                  </Text>
+                </View>
+                <View style={[styles.legendItem, { width: '48%', backgroundColor: '#FEF2F2', padding: 8, borderRadius: 8, marginTop: 6 }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#991B1B' }}>Absent (A)</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#991B1B', marginTop: 2 }}>
+                    {selectedEmpComp?.summary.A || 0} Days
+                  </Text>
+                </View>
+                <View style={[styles.legendItem, { width: '48%', backgroundColor: '#DBEAFE', padding: 8, borderRadius: 8, marginTop: 6 }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#1E40AF' }}>Weekly Off (WO)</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#1E40AF', marginTop: 2 }}>
+                    {selectedEmpComp?.summary.WO || 0} Days
+                  </Text>
+                </View>
+              </View>
+
+              {/* Attendance-Based Compensation Breakdown */}
+              <Text style={[styles.inputFieldLabel, { marginTop: 14 }]}>ATTENDANCE-BASED SALARY CALCULATION</Text>
+              {selectedEmpComp?.compensation ? (
+                <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 12, color: '#475569' }}>Monthly Base Salary:</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                      ₹{selectedEmpComp.compensation.monthlySalary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 12, color: '#DC2626' }}>
+                      Absent Deduction ({selectedEmpComp.summary.A} × ₹{selectedEmpComp.compensation.absentDeductionRate}):
+                    </Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#DC2626' }}>
+                      -₹{selectedEmpComp.compensation.absentDeductionTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 12, color: '#EA580C' }}>
+                      Half-Day Deduction ({selectedEmpComp.summary.HD || 0} × ₹{selectedEmpComp.compensation.halfDayDeductionRate}):
+                    </Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#EA580C' }}>
+                      -₹{selectedEmpComp.compensation.halfDayDeductionTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                  <View style={{ height: 1, backgroundColor: '#CBD5E1', marginVertical: 6 }} />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>Total Deductions:</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#DC2626' }}>
+                      -₹{selectedEmpComp.compensation.totalDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, backgroundColor: '#ECFDF5', padding: 8, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46' }}>Net Payable Take-Home:</Text>
+                    <Text style={{ fontSize: 15, fontWeight: '900', color: '#059669' }}>
+                      ₹{selectedEmpComp.compensation.netPayableSalary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14, gap: 10 }}>
+              <TouchableOpacity delayPressIn={0}
+                style={[styles.cancelBtn, { paddingHorizontal: 16 }]}
+                onPress={() => setSelectedEmpComp(null)}
+              >
+                <Text style={styles.cancelBtnText}>Close</Text>
+              </TouchableOpacity>
+              <TouchableOpacity delayPressIn={0}
+                style={[styles.saveMarkBtn, { paddingHorizontal: 16, backgroundColor: '#2563EB' }]}
+                onPress={() => {
+                  setSelectedEmpComp(null);
+                  navigation.navigate('Compensation');
+                }}
+              >
+                <Text style={styles.saveMarkBtnText}>Open Compensation</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Public Holiday Info Modal (Requirement 4) */}
       <Modal
@@ -1623,6 +1760,10 @@ const styles = StyleSheet.create({
   kpiCardBorderGreen: {
     borderLeftWidth: 4,
     borderLeftColor: '#059669',
+  },
+  kpiCardBorderOrange: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#EA580C',
   },
   kpiCardBorderRed: {
     borderLeftWidth: 4,

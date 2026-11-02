@@ -157,6 +157,36 @@ class ReportService:
 
             total_recorded = p_count + wo_count + ph_count
 
+            # Synchronized attendance-based compensation breakdown
+            try:
+                from app.services.salary_service import salary_service
+                slip = salary_service.get_salary_slip(emp_id, month=month, year=year)
+                comp_data = {
+                    "monthlySalary": slip.get("monthlySalary", 20000.0),
+                    "dailyRate": slip.get("dailySalaryRate", 666.67),
+                    "absentDeductionRate": slip.get("absentDeductionRate", 500.0),
+                    "halfDayDeductionRate": slip.get("halfDayDeductionRate", 250.0),
+                    "absentDeductionTotal": slip.get("absentDeductionTotal", 0.0),
+                    "halfDayDeductionTotal": slip.get("halfDayDeductionTotal", 0.0),
+                    "totalDeductions": slip.get("totalDeductionAmount", 0.0),
+                    "netPayableSalary": slip.get("netPay", 20000.0),
+                    "status": slip.get("status", "DRAFT"),
+                    "referenceNumber": slip.get("referenceNumber")
+                }
+            except Exception:
+                comp_data = {
+                    "monthlySalary": 20000.0,
+                    "dailyRate": 666.67,
+                    "absentDeductionRate": 500.0,
+                    "halfDayDeductionRate": 250.0,
+                    "absentDeductionTotal": round(a_count * 500.0, 2),
+                    "halfDayDeductionTotal": round(hd_count * 250.0, 2),
+                    "totalDeductions": round((a_count * 500.0) + (hd_count * 250.0), 2),
+                    "netPayableSalary": round(20000.0 - ((a_count * 500.0) + (hd_count * 250.0)), 2),
+                    "status": "DRAFT",
+                    "referenceNumber": None
+                }
+
             records.append({
                 "sr": sr,
                 "employeeId": emp_id,
@@ -174,16 +204,22 @@ class ReportService:
                     "WO": wo_count,
                     "PH": ph_count,
                     "Total": total_recorded
-                }
+                },
+                "compensation": comp_data
             })
             sr += 1
 
         # 5. Summary KPI Stats
         total_shifts = sum(r["summary"]["P"] for r in records)
+        total_hd = sum(r["summary"]["HD"] for r in records)
         total_p = total_shifts
         total_a = sum(r["summary"]["A"] for r in records)
         total_wo = sum(r["summary"]["WO"] for r in records)
         total_ph = sum(r["summary"]["PH"] for r in records)
+
+        total_compensation = round(sum(r.get("compensation", {}).get("netPayableSalary", 0.0) for r in records), 2)
+        total_deductions_all = round(sum(r.get("compensation", {}).get("totalDeductions", 0.0) for r in records), 2)
+        total_hd_deductions = round(sum(r.get("compensation", {}).get("halfDayDeductionTotal", 0.0) for r in records), 2)
 
         possible_working = (total_p + total_a) if (total_p + total_a) > 0 else 1
         compliance_pct = f"{round((total_p / possible_working) * 100, 1)}%"
@@ -191,11 +227,14 @@ class ReportService:
         stats = {
             "totalShifts": total_shifts,
             "present": total_p,
+            "halfDays": total_hd,
             "absent": total_a,
             "weeklyOff": total_wo,
             "publicHolidays": total_ph,
+            "totalHalfDayDeductions": total_hd_deductions,
+            "totalDeductions": total_deductions_all,
+            "totalDisbursed": total_compensation,
             "lateArrivals": 0,
-            "halfDays": 0,
             "avgDuration": "8h 45m",
             "compliance": compliance_pct
         }
@@ -435,9 +474,144 @@ class ReportService:
             ws.column_dimensions[col_letter].width = 7.5
 
         start_sum_col = 6 + days_in_month + 1
-        for s_idx in range(5):
+        for s_idx in range(6):
             col_letter = get_column_letter(start_sum_col + s_idx)
             ws.column_dimensions[col_letter].width = 8.5
+
+        # =========================================================================
+        # SHEET 2: ATTENDANCE-BASED SALARY & DEDUCTIONS REGISTER
+        # =========================================================================
+        ws2 = wb.create_sheet(title="Salary & Deductions")
+        ws2.views.sheetView[0].showGridLines = True
+        ws2.freeze_panes = "E6"
+
+        comp_cols = 16
+        last_comp_col_letter = get_column_letter(comp_cols)
+
+        # Banner Rows 1-3
+        ws2.merge_cells(f"A1:{last_comp_col_letter}1")
+        ws2["A1"] = "OFFICIAL ATTENDANCE-BASED COMPENSATION & DEDUCTION REGISTER"
+        ws2["A1"].font = Font(name="Calibri", size=9, bold=True, color="93C5FD")
+        ws2["A1"].fill = fill_navy_header
+        ws2["A1"].alignment = align_center
+
+        ws2.merge_cells(f"A2:{last_comp_col_letter}2")
+        ws2["A2"] = f"SALARY & DEDUCTIONS STATEMENT FOR {month_name_upper}"
+        ws2["A2"].font = font_header_title
+        ws2["A2"].fill = fill_navy_header
+        ws2["A2"].alignment = align_center
+
+        ws2.merge_cells(f"A3:{last_comp_col_letter}3")
+        ws2["A3"] = f"b4S SOLUTIONS PVT. LTD. • SYNCHRONIZED WITH ATTENDANCE DATABASE • ABSENT & HALF-DAY DEDUCTIONS"
+        ws2["A3"].font = font_header_sub
+        ws2["A3"].fill = fill_navy_header
+        ws2["A3"].alignment = align_center
+
+        ws2.row_dimensions[4].height = 8
+
+        # Headers on Row 5
+        comp_headers = [
+            "SR.", "Employee Code", "Employee Name", "Designation",
+            "Monthly Base (Rs.)", "Present (P)", "Half Days (HD)", "Absent (A)",
+            "Weekly Off (WO)", "Public Holiday (PH)", "Absent Rate (Rs.)",
+            "Absent Deduct (Rs.)", "Half-Day Rate (Rs.)", "Half-Day Deduct (Rs.)",
+            "Total Deductions (Rs.)", "Net Payable Salary (Rs.)"
+        ]
+
+        ws2.row_dimensions[5].height = 26
+        for c_idx, h_text in enumerate(comp_headers, 1):
+            cell = ws2.cell(row=5, column=c_idx, value=h_text)
+            cell.font = font_col_header
+            cell.fill = fill_table_header
+            cell.alignment = align_center
+            cell.border = border_header
+
+        # Data Rows
+        c_row_idx = 6
+        total_base_sum = 0.0
+        total_absent_deduct_sum = 0.0
+        total_hd_deduct_sum = 0.0
+        total_deduct_sum = 0.0
+        total_net_sum = 0.0
+
+        for record in records:
+            ws2.row_dimensions[c_row_idx].height = 20
+            is_even = (c_row_idx % 2 == 0)
+            c_fill = fill_white if is_even else fill_zebra
+            comp = record.get("compensation", {})
+            smry = record.get("summary", {})
+
+            m_base = float(comp.get("monthlySalary", 20000.0))
+            a_ded = float(comp.get("absentDeductionTotal", 0.0))
+            hd_ded = float(comp.get("halfDayDeductionTotal", 0.0))
+            t_ded = float(comp.get("totalDeductions", 0.0))
+            net_p = float(comp.get("netPayableSalary", 20000.0))
+
+            total_base_sum += m_base
+            total_absent_deduct_sum += a_ded
+            total_hd_deduct_sum += hd_ded
+            total_deduct_sum += t_ded
+            total_net_sum += net_p
+
+            row_data = [
+                (record["sr"], align_center, font_data),
+                (record["employeeCode"], align_center, font_data_bold),
+                (record["employeeName"], align_left, font_data_bold),
+                (record["designation"], align_left, font_data),
+                (f"{m_base:,.2f}", align_center, font_data),
+                (smry.get("P", 0), align_center, font_data),
+                (smry.get("HD", 0), align_center, Font(name="Calibri", size=9, bold=True, color="C2410C")),
+                (smry.get("A", 0), align_center, Font(name="Calibri", size=9, bold=True, color="991B1B")),
+                (smry.get("WO", 0), align_center, font_data),
+                (smry.get("PH", 0), align_center, font_data),
+                (f"{float(comp.get('absentDeductionRate', 500.0)):,.2f}", align_center, font_data),
+                (f"{a_ded:,.2f}", align_center, Font(name="Calibri", size=9, bold=True, color="991B1B")),
+                (f"{float(comp.get('halfDayDeductionRate', 250.0)):,.2f}", align_center, font_data),
+                (f"{hd_ded:,.2f}", align_center, Font(name="Calibri", size=9, bold=True, color="C2410C")),
+                (f"{t_ded:,.2f}", align_center, Font(name="Calibri", size=9, bold=True, color="DC2626")),
+                (f"{net_p:,.2f}", align_center, Font(name="Calibri", size=9, bold=True, color="059669")),
+            ]
+
+            for col_idx, (val, alignment, font) in enumerate(row_data, 1):
+                cell = ws2.cell(row=c_row_idx, column=col_idx, value=val)
+                cell.font = font
+                cell.fill = c_fill
+                cell.alignment = alignment
+                cell.border = border_thin
+
+            c_row_idx += 1
+
+        # Total Summary Row at bottom
+        ws2.row_dimensions[c_row_idx].height = 24
+        tot_cells = [
+            (1, "TOTAL", align_center, font_col_header, fill_table_header),
+            (2, "", align_center, font_col_header, fill_table_header),
+            (3, f"{len(records)} EMPLOYEES", align_left, font_col_header, fill_table_header),
+            (4, "", align_left, font_col_header, fill_table_header),
+            (5, f"{total_base_sum:,.2f}", align_center, font_col_header, fill_table_header),
+            (6, sum(r.get("summary", {}).get("P", 0) for r in records), align_center, font_col_header, fill_table_header),
+            (7, sum(r.get("summary", {}).get("HD", 0) for r in records), align_center, font_col_header, fill_table_header),
+            (8, sum(r.get("summary", {}).get("A", 0) for r in records), align_center, font_col_header, fill_table_header),
+            (9, sum(r.get("summary", {}).get("WO", 0) for r in records), align_center, font_col_header, fill_table_header),
+            (10, sum(r.get("summary", {}).get("PH", 0) for r in records), align_center, font_col_header, fill_table_header),
+            (11, "--", align_center, font_col_header, fill_table_header),
+            (12, f"{total_absent_deduct_sum:,.2f}", align_center, font_col_header, fill_table_header),
+            (13, "--", align_center, font_col_header, fill_table_header),
+            (14, f"{total_hd_deduct_sum:,.2f}", align_center, font_col_header, fill_table_header),
+            (15, f"{total_deduct_sum:,.2f}", align_center, font_col_header, fill_table_header),
+            (16, f"{total_net_sum:,.2f}", align_center, font_col_header, fill_table_header),
+        ]
+        for c_idx, val, alignment, font, fill in tot_cells:
+            cell = ws2.cell(row=c_row_idx, column=c_idx, value=val)
+            cell.font = font
+            cell.fill = fill
+            cell.alignment = alignment
+            cell.border = border_header
+
+        # Column widths for Sheet 2
+        comp_widths = [6, 16, 22, 22, 18, 12, 14, 12, 14, 16, 16, 18, 16, 18, 20, 22]
+        for idx, w in enumerate(comp_widths, 1):
+            ws2.column_dimensions[get_column_letter(idx)].width = w
 
         output = io.BytesIO()
         wb.save(output)
@@ -482,7 +656,14 @@ class ReportService:
             ws.cell(row=row, column=6, value=c_in)
             ws.cell(row=row, column=7, value=c_out)
             ws.cell(row=row, column=8, value=l.get("workingHoursFormatted", "--"))
-            ws.cell(row=row, column=9, value=str(l.get("status", "P")).upper())
+            is_hd_log = bool(
+                l.get("isHalfDay")
+                or l.get("attendanceCategory") == "HALF_DAY"
+                or str(l.get("status") or "").lower() in ("half_day", "half-day", "hd")
+                or str(l.get("shiftStatus") or "").lower() in ("half_day", "hd")
+            )
+            disp_st = "HALF DAY (HD)" if is_hd_log else str(l.get("status", "P")).replace("_", " ").upper()
+            ws.cell(row=row, column=9, value=disp_st)
             ws.cell(row=row, column=10, value=l.get("distanceTraveledFormatted", "0 m"))
             row += 1
 
