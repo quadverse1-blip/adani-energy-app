@@ -108,14 +108,43 @@ export async function setStorageItem(key: string, value: string): Promise<void> 
   }
 }
 
-// Fast synchronous token attachment on all outbound requests
+// Asynchronous token attachment on all outbound requests
 apiClient.interceptors.request.use(
-  (config) => {
-    const token = cachedAuthToken || (Platform.OS === 'web' ? localStorage.getItem(CONFIG.TOKEN_KEY) : null);
+  async (config) => {
+    let token = cachedAuthToken;
+    if (!token) {
+      token = await getStoredToken();
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+// Intercept 401 Unauthorized to auto-clear dead or expired sessions and return to Login cleanly
+let isHandling401 = false;
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      const url = String(error.config?.url || '');
+      // Don't auto-logout if the error comes from an active login attempt failing
+      if (!url.includes('/auth/login')) {
+        if (!isHandling401) {
+          isHandling401 = true;
+          await clearStoredToken();
+          try {
+            const { useAuthStore } = require('../store/useAuthStore');
+            useAuthStore.getState().logout();
+          } catch {}
+          setTimeout(() => {
+            isHandling401 = false;
+          }, 1500);
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
 );
