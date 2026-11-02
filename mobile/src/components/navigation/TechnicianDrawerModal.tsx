@@ -91,8 +91,8 @@ const TECHNICIAN_MENU_ITEMS: NavMenuItem[] = [
   },
   {
     key: 'Salary',
-    label: 'Pay Slip & Salary',
-    subLabel: 'Verified monthly payout & PDF slip',
+    label: 'Salary Slip',
+    subLabel: 'Retrieve verified monthly salary slips',
     screenName: 'Salary',
     icon: Banknote,
     badge: 'PAYSLIP',

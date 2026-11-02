@@ -1136,10 +1136,10 @@ Synchronized across all dashboards and muster reports.`,
                 style={[styles.saveMarkBtn, { paddingHorizontal: 16, backgroundColor: '#2563EB' }]}
                 onPress={() => {
                   setSelectedEmpComp(null);
-                  navigation.navigate('Compensation');
+                  navigation.navigate('Salary');
                 }}
               >
-                <Text style={styles.saveMarkBtnText}>Open Compensation</Text>
+                <Text style={styles.saveMarkBtnText}>Open Salary Slip</Text>
               </TouchableOpacity>
             </View>
           </View>

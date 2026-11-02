@@ -230,7 +230,7 @@ export const SalaryScreen: React.FC = () => {
             <FileText size={26} color="#1E40AF" strokeWidth={2.4} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.mainTitleText}>Pay Slip & Salary</Text>
+            <Text style={styles.mainTitleText}>Salary Slip</Text>
             <Text style={styles.mainSubtitleText}>
               Retrieve and download official salary slips uploaded by Admin
             </Text>

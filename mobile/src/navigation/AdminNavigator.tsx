@@ -31,6 +31,10 @@ export const AdminNavigator: React.FC = () => {
         name="Salary"
         component={CompensationScreen}
       />
+      <Stack.Screen
+        name="Compensation"
+        component={CompensationScreen}
+      />
       <Stack.Screen name="Holidays" component={HolidayManagementScreen} />
     </Stack.Navigator>
   );

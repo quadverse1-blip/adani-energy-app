@@ -96,8 +96,8 @@ const MENU_ITEMS: NavMenuItem[] = [
   },
   {
     key: 'Salary',
-    label: 'Compensation',
-    subLabel: 'Shift wages & overtime',
+    label: 'Salary Slip',
+    subLabel: 'Upload & manage employee salary slips',
     screenName: 'Salary',
     icon: Banknote,
   },

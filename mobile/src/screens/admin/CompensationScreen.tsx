@@ -11,7 +11,6 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
-  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -20,83 +19,87 @@ import {
   Download,
   Calendar,
   CheckCircle2,
-  Clock,
-  ChevronLeft,
-  ChevronRight,
+  FileText,
   Search,
   X,
-  FileText,
-  IndianRupee,
+  Check,
+  ChevronDown,
+  RefreshCw,
+  FileUp,
   ShieldCheck,
-  Settings,
-  Eye,
-  TrendingDown,
-  Lock,
-  Edit3,
-  HelpCircle,
-  AlertCircle,
+  Info,
+  Clock,
+  User as UserIcon,
 } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import { Paths, File as ExpoFile } from 'expo-file-system';
 import { useAdminDrawerStore } from '../../store/useAdminDrawerStore';
 import { salaryService } from '../../services/salaryService';
 import { employeeService } from '../../services/employeeService';
-import { SalarySlip, SalarySummaryResponse, User, SalaryConfig } from '../../types';
-import { UploadSalarySlipModal } from '../../components/compensation/UploadSalarySlipModal';
+import { SalarySlip, SalarySummaryResponse, User } from '../../types';
 import { AdminDrawerModal } from '../../components/navigation/AdminDrawerModal';
-import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { AppBackButton } from '../../components/common/AppBackButton';
+import { COLORS, SHADOWS } from '../../constants/theme';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+const AVAILABLE_YEARS = [2024, 2025, 2026, 2027, 2028];
+
 export const CompensationScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const { openDrawer } = useAdminDrawerStore();
 
-  const [selectedMonth, setSelectedMonth] = useState<number>(10); // Oct
+  // Period Selection
+  const [selectedMonth, setSelectedMonth] = useState<number>(10);
   const [selectedYear, setSelectedYear] = useState<number>(2026);
-  const [summary, setSummary] = useState<SalarySummaryResponse | null>(null);
+  const [showMonthModal, setShowMonthModal] = useState<boolean>(false);
+  const [showYearModal, setShowYearModal] = useState<boolean>(false);
+
+  // Data States
   const [employees, setEmployees] = useState<User[]>([]);
+  const [summary, setSummary] = useState<SalarySummaryResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  const [search, setSearch] = useState<string>('');
-  const [filterTab, setFilterTab] = useState<'all' | 'finalized' | 'draft'>('all');
+  // Upload Placeholder Form States
+  const [selectedEmpId, setSelectedEmpId] = useState<string>('');
+  const [showEmpModal, setShowEmpModal] = useState<boolean>(false);
+  const [empSearchQuery, setEmpSearchQuery] = useState<string>('');
+  const [netAmount, setNetAmount] = useState<string>('20000');
+  const [notes, setNotes] = useState<string>('Verified monthly salary slip');
+  const [pickedFile, setPickedFile] = useState<{
+    name: string;
+    size?: number;
+    uri: string;
+    base64?: string;
+  } | null>(null);
+  const [uploading, setUploading] = useState<boolean>(false);
+  const [uploadSuccessMsg, setUploadSuccessMsg] = useState<string | null>(null);
 
-  // Configure Salary Modal
-  const [configModalVisible, setConfigModalVisible] = useState<boolean>(false);
-  const [configuringEmp, setConfiguringEmp] = useState<SalarySlip | null>(null);
-  const [configMonthlySalary, setConfigMonthlySalary] = useState<string>('20000');
-  const [configAbsentRate, setConfigAbsentRate] = useState<string>('500');
-  const [configHalfDayRate, setConfigHalfDayRate] = useState<string>('250');
-  const [configNotes, setConfigNotes] = useState<string>('');
-  const [configSaving, setConfigSaving] = useState<boolean>(false);
-
-  // Review & Finalize Modal
-  const [reviewModalVisible, setReviewModalVisible] = useState<boolean>(false);
-  const [reviewingSlip, setReviewingSlip] = useState<SalarySlip | null>(null);
-  const [finalizing, setFinalizing] = useState<boolean>(false);
-
-  // Legacy Upload Modal
-  const [uploadModalVisible, setUploadModalVisible] = useState<boolean>(false);
-  const [selectedEmpForUpload, setSelectedEmpForUpload] = useState<string | undefined>(undefined);
-
-  const isWide = width >= 768;
+  // Search & Filter for Uploaded List
+  const [listSearchQuery, setListSearchQuery] = useState<string>('');
+  const [downloadingEmpId, setDownloadingEmpId] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
       const [sumRes, empRes] = await Promise.all([
-        salaryService.getSalarySummary(selectedMonth, selectedYear),
+        salaryService.getSalarySummary(selectedMonth, selectedYear).catch(() => null),
         employeeService.getEmployees().catch(() => []),
       ]);
-      setSummary(sumRes);
+
+      if (sumRes) {
+        setSummary(sumRes);
+      }
 
       if (empRes && empRes.length > 0) {
         setEmployees(empRes);
+        if (!selectedEmpId) {
+          setSelectedEmpId(empRes[0].id || (empRes[0] as any)._id || empRes[0].employeeId);
+        }
       } else if (sumRes?.slips && sumRes.slips.length > 0) {
         const mappedUsers: User[] = sumRes.slips.map((s) => ({
           id: s.employeeId,
@@ -108,9 +111,12 @@ export const CompensationScreen: React.FC = () => {
           status: 'active',
         }));
         setEmployees(mappedUsers);
+        if (!selectedEmpId) {
+          setSelectedEmpId(mappedUsers[0].id || mappedUsers[0].employeeId);
+        }
       }
     } catch (e: any) {
-      console.warn('Compensation fetch error:', e);
+      console.warn('Salary slip data fetch error:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -126,423 +132,495 @@ export const CompensationScreen: React.FC = () => {
     fetchData();
   };
 
-  const prevMonth = () => {
-    if (selectedMonth === 1) {
-      setSelectedMonth(12);
-      setSelectedYear((y) => y - 1);
-    } else {
-      setSelectedMonth((m) => m - 1);
-    }
-  };
+  // Find currently selected employee for upload form
+  const selectedEmployee = useMemo(() => {
+    return (
+      employees.find(
+        (e) =>
+          e.id === selectedEmpId ||
+          (e as any)._id === selectedEmpId ||
+          e.employeeId === selectedEmpId
+      ) || employees[0]
+    );
+  }, [employees, selectedEmpId]);
 
-  const nextMonth = () => {
-    if (selectedMonth === 12) {
-      setSelectedMonth(1);
-      setSelectedYear((y) => y + 1);
-    } else {
-      setSelectedMonth((m) => m + 1);
-    }
-  };
-
-  // Open Configure Modal
-  const handleOpenConfigure = async (slip: SalarySlip) => {
-    setConfiguringEmp(slip);
-    setConfigMonthlySalary(String(slip.monthlySalary || 20000));
-    setConfigAbsentRate(String(slip.absentDeductionRate || 500));
-    setConfigHalfDayRate(String(slip.halfDayDeductionRate || 250));
-    setConfigNotes(slip.notes || '');
-    setConfigModalVisible(true);
-
+  // Pick Document (PDF, Image, etc.)
+  const handlePickDocument = async () => {
     try {
-      const liveCfg = await salaryService.getSalaryConfig(slip.employeeId);
-      if (liveCfg) {
-        setConfigMonthlySalary(String(liveCfg.monthlySalary));
-        setConfigAbsentRate(String(liveCfg.absentDeductionRate));
-        setConfigHalfDayRate(String(liveCfg.halfDayDeductionRate));
-        if (liveCfg.notes) setConfigNotes(liveCfg.notes);
-      }
-    } catch (e) {
-      // Use slip defaults
-    }
-  };
-
-  // Save Config
-  const handleSaveConfig = async () => {
-    if (!configuringEmp) return;
-    const mSalary = parseFloat(configMonthlySalary) || 20000;
-    const aRate = parseFloat(configAbsentRate) || 500;
-    const hdRate = parseFloat(configHalfDayRate) || 250;
-
-    setConfigSaving(true);
-    try {
-      await salaryService.updateSalaryConfig(configuringEmp.employeeId, {
-        monthlySalary: mSalary,
-        absentDeductionRate: aRate,
-        halfDayDeductionRate: hdRate,
-        effectiveDate: `${selectedYear}-${selectedMonth < 10 ? '0' : ''}${selectedMonth}-01`,
-        notes: configNotes || 'Updated from Admin Compensation Console',
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
       });
-      Alert.alert(
-        'Salary Configured',
-        `Successfully updated compensation for ${configuringEmp.employeeName} (${configuringEmp.employeeId}).`
-      );
-      setConfigModalVisible(false);
-      fetchData();
-    } catch (e: any) {
-      Alert.alert('Configuration Error', e.message || 'Failed to update salary settings.');
-    } finally {
-      setConfigSaving(false);
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        let base64Data: string | undefined = undefined;
+
+        if (Platform.OS === 'web' && (file as any).file) {
+          try {
+            const rawFile = (file as any).file as File;
+            const reader = new FileReader();
+            base64Data = await new Promise((resolve) => {
+              reader.onload = () => {
+                const res = reader.result as string;
+                resolve(res.includes(',') ? res.split(',')[1] : res);
+              };
+              reader.readAsDataURL(rawFile);
+            });
+          } catch {}
+        }
+
+        setPickedFile({
+          name: file.name,
+          size: file.size,
+          uri: file.uri,
+          base64: base64Data,
+        });
+        setUploadSuccessMsg(null);
+      }
+    } catch (err: any) {
+      Alert.alert('Error Picking Document', err.message || 'Could not select the document.');
     }
   };
 
-  // Finalize Salary
-  const handleFinalizeStatement = async (slip: SalarySlip) => {
-    setFinalizing(true);
+  // Upload Salary Slip Handler
+  const handleUploadSalarySlip = async () => {
+    if (!selectedEmployee) {
+      Alert.alert('Missing Employee', 'Please select an employee to upload the salary slip for.');
+      return;
+    }
+
+    setUploading(true);
+    setUploadSuccessMsg(null);
+
+    const empId =
+      selectedEmployee.employeeId ||
+      selectedEmployee.id ||
+      (selectedEmployee as any)._id;
+
     try {
-      await salaryService.finalizeSalary({
-        employeeId: slip.employeeId,
+      await salaryService.uploadSalarySlip({
+        employeeId: empId,
         month: selectedMonth,
         year: selectedYear,
-        notes: 'Finalized and approved by Operations Admin',
+        netAmount: parseFloat(netAmount) || 20000,
+        notes: notes.trim() || `Verified salary slip for ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`,
+        fileName: pickedFile?.name || `Adani_Salary_Slip_${empId}_${selectedMonth}_${selectedYear}.pdf`,
+        fileBase64: pickedFile?.base64,
       });
-      Alert.alert('Statement Finalized', `Salary statement for ${slip.employeeName} has been frozen.`);
-      setReviewModalVisible(false);
+
+      const successText = `Salary slip for ${selectedEmployee.name} (${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}) uploaded successfully! It is now retrievable by the employee and supervisor.`;
+      setUploadSuccessMsg(successText);
+      setPickedFile(null);
+
+      Alert.alert('Salary Slip Uploaded', successText);
+
+      // Refresh list to show newly uploaded document
       fetchData();
-    } catch (e: any) {
-      Alert.alert('Finalize Error', e.message || 'Failed to finalize salary statement.');
+    } catch (err: any) {
+      Alert.alert('Upload Failed', err.message || 'Failed to upload salary slip. Please try again.');
     } finally {
-      setFinalizing(false);
+      setUploading(false);
     }
   };
 
-  // Download PDF
+  // Download / Retrieve Document (Admin verification)
   const handleDownloadSlip = async (slip: SalarySlip) => {
+    const empId = slip.employeeId;
+    setDownloadingEmpId(empId);
     try {
-      const url = salaryService.getDownloadUrl(slip.employeeId, selectedMonth, selectedYear);
+      const url = salaryService.getDownloadUrl(empId, selectedMonth, selectedYear);
+
       if (Platform.OS === 'web') {
         window.open(url, '_blank');
+        setDownloadingEmpId(null);
         return;
       }
 
-      const filename = `Adani_Payslip_${slip.employeeId.replace('/', '_')}_${selectedMonth}_${selectedYear}.pdf`;
+      const rawFileName =
+        slip.fileName || `Adani_Salary_Slip_${empId}_${selectedMonth}_${selectedYear}.pdf`;
+      const filename = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
       const destination = new ExpoFile(Paths.document, filename);
       const downloadedFile = await ExpoFile.downloadFileAsync(url, destination);
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(downloadedFile.uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: `Adani Payslip - ${slip.employeeName}`,
+          mimeType: filename.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream',
+          dialogTitle: `Adani Salary Slip - ${slip.employeeName} (${MONTH_NAMES[selectedMonth - 1]} ${selectedYear})`,
+          UTI: 'com.adobe.pdf',
         });
       } else {
-        Alert.alert('Payslip Downloaded', `Saved to ${downloadedFile.uri}`);
+        Alert.alert(
+          'Document Retrieved',
+          `Saved ${filename} to your device documents.\n\nPath: ${downloadedFile.uri}`
+        );
       }
     } catch (err: any) {
-      Alert.alert('Download Error', err.message || 'Failed to download payslip');
+      console.warn('Payslip download error:', err);
+      Alert.alert('Error', err.message || 'Failed to download salary slip document.');
+    } finally {
+      setDownloadingEmpId(null);
     }
   };
 
+  // Filter employees for employee picker modal
+  const filteredModalEmployees = useMemo(() => {
+    if (!empSearchQuery.trim()) return employees;
+    const q = empSearchQuery.toLowerCase();
+    return employees.filter(
+      (e) =>
+        e.name?.toLowerCase().includes(q) ||
+        e.employeeId?.toLowerCase().includes(q) ||
+        e.designation?.toLowerCase().includes(q)
+    );
+  }, [employees, empSearchQuery]);
+
+  // Slips list filtered by search
   const filteredSlips = useMemo(() => {
-    if (!summary?.slips) return [];
-    return summary.slips.filter((s) => {
-      const q = search.trim().toLowerCase();
-      const matchSearch =
-        !q ||
-        s.employeeName.toLowerCase().includes(q) ||
-        s.employeeId.toLowerCase().includes(q) ||
-        s.designation.toLowerCase().includes(q);
-
-      if (!matchSearch) return false;
-
-      const isFin = (s.status || '').toUpperCase() === 'FINALIZED' || (s.status || '').toUpperCase() === 'PAID';
-      if (filterTab === 'finalized') return isFin;
-      if (filterTab === 'draft') return !isFin;
-      return true;
-    });
-  }, [summary, search, filterTab]);
-
-  const totalDisbursed = summary?.totalNetPayable || 0;
-  const totalDeductions = summary?.totalDeductions || 0;
-  const totalGross = summary?.totalGrossDisbursed || 0;
-
-  if (loading && !summary) {
-    return <LoadingSpinner message="Loading workforce payroll & compensation..." />;
-  }
+    const slips = summary?.slips || [];
+    if (!listSearchQuery.trim()) return slips;
+    const q = listSearchQuery.toLowerCase();
+    return slips.filter(
+      (s) =>
+        s.employeeName?.toLowerCase().includes(q) ||
+        s.employeeId?.toLowerCase().includes(q) ||
+        s.designation?.toLowerCase().includes(q)
+    );
+  }, [summary, listSearchQuery]);
 
   return (
-    <View style={[styles.screen, { paddingTop: Math.max(insets.top, 12) }]}>
-      {/* 1. Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <AppBackButton style={{ marginRight: 8 }} />
-          <TouchableOpacity style={styles.menuBtn} onPress={() => openDrawer()} activeOpacity={0.7}>
-            <Menu size={20} color="#0F172A" />
+    <View style={styles.container}>
+      {/* Top Navigation Bar with Left-Aligned Back Button */}
+      <View style={[styles.topNavBar, { paddingTop: Math.max(insets.top, 14) + 6 }]}>
+        <View style={styles.topNavLeft}>
+          <AppBackButton />
+          <TouchableOpacity
+            style={styles.navRoundBtn}
+            onPress={() => openDrawer('Salary')}
+            activeOpacity={0.7}
+            accessibilityLabel="Open Navigation Menu"
+          >
+            <Menu size={19} color="#0F172A" />
           </TouchableOpacity>
           <View>
-            <Text style={styles.headerTitle}>Compensation & Salary</Text>
-            <Text style={styles.headerSub}>Attendance-Based Payroll Management</Text>
+            <Text style={styles.headerTitle}>Salary Slip</Text>
+            <Text style={styles.headerSubtitle}>
+              Upload workforce salary slips for retrieval
+            </Text>
           </View>
         </View>
 
-        {/* Month Selector Navigation */}
-        <View style={styles.monthNav}>
-          <TouchableOpacity onPress={prevMonth} style={styles.monthArrowBtn}>
-            <ChevronLeft size={16} color="#1E293B" />
-          </TouchableOpacity>
-          <Text style={styles.monthNavText}>
-            {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
-          </Text>
-          <TouchableOpacity onPress={nextMonth} style={styles.monthArrowBtn}>
-            <ChevronRight size={16} color="#1E293B" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.refreshBtn}
+          onPress={onRefresh}
+          activeOpacity={0.7}
+          accessibilityLabel="Refresh Records"
+        >
+          <RefreshCw size={12} color="#1E63F0" style={{ marginRight: 5 }} />
+          <Text style={styles.refreshBtnText}>Refresh</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) + 40 }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1E63F0']} />}
+        style={styles.mainScroll}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(insets.bottom, 20) + 40 },
+        ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+        }
       >
-        {/* 2. Top Summary KPI Cards */}
-        <View style={styles.kpiRow}>
-          <View style={[styles.kpiCard, { borderLeftColor: '#2563EB', borderLeftWidth: 4 }]}>
-            <Text style={styles.kpiLabel}>TOTAL ASSIGNED GROSS</Text>
-            <Text style={styles.kpiValue}>₹{totalGross.toLocaleString('en-IN')}</Text>
-            <Text style={styles.kpiSub}>{summary?.totalEmployees || 0} Workforce active</Text>
+        {/* Payroll Period Selector */}
+        <View style={styles.periodRow}>
+          <View style={styles.periodBadge}>
+            <Calendar size={13} color="#4338CA" style={{ marginRight: 5 }} />
+            <Text style={styles.periodBadgeText}>Payroll Period</Text>
           </View>
 
-          <View style={[styles.kpiCard, { borderLeftColor: '#DC2626', borderLeftWidth: 4 }]}>
-            <Text style={styles.kpiLabel}>TOTAL DEDUCTIONS</Text>
-            <Text style={[styles.kpiValue, { color: '#DC2626' }]}>-₹{totalDeductions.toLocaleString('en-IN')}</Text>
-            <Text style={styles.kpiSub}>Absent + Half-day penalties</Text>
-          </View>
+          <View style={styles.dropdownsGroup}>
+            <TouchableOpacity
+              style={styles.dropdownPill}
+              onPress={() => setShowMonthModal(true)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.dropdownPillText}>{MONTH_NAMES[selectedMonth - 1]}</Text>
+              <ChevronDown size={14} color="#475569" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
 
-          <View style={[styles.kpiCard, { borderLeftColor: '#059669', borderLeftWidth: 4 }]}>
-            <Text style={styles.kpiLabel}>NET PAYABLE DISBURSEMENT</Text>
-            <Text style={[styles.kpiValue, { color: '#059669' }]}>₹{totalDisbursed.toLocaleString('en-IN')}</Text>
-            <Text style={styles.kpiSub}>{summary?.finalizedCount || 0} Finalized • {summary?.draftCount || 0} Drafts</Text>
+            <TouchableOpacity
+              style={styles.dropdownPill}
+              onPress={() => setShowYearModal(true)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.dropdownPillText}>{selectedYear}</Text>
+              <ChevronDown size={14} color="#475569" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* 3. Search & Filter Bar */}
-        <View style={styles.filterSection}>
+        {/* ============================================================== */}
+        {/* 1. PRIMARY PLACEHOLDER: UPLOAD SALARY SLIP FORM                */}
+        {/* ============================================================== */}
+        <View style={[styles.uploadCard, SHADOWS.md]}>
+          <View style={styles.uploadCardHeader}>
+            <View style={styles.uploadIconBadge}>
+              <Upload size={22} color="#1E40AF" strokeWidth={2.4} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.uploadCardTitle}>Upload Salary Slip</Text>
+              <Text style={styles.uploadCardSub}>
+                Upload the monthly salary slip document so it can be retrieved by the employee and supervisor
+              </Text>
+            </View>
+          </View>
+
+          {/* Success Banner */}
+          {uploadSuccessMsg && (
+            <View style={styles.successBanner}>
+              <CheckCircle2 size={16} color="#059669" style={{ marginRight: 8, marginTop: 1 }} />
+              <Text style={styles.successBannerText}>{uploadSuccessMsg}</Text>
+            </View>
+          )}
+
+          {/* Form Step 1: Select Employee */}
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>SELECT WORKFORCE EMPLOYEE *</Text>
+            <TouchableOpacity
+              style={styles.employeeSelectorBtn}
+              onPress={() => setShowEmpModal(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.empAvatarCircle}>
+                <UserIcon size={16} color="#1E63F0" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectedEmpName}>
+                  {selectedEmployee?.name || 'Select Employee'}
+                </Text>
+                <Text style={styles.selectedEmpSub}>
+                  {selectedEmployee?.employeeId || 'ID Pending'} •{' '}
+                  {selectedEmployee?.designation || 'Smart Meter Technician'}
+                </Text>
+              </View>
+              <ChevronDown size={18} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Form Step 2: Document Dropzone / File Picker */}
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>SALARY SLIP DOCUMENT (PDF / DOC / IMAGE) *</Text>
+            {pickedFile ? (
+              <View style={styles.fileSelectedBox}>
+                <View style={styles.fileIconBadgeWrap}>
+                  <FileText size={24} color="#DC2626" />
+                  <View style={styles.pdfBadgeMini}>
+                    <Text style={styles.pdfBadgeMiniText}>PDF</Text>
+                  </View>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fileSelectedName} numberOfLines={1}>
+                    {pickedFile.name}
+                  </Text>
+                  <Text style={styles.fileSelectedMeta}>
+                    {pickedFile.size
+                      ? `${(pickedFile.size / 1024).toFixed(1)} KB • Ready to Upload`
+                      : 'Selected • Ready to Upload'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.changeFileBtn}
+                  onPress={handlePickDocument}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.changeFileBtnText}>Change</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.removeFileBtn}
+                  onPress={() => setPickedFile(null)}
+                  activeOpacity={0.7}
+                >
+                  <X size={16} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.dropzoneBox}
+                onPress={handlePickDocument}
+                activeOpacity={0.75}
+              >
+                <View style={styles.dropzoneIconWrap}>
+                  <FileUp size={28} color="#2563EB" />
+                </View>
+                <Text style={styles.dropzoneTitle}>Tap to Browse & Select Salary Slip</Text>
+                <Text style={styles.dropzoneSub}>
+                  Upload PDF, DOC, or Image file for {selectedEmployee?.name || 'the employee'}
+                </Text>
+                <View style={styles.browsePill}>
+                  <Text style={styles.browsePillText}>Browse Files</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Form Step 3: Optional Net Amount & Remarks */}
+          <View style={styles.formRow}>
+            <View style={[styles.formGroup, { flex: 1 }]}>
+              <Text style={styles.formLabel}>NET SALARY AMOUNT (₹)</Text>
+              <TextInput
+                style={styles.inputField}
+                value={netAmount}
+                onChangeText={setNetAmount}
+                placeholder="20000"
+                keyboardType="numeric"
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+
+            <View style={[styles.formGroup, { flex: 1.5 }]}>
+              <Text style={styles.formLabel}>REMARKS / NOTES</Text>
+              <TextInput
+                style={styles.inputField}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Verified monthly payout"
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+          </View>
+
+          {/* Upload Button */}
+          <TouchableOpacity
+            style={[styles.uploadSubmitBtn, uploading && { opacity: 0.75 }]}
+            onPress={handleUploadSalarySlip}
+            activeOpacity={0.85}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+            ) : (
+              <Upload size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+            )}
+            <Text style={styles.uploadSubmitBtnText}>
+              {uploading
+                ? 'Uploading Salary Slip...'
+                : `Upload Salary Slip for ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ============================================================== */}
+        {/* 2. UPLOADED SALARY SLIPS RETRIEVAL & VERIFICATION              */}
+        {/* ============================================================== */}
+        <View style={[styles.listCard, SHADOWS.sm]}>
+          <View style={styles.listCardHeader}>
+            <View>
+              <Text style={styles.listCardTitle}>
+                Uploaded Slips ({MONTH_NAMES[selectedMonth - 1]} {selectedYear})
+              </Text>
+              <Text style={styles.listCardSub}>
+                Verify documents uploaded and retrievable by employees and supervisors
+              </Text>
+            </View>
+          </View>
+
+          {/* Search Bar */}
           <View style={styles.searchBox}>
-            <Search size={16} color="#64748B" />
+            <Search size={16} color="#94A3B8" style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search by employee name, ID, or designation..."
+              placeholder="Search by employee name or ID..."
               placeholderTextColor="#94A3B8"
-              value={search}
-              onChangeText={setSearch}
+              value={listSearchQuery}
+              onChangeText={setListSearchQuery}
             />
-            {search ? (
-              <TouchableOpacity onPress={() => setSearch('')}>
-                <X size={16} color="#64748B" />
+            {listSearchQuery ? (
+              <TouchableOpacity onPress={() => setListSearchQuery('')}>
+                <X size={15} color="#94A3B8" />
               </TouchableOpacity>
             ) : null}
           </View>
 
-          <View style={styles.tabsRow}>
-            <TouchableOpacity
-              style={[styles.tabBtn, filterTab === 'all' && styles.tabBtnActive]}
-              onPress={() => setFilterTab('all')}
-            >
-              <Text style={[styles.tabBtnText, filterTab === 'all' && styles.tabBtnTextActive]}>
-                All Employees ({summary?.slips?.length || 0})
+          {/* Slips List */}
+          {loading ? (
+            <View style={styles.centerBox}>
+              <ActivityIndicator size="large" color="#1E63F0" />
+              <Text style={styles.centerBoxText}>Loading salary slips...</Text>
+            </View>
+          ) : filteredSlips.length === 0 ? (
+            <View style={styles.emptyListBox}>
+              <FileText size={36} color="#CBD5E1" />
+              <Text style={styles.emptyListTitle}>No Slips Uploaded for This Period</Text>
+              <Text style={styles.emptyListSub}>
+                Use the upload section above to upload salary slips for {MONTH_NAMES[selectedMonth - 1]} {selectedYear}.
               </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabBtn, filterTab === 'finalized' && styles.tabBtnActive]}
-              onPress={() => setFilterTab('finalized')}
-            >
-              <Text style={[styles.tabBtnText, filterTab === 'finalized' && styles.tabBtnTextActive]}>
-                Finalized ({summary?.finalizedCount || 0})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabBtn, filterTab === 'draft' && styles.tabBtnActive]}
-              onPress={() => setFilterTab('draft')}
-            >
-              <Text style={[styles.tabBtnText, filterTab === 'draft' && styles.tabBtnTextActive]}>
-                Drafts ({summary?.draftCount || 0})
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* 4. Employee-Wise Salary Table / Card View */}
-        <View style={styles.tableCard}>
-          <View style={styles.tableCardHeader}>
-            <Text style={styles.tableCardTitle}>Workforce Attendance & Salary Roster</Text>
-            <Text style={styles.tableCardSub}>
-              {MONTH_NAMES[selectedMonth - 1]} {selectedYear} • Real-time Attendance Integration
-            </Text>
-          </View>
-
-          {isWide ? (
-            /* Desktop/Tablet Table Layout */
-            <View style={styles.tableWrap}>
-              <View style={styles.thRow}>
-                <Text style={[styles.thCell, { flex: 2 }]}>EMPLOYEE</Text>
-                <Text style={[styles.thCell, { flex: 1.2, textAlign: 'right' }]}>MONTHLY SALARY</Text>
-                <Text style={[styles.thCell, { flex: 0.8, textAlign: 'center' }]}>P</Text>
-                <Text style={[styles.thCell, { flex: 0.8, textAlign: 'center' }]}>A</Text>
-                <Text style={[styles.thCell, { flex: 1, textAlign: 'center' }]}>HALF DAYS</Text>
-                <Text style={[styles.thCell, { flex: 1.2, textAlign: 'right' }]}>DEDUCTION</Text>
-                <Text style={[styles.thCell, { flex: 1.3, textAlign: 'right' }]}>NET SALARY</Text>
-                <Text style={[styles.thCell, { flex: 1, textAlign: 'center' }]}>STATUS</Text>
-                <Text style={[styles.thCell, { flex: 1.5, textAlign: 'center' }]}>ACTIONS</Text>
-              </View>
-
-              {filteredSlips.map((slip) => {
-                const isFin = (slip.status || '').toUpperCase() === 'FINALIZED' || (slip.status || '').toUpperCase() === 'PAID';
-                return (
-                  <View key={slip.employeeId} style={styles.trRow}>
-                    <View style={{ flex: 2 }}>
-                      <Text style={styles.tdEmpName}>{slip.employeeName}</Text>
-                      <Text style={styles.tdEmpId}>{slip.employeeId} • {slip.designation}</Text>
-                    </View>
-                    <Text style={[styles.tdCell, { flex: 1.2, textAlign: 'right', fontWeight: '700' }]}>
-                      ₹{(slip.monthlySalary || 20000).toLocaleString('en-IN')}
-                    </Text>
-                    <Text style={[styles.tdCell, { flex: 0.8, textAlign: 'center', color: '#15803D', fontWeight: '800' }]}>
-                      {slip.presentDays || 0}
-                    </Text>
-                    <Text style={[styles.tdCell, { flex: 0.8, textAlign: 'center', color: '#DC2626', fontWeight: '800' }]}>
-                      {slip.absentDays || 0}
-                    </Text>
-                    <Text style={[styles.tdCell, { flex: 1, textAlign: 'center', color: '#D97706', fontWeight: '800' }]}>
-                      {slip.halfDays || 0}
-                    </Text>
-                    <Text style={[styles.tdCell, { flex: 1.2, textAlign: 'right', color: '#DC2626', fontWeight: '700' }]}>
-                      -₹{(slip.totalDeductionAmount || 0).toLocaleString('en-IN')}
-                    </Text>
-                    <Text style={[styles.tdCell, { flex: 1.3, textAlign: 'right', color: '#059669', fontWeight: '900', fontSize: 13 }]}>
-                      ₹{(slip.netPay || 0).toLocaleString('en-IN')}
-                    </Text>
-                    <View style={{ flex: 1, alignItems: 'center' }}>
-                      <View style={[styles.statusBadgeSmall, isFin ? styles.statusBadgeFin : styles.statusBadgeDr]}>
-                        <Text style={[styles.statusBadgeTextSmall, { color: isFin ? '#059669' : '#D97706' }]}>
-                          {isFin ? 'FINALIZED' : 'DRAFT'}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={[styles.actionsCell, { flex: 1.5 }]}>
-                      <TouchableOpacity
-                        style={styles.actionIconBtn}
-                        onPress={() => handleOpenConfigure(slip)}
-                        accessibilityLabel="Configure Salary"
-                      >
-                        <Settings size={14} color="#2563EB" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.actionIconBtn}
-                        onPress={() => {
-                          setReviewingSlip(slip);
-                          setReviewModalVisible(true);
-                        }}
-                        accessibilityLabel="View Breakdown"
-                      >
-                        <Eye size={14} color="#059669" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.actionIconBtn}
-                        onPress={() => handleDownloadSlip(slip)}
-                        accessibilityLabel="Download PDF"
-                      >
-                        <Download size={14} color="#1E293B" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })}
             </View>
           ) : (
-            /* Mobile Responsive Card Layout */
-            <View style={styles.cardList}>
+            <View style={styles.slipsListWrap}>
               {filteredSlips.map((slip) => {
-                const isFin = (slip.status || '').toUpperCase() === 'FINALIZED' || (slip.status || '').toUpperCase() === 'PAID';
+                const isUploaded =
+                  slip.hasUploadedDocument ||
+                  slip.status === 'FINALIZED' ||
+                  slip.status === 'PAID';
+                const isDownloadingThis = downloadingEmpId === slip.employeeId;
+
                 return (
-                  <View key={slip.employeeId} style={styles.mobileCard}>
-                    {/* Top Identity Row */}
-                    <View style={styles.mobileCardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.mobileEmpName}>{slip.employeeName}</Text>
-                        <Text style={styles.mobileEmpId}>{slip.employeeId} • {slip.designation}</Text>
-                      </View>
-                      <View style={[styles.statusBadgeSmall, isFin ? styles.statusBadgeFin : styles.statusBadgeDr]}>
-                        <Text style={[styles.statusBadgeTextSmall, { color: isFin ? '#059669' : '#D97706' }]}>
-                          {isFin ? 'FINALIZED' : 'DRAFT'}
+                  <View key={slip.employeeId} style={styles.slipItemRow}>
+                    <View style={styles.slipItemIconWrap}>
+                      <FileText size={22} color={isUploaded ? '#059669' : '#94A3B8'} />
+                    </View>
+
+                    <View style={styles.slipItemContent}>
+                      <View style={styles.slipItemNameRow}>
+                        <Text style={styles.slipItemEmpName} numberOfLines={1}>
+                          {slip.employeeName}
                         </Text>
+                        <View
+                          style={[
+                            styles.statusBadgeMini,
+                            isUploaded ? styles.statusBadgeUploaded : styles.statusBadgePending,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusBadgeMiniText,
+                              { color: isUploaded ? '#059669' : '#D97706' },
+                            ]}
+                          >
+                            {isUploaded ? 'UPLOADED' : 'PENDING'}
+                          </Text>
+                        </View>
                       </View>
+
+                      <Text style={styles.slipItemEmpMeta}>
+                        {slip.employeeId} • {slip.designation}
+                      </Text>
+
+                      {isUploaded && (
+                        <Text style={styles.slipItemFileName} numberOfLines={1}>
+                          📄 {slip.fileName || `Adani_Salary_Slip_${selectedMonth}_${selectedYear}.pdf`}
+                        </Text>
+                      )}
                     </View>
 
-                    {/* Attendance Grid Strip */}
-                    <View style={styles.mobileAttStrip}>
-                      <View style={styles.mobileAttCol}>
-                        <Text style={styles.attStripLabel}>PRESENT</Text>
-                        <Text style={[styles.attStripVal, { color: '#15803D' }]}>{slip.presentDays || 0}</Text>
-                      </View>
-                      <View style={styles.mobileAttCol}>
-                        <Text style={styles.attStripLabel}>ABSENT</Text>
-                        <Text style={[styles.attStripVal, { color: '#DC2626' }]}>{slip.absentDays || 0}</Text>
-                      </View>
-                      <View style={styles.mobileAttCol}>
-                        <Text style={styles.attStripLabel}>HALF DAYS</Text>
-                        <Text style={[styles.attStripVal, { color: '#D97706' }]}>{slip.halfDays || 0}</Text>
-                      </View>
-                      <View style={styles.mobileAttCol}>
-                        <Text style={styles.attStripLabel}>WEEKLY OFF</Text>
-                        <Text style={[styles.attStripVal, { color: '#2563EB' }]}>{slip.weeklyOffDays || 4}</Text>
-                      </View>
-                    </View>
-
-                    {/* Financial Summary */}
-                    <View style={styles.mobileFinRow}>
-                      <View>
-                        <Text style={styles.finLabel}>MONTHLY SALARY</Text>
-                        <Text style={styles.finVal}>₹{(slip.monthlySalary || 20000).toLocaleString('en-IN')}</Text>
-                      </View>
-                      <View>
-                        <Text style={styles.finLabel}>TOTAL DEDUCTION</Text>
-                        <Text style={[styles.finVal, { color: '#DC2626' }]}>-₹{(slip.totalDeductionAmount || 0).toLocaleString('en-IN')}</Text>
-                      </View>
-                      <View>
-                        <Text style={styles.finLabel}>NET SALARY</Text>
-                        <Text style={[styles.finVal, { color: '#059669', fontSize: 16 }]}>₹{(slip.netPay || 0).toLocaleString('en-IN')}</Text>
-                      </View>
-                    </View>
-
-                    {/* Card Actions */}
-                    <View style={styles.mobileActionsRow}>
+                    {/* Download / Verify Action */}
+                    <View style={styles.slipItemActions}>
                       <TouchableOpacity
-                        style={styles.mobileBtnSecondary}
-                        onPress={() => handleOpenConfigure(slip)}
-                      >
-                        <Settings size={13} color="#2563EB" style={{ marginRight: 4 }} />
-                        <Text style={styles.mobileBtnSecondaryText}>Configure</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.mobileBtnSecondary}
-                        onPress={() => {
-                          setReviewingSlip(slip);
-                          setReviewModalVisible(true);
-                        }}
-                      >
-                        <Eye size={13} color="#059669" style={{ marginRight: 4 }} />
-                        <Text style={[styles.mobileBtnSecondaryText, { color: '#059669' }]}>Breakdown</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.mobileBtnPrimary}
+                        style={[styles.downloadSlipBtn, isDownloadingThis && { opacity: 0.6 }]}
                         onPress={() => handleDownloadSlip(slip)}
+                        activeOpacity={0.8}
+                        disabled={isDownloadingThis}
                       >
-                        <Download size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                        <Text style={styles.mobileBtnPrimaryText}>PDF Slip</Text>
+                        {isDownloadingThis ? (
+                          <ActivityIndicator size="small" color="#1E63F0" />
+                        ) : (
+                          <>
+                            <Download size={14} color="#1E63F0" style={{ marginRight: 4 }} />
+                            <Text style={styles.downloadSlipBtnText}>Retrieve</Text>
+                          </>
+                        )}
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -551,699 +629,725 @@ export const CompensationScreen: React.FC = () => {
             </View>
           )}
         </View>
+
+        {/* Security & Isolation Strip */}
+        <View style={styles.securityStrip}>
+          <ShieldCheck size={16} color="#059669" style={{ marginRight: 8 }} />
+          <Text style={styles.securityText}>
+            Centralized Workforce Payroll • Slips accessible only by the assigned employee & supervisor
+          </Text>
+        </View>
       </ScrollView>
 
-      {/* 5. CONFIGURE SALARY MODAL */}
-      <Modal visible={configModalVisible} transparent animationType="fade" onRequestClose={() => setConfigModalVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.configModalContainer}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Configure Employee Salary</Text>
-                <Text style={styles.modalSub}>
-                  {configuringEmp?.employeeName} ({configuringEmp?.employeeId})
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setConfigModalVisible(false)}>
-                <X size={20} color="#64748B" />
+      {/* Month Picker Modal */}
+      <Modal visible={showMonthModal} transparent animationType="fade" onRequestClose={() => setShowMonthModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowMonthModal(false)}>
+          <View style={styles.pickerModal}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Select Payroll Month</Text>
+              <TouchableOpacity onPress={() => setShowMonthModal(false)}>
+                <X size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
-
-            <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 14 }}>
-              {/* Preset Buttons for Quick Custom Amounts */}
-              <View>
-                <Text style={styles.inputLabel}>QUICK SALARY PRESETS (INR)</Text>
-                <View style={styles.presetsRow}>
-                  {['10000', '15000', '20000', '25000', '50000'].map((amt) => (
-                    <TouchableOpacity
-                      key={amt}
-                      style={[styles.presetBtn, configMonthlySalary === amt && styles.presetBtnActive]}
-                      onPress={() => setConfigMonthlySalary(amt)}
-                    >
-                      <Text style={[styles.presetBtnText, configMonthlySalary === amt && styles.presetBtnTextActive]}>
-                        ₹{parseInt(amt, 10).toLocaleString('en-IN')}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Monthly Salary Input */}
-              <View>
-                <Text style={styles.inputLabel}>MONTHLY SALARY AMOUNT (₹) *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  keyboardType="numeric"
-                  placeholder="e.g. 20000"
-                  value={configMonthlySalary}
-                  onChangeText={setConfigMonthlySalary}
-                />
-                <Text style={styles.inputHelp}>
-                  Per-day rate: ₹{Math.round((parseFloat(configMonthlySalary || '0') / 30) * 100) / 100} / day (auto-calculated)
-                </Text>
-              </View>
-
-              {/* Absent Deduction Input */}
-              <View>
-                <Text style={styles.inputLabel}>ABSENT-DAY DEDUCTION AMOUNT (₹) *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  keyboardType="numeric"
-                  placeholder="e.g. 500"
-                  value={configAbsentRate}
-                  onChangeText={setConfigAbsentRate}
-                />
-                <Text style={styles.inputHelp}>Deducted per unauthorized absent day</Text>
-              </View>
-
-              {/* Half-Day Deduction Input */}
-              <View>
-                <Text style={styles.inputLabel}>HALF-DAY DEDUCTION AMOUNT (₹) *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  keyboardType="numeric"
-                  placeholder="e.g. 250"
-                  value={configHalfDayRate}
-                  onChangeText={setConfigHalfDayRate}
-                />
-                <Text style={styles.inputHelp}>Deducted per partial shift (&lt; 8 hrs worked)</Text>
-              </View>
-
-              {/* Notes */}
-              <View>
-                <Text style={styles.inputLabel}>ADMIN NOTES / REMARKS (OPTIONAL)</Text>
-                <TextInput
-                  style={[styles.formInput, { height: 60, textAlignVertical: 'top' }]}
-                  placeholder="e.g. Adjusted annual increment effective Q4"
-                  multiline
-                  value={configNotes}
-                  onChangeText={setConfigNotes}
-                />
-              </View>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {MONTH_NAMES.map((m, idx) => (
+                <TouchableOpacity
+                  key={m}
+                  style={[styles.pickerItem, selectedMonth === idx + 1 && styles.pickerItemActive]}
+                  onPress={() => {
+                    setSelectedMonth(idx + 1);
+                    setShowMonthModal(false);
+                  }}
+                >
+                  <Text style={[styles.pickerItemText, selectedMonth === idx + 1 && styles.pickerItemTextActive]}>
+                    {m}
+                  </Text>
+                  {selectedMonth === idx + 1 && <Check size={16} color="#1E63F0" />}
+                </TouchableOpacity>
+              ))}
             </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setConfigModalVisible(false)}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
-                onPress={handleSaveConfig}
-                disabled={configSaving}
-              >
-                {configSaving ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.modalSaveBtnText}>Save Salary Settings</Text>
-                )}
-              </TouchableOpacity>
-            </View>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
-      {/* 6. REVIEW & FINALIZE BREAKDOWN MODAL */}
-      <Modal visible={reviewModalVisible} transparent animationType="slide" onRequestClose={() => setReviewModalVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.reviewModalContainer}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Salary Statement Review</Text>
-                <Text style={styles.modalSub}>
-                  {reviewingSlip?.employeeName} ({reviewingSlip?.employeeId}) • {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setReviewModalVisible(false)}>
-                <X size={20} color="#64748B" />
+      {/* Year Picker Modal */}
+      <Modal visible={showYearModal} transparent animationType="fade" onRequestClose={() => setShowYearModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowYearModal(false)}>
+          <View style={styles.pickerModal}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Select Payroll Year</Text>
+              <TouchableOpacity onPress={() => setShowYearModal(false)}>
+                <X size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
-
-            {reviewingSlip && (
-              <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 12 }}>
-                {/* Breakdown Summary Grid */}
-                <View style={styles.breakdownBox}>
-                  <Text style={styles.breakdownHeader}>ATTENDANCE BREAKDOWN</Text>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLbl}>Present (Full Shifts):</Text>
-                    <Text style={styles.breakdownVal}>{Math.max(0, (reviewingSlip.presentDays || 0) - (reviewingSlip.halfDays || 0))} Days</Text>
-                  </View>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLbl}>Half Days (&lt; 8 hrs):</Text>
-                    <Text style={[styles.breakdownVal, { color: '#D97706' }]}>{reviewingSlip.halfDays || 0} Days</Text>
-                  </View>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLbl}>Absent Days:</Text>
-                    <Text style={[styles.breakdownVal, { color: '#DC2626' }]}>{reviewingSlip.absentDays || 0} Days</Text>
-                  </View>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLbl}>Weekly Offs (Sundays):</Text>
-                    <Text style={styles.breakdownVal}>{reviewingSlip.weeklyOffDays || 4} Days</Text>
-                  </View>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLbl}>Gazetted Public Holidays:</Text>
-                    <Text style={styles.breakdownVal}>{reviewingSlip.publicHolidayDays || 1} Days</Text>
-                  </View>
-                </View>
-
-                {/* Calculation Box */}
-                <View style={[styles.breakdownBox, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
-                  <Text style={[styles.breakdownHeader, { color: '#166534' }]}>CALCULATION DETAILS</Text>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLbl}>Monthly Assigned Base:</Text>
-                    <Text style={[styles.breakdownVal, { fontWeight: '800' }]}>₹{(reviewingSlip.monthlySalary || 20000).toLocaleString('en-IN')}</Text>
-                  </View>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLbl}>Absent Penalty ({reviewingSlip.absentDays || 0} × ₹{reviewingSlip.absentDeductionRate || 500}):</Text>
-                    <Text style={[styles.breakdownVal, { color: '#DC2626' }]}>-₹{(reviewingSlip.absentDeductionTotal || 0).toLocaleString('en-IN')}</Text>
-                  </View>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLbl}>Half-Day Penalty ({reviewingSlip.halfDays || 0} × ₹{reviewingSlip.halfDayDeductionRate || 250}):</Text>
-                    <Text style={[styles.breakdownVal, { color: '#DC2626' }]}>-₹{(reviewingSlip.halfDayDeductionTotal || 0).toLocaleString('en-IN')}</Text>
-                  </View>
-                  <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#BBF7D0', paddingTop: 6, marginTop: 4 }]}>
-                    <Text style={[styles.breakdownLbl, { fontWeight: '800', color: '#166534' }]}>Final Payable Salary:</Text>
-                    <Text style={[styles.breakdownVal, { fontWeight: '900', color: '#15803D', fontSize: 16 }]}>
-                      ₹{(reviewingSlip.netPay || 0).toLocaleString('en-IN')}
-                    </Text>
-                  </View>
-                </View>
-              </ScrollView>
-            )}
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setReviewModalVisible(false)}
-              >
-                <Text style={styles.modalCancelBtnText}>Close</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalSaveBtn, { backgroundColor: '#059669' }]}
-                onPress={() => reviewingSlip && handleFinalizeStatement(reviewingSlip)}
-                disabled={finalizing}
-              >
-                {finalizing ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Lock size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                    <Text style={styles.modalSaveBtnText}>Freeze & Finalize</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
+            <ScrollView style={{ maxHeight: 260 }}>
+              {AVAILABLE_YEARS.map((y) => (
+                <TouchableOpacity
+                  key={y}
+                  style={[styles.pickerItem, selectedYear === y && styles.pickerItemActive]}
+                  onPress={() => {
+                    setSelectedYear(y);
+                    setShowYearModal(false);
+                  }}
+                >
+                  <Text style={[styles.pickerItemText, selectedYear === y && styles.pickerItemTextActive]}>
+                    {y}
+                  </Text>
+                  {selectedYear === y && <Check size={16} color="#1E63F0" />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
-      {/* Global Navigation Drawer */}
+      {/* Employee Selector Modal */}
+      <Modal visible={showEmpModal} transparent animationType="fade" onRequestClose={() => setShowEmpModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowEmpModal(false)}>
+          <View style={[styles.pickerModal, { maxHeight: '80%' }]}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Select Employee</Text>
+              <TouchableOpacity onPress={() => setShowEmpModal(false)}>
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalSearchBox}>
+              <Search size={15} color="#94A3B8" style={{ marginRight: 6 }} />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search staff by name or code..."
+                placeholderTextColor="#94A3B8"
+                value={empSearchQuery}
+                onChangeText={setEmpSearchQuery}
+              />
+            </View>
+
+            <ScrollView style={{ maxHeight: 360 }}>
+              {filteredModalEmployees.map((emp) => {
+                const empId = emp.employeeId || emp.id || (emp as any)._id;
+                const isSelected =
+                  empId === selectedEmpId ||
+                  emp.id === selectedEmpId ||
+                  (emp as any)._id === selectedEmpId;
+
+                return (
+                  <TouchableOpacity
+                    key={empId}
+                    style={[styles.empPickerItem, isSelected && styles.empPickerItemActive]}
+                    onPress={() => {
+                      setSelectedEmpId(empId);
+                      setShowEmpModal(false);
+                      setEmpSearchQuery('');
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.empAvatarCircleMini}>
+                      <UserIcon size={14} color={isSelected ? '#1E63F0' : '#64748B'} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.empPickerName, isSelected && styles.empPickerNameActive]}>
+                        {emp.name}
+                      </Text>
+                      <Text style={styles.empPickerMeta}>
+                        {emp.employeeId || emp.id} • {emp.designation || 'Technician'}
+                      </Text>
+                    </View>
+                    {isSelected && <Check size={16} color="#1E63F0" />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Sidecar Navigation Drawer */}
       <AdminDrawerModal />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  screen: {
+  container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-  header: {
+  topNavBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
-  headerLeft: {
+  topNavLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    flex: 1,
   },
-  menuBtn: {
+  navRoundBtn: {
     width: 36,
     height: 36,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '900',
     color: '#0F172A',
   },
-  headerSub: {
+  headerSubtitle: {
     fontSize: 11,
     fontWeight: '500',
     color: '#64748B',
   },
-  monthNav: {
+  refreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
-    padding: 2,
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#BFDBFE',
   },
-  monthArrowBtn: {
-    padding: 6,
-  },
-  monthNavText: {
+  refreshBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#1E293B',
-    paddingHorizontal: 8,
+    color: '#1E63F0',
   },
-  scroll: {
+  mainScroll: {
     flex: 1,
   },
   content: {
     padding: 16,
     gap: 16,
   },
-  kpiRow: {
-    flexDirection: 'row',
-    gap: 12,
-    flexWrap: 'wrap',
-  },
-  kpiCard: {
-    flex: 1,
-    minWidth: 160,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  kpiLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.5,
-  },
-  kpiValue: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#0F172A',
-    marginTop: 4,
-  },
-  kpiSub: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  filterSection: {
-    gap: 10,
-  },
-  searchBox: {
+  periodRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  periodBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  periodBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#4338CA',
+  },
+  dropdownsGroup: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  dropdownPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  dropdownPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  uploadCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    height: 42,
-    gap: 8,
+    gap: 14,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
+  uploadCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  uploadIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadCardTitle: {
+    fontSize: 17,
+    fontWeight: '900',
     color: '#0F172A',
   },
-  tabsRow: {
+  uploadCardSub: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  successBanner: {
     flexDirection: 'row',
-    gap: 8,
-  },
-  tabBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    alignItems: 'flex-start',
+    backgroundColor: '#ECFDF5',
+    borderRadius: 8,
+    padding: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#A7F3D0',
   },
-  tabBtnActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-  },
-  tabBtnText: {
+  successBannerText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#065F46',
+    flex: 1,
+    lineHeight: 16,
   },
-  tabBtnTextActive: {
-    color: '#FFFFFF',
+  formGroup: {
+    gap: 6,
+  },
+  formLabel: {
+    fontSize: 11,
     fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 0.3,
   },
-  tableCard: {
+  employeeSelectorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    gap: 10,
+  },
+  empAvatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  selectedEmpName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  selectedEmpSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  dropzoneBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dropzoneIconWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  dropzoneTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  dropzoneSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  browsePill: {
+    marginTop: 6,
+    backgroundColor: '#1E63F0',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  browsePillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  fileSelectedBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    gap: 10,
+  },
+  fileIconBadgeWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'hidden',
   },
-  tableCardHeader: {
+  pdfBadgeMini: {
+    position: 'absolute',
+    bottom: -3,
+    backgroundColor: '#DC2626',
+    borderRadius: 3,
+    paddingHorizontal: 4,
+  },
+  pdfBadgeMiniText: {
+    color: '#FFFFFF',
+    fontSize: 7,
+    fontWeight: '900',
+  },
+  fileSelectedName: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  fileSelectedMeta: {
+    fontSize: 11,
+    color: '#2563EB',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  changeFileBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  changeFileBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  removeFileBtn: {
+    padding: 6,
+  },
+  formRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  inputField: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+  uploadSubmitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E63F0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginTop: 4,
+  },
+  uploadSubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  listCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
   },
-  tableCardTitle: {
+  listCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  listCardTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
   },
-  tableCardSub: {
+  listCardSub: {
     fontSize: 11,
-    fontWeight: '500',
     color: '#64748B',
     marginTop: 2,
   },
-  tableWrap: {
-    width: '100%',
-  },
-  thRow: {
+  searchBox: {
     flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  thCell: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.5,
-  },
-  trRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  tdEmpName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  tdEmpId: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  tdCell: {
-    fontSize: 12,
-    color: '#334155',
-  },
-  statusBadgeSmall: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  statusBadgeFin: {
-    backgroundColor: '#ECFDF5',
-  },
-  statusBadgeDr: {
-    backgroundColor: '#FFFBEB',
-  },
-  statusBadgeTextSmall: {
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  actionsCell: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  actionIconBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardList: {
-    padding: 12,
-    gap: 12,
-  },
-  mobileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 10,
   },
-  mobileCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  mobileEmpName: {
-    fontSize: 14,
-    fontWeight: '800',
+  searchInput: {
+    flex: 1,
+    fontSize: 12.5,
     color: '#0F172A',
   },
-  mobileEmpId: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  mobileAttStrip: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    padding: 8,
-  },
-  mobileAttCol: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  attStripLabel: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.4,
-  },
-  attStripVal: {
-    fontSize: 14,
-    fontWeight: '900',
-    marginTop: 2,
-  },
-  mobileFinRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  finLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#94A3B8',
-    letterSpacing: 0.4,
-  },
-  finVal: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1E293B',
-    marginTop: 2,
-  },
-  mobileActionsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  mobileBtnSecondary: {
-    flex: 1,
-    flexDirection: 'row',
+  centerBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 24,
   },
-  mobileBtnSecondaryText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  mobileBtnPrimary: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1E293B',
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  mobileBtnPrimaryText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  configModalContainer: {
-    width: '100%',
-    maxWidth: 440,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    gap: 14,
-  },
-  reviewModalContainer: {
-    width: '100%',
-    maxWidth: 480,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    gap: 14,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    paddingBottom: 12,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  modalSub: {
+  centerBoxText: {
+    marginTop: 8,
     fontSize: 12,
     color: '#64748B',
-    marginTop: 2,
+    fontWeight: '600',
   },
-  inputLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#475569',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  presetsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  emptyListBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 28,
     gap: 6,
   },
-  presetBtn: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  presetBtnActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
-  },
-  presetBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
+  emptyListTitle: {
+    fontSize: 14,
+    fontWeight: '800',
     color: '#334155',
   },
-  presetBtnTextActive: {
-    color: '#2563EB',
-    fontWeight: '800',
-  },
-  formInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: '#0F172A',
-  },
-  inputHelp: {
-    fontSize: 10,
+  emptyListSub: {
+    fontSize: 11.5,
     color: '#64748B',
-    marginTop: 4,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
-  modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+  slipsListWrap: {
     gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 12,
   },
-  modalCancelBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
-  },
-  modalCancelBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  modalSaveBtn: {
+  slipItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#2563EB',
-  },
-  modalSaveBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  breakdownBox: {
     backgroundColor: '#F8FAFC',
     borderRadius: 10,
     padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    gap: 10,
+  },
+  slipItemIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  slipItemContent: {
+    flex: 1,
+  },
+  slipItemNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
   },
-  breakdownHeader: {
-    fontSize: 10,
+  slipItemEmpName: {
+    fontSize: 13.5,
     fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    color: '#0F172A',
   },
-  breakdownRow: {
+  statusBadgeMini: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  statusBadgeUploaded: {
+    backgroundColor: '#ECFDF5',
+  },
+  statusBadgePending: {
+    backgroundColor: '#FFFBEB',
+  },
+  statusBadgeMiniText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  slipItemEmpMeta: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  slipItemFileName: {
+    fontSize: 11,
+    color: '#2563EB',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  slipItemActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  downloadSlipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  downloadSlipBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#1E63F0',
+  },
+  securityStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    marginTop: 4,
+  },
+  securityText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#166534',
+    textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  pickerModal: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+  },
+  pickerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 2,
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  breakdownLbl: {
-    fontSize: 12,
-    color: '#475569',
+  pickerTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
   },
-  breakdownVal: {
+  pickerItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  pickerItemActive: {
+    backgroundColor: '#EFF6FF',
+  },
+  pickerItemText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  pickerItemTextActive: {
+    color: '#1E63F0',
+    fontWeight: '800',
+  },
+  modalSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginVertical: 10,
+  },
+  modalSearchInput: {
+    flex: 1,
     fontSize: 12,
+    color: '#0F172A',
+  },
+  empPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    gap: 8,
+  },
+  empPickerItemActive: {
+    backgroundColor: '#EFF6FF',
+  },
+  empAvatarCircleMini: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  empPickerName: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  empPickerNameActive: {
+    color: '#1E63F0',
+  },
+  empPickerMeta: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 1,
   },
 });

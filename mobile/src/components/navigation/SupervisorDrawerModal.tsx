@@ -70,8 +70,8 @@ const SUPERVISOR_MENU_ITEMS: NavMenuItem[] = [
   },
   {
     key: 'Salary',
-    label: 'Compensation & Slip',
-    subLabel: 'Verified monthly payout & slips',
+    label: 'Salary Slip',
+    subLabel: 'Retrieve verified monthly salary slips',
     screenName: 'Salary',
     icon: Banknote,
   },
