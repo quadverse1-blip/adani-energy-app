@@ -38,6 +38,7 @@ import { Linking } from 'react-native';
 import { apiClient } from '../../services/api';
 import { holidayService, HolidayItem } from '../../services/holidayService';
 import { formatTimeIST } from '../../utils/shiftUtils';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 interface TodayAttendanceScreenProps {
   navigation: any;
@@ -281,13 +282,7 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
         {/* ======================================================== */}
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
-            <TouchableOpacity delayPressIn={0}
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
-              activeOpacity={0.7}
-            >
-              <ArrowLeft size={20} color="#1E293B" />
-            </TouchableOpacity>
+            <AppBackButton />
             <View>
               <Text style={styles.headerTitle}>Today's Attendance Status</Text>
             </View>

@@ -46,6 +46,7 @@ import { AdminDrawerModal } from '../../components/navigation/AdminDrawerModal';
 import { useSupervisorDrawerStore } from '../../store/useSupervisorDrawerStore';
 import { SupervisorDrawerModal } from '../../components/navigation/SupervisorDrawerModal';
 import { useAuthStore } from '../../store/useAuthStore';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 const { width } = Dimensions.get('window');
 
@@ -877,13 +878,7 @@ export const TrackingScreen: React.FC = () => {
         // Desktop Wide Header
         <View style={styles.desktopHeader}>
           <View style={styles.desktopHeaderLeft}>
-            <TouchableOpacity delayPressIn={0}
-              style={styles.backBtn}
-              onPress={handleBack}
-              activeOpacity={0.7}
-            >
-              <ArrowLeft size={18} color="#0F172A" />
-            </TouchableOpacity>
+            <AppBackButton onPress={handleBack} style={{ marginRight: 8 }} />
 
             <View style={styles.desktopHeaderTitleWrap}>
               <View style={styles.desktopTitleRow}>
@@ -936,13 +931,7 @@ export const TrackingScreen: React.FC = () => {
         <View style={styles.mobileHeader}>
           {/* Mobile Row 1: Back, Title, Sync, Menu */}
           <View style={styles.mobileHeaderRow1}>
-            <TouchableOpacity delayPressIn={0}
-              style={styles.backBtn}
-              onPress={handleBack}
-              activeOpacity={0.7}
-            >
-              <ArrowLeft size={18} color="#0F172A" />
-            </TouchableOpacity>
+            <AppBackButton onPress={handleBack} style={{ marginRight: 8 }} />
 
             <View style={styles.mobileTitleBlock}>
               <Text style={styles.mobileTitleText} numberOfLines={1}>

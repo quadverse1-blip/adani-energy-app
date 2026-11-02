@@ -24,6 +24,7 @@ import { COLORS, RADII, SHADOWS } from '../../constants/theme';
 import { AppInput } from '../../components/common/AppInput';
 import { AppButton } from '../../components/common/AppButton';
 import { authService } from '../../services/authService';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 interface ForgotPasswordScreenProps {
   navigation: any;
@@ -160,18 +161,13 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navi
     >
       {/* Top Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          delayPressIn={0}
+        <AppBackButton
           onPress={() => {
             if (step === 'VERIFY_OTP') setStep('REQUEST_OTP');
             else if (step === 'SET_PASSWORD') setStep('VERIFY_OTP');
             else navigation.goBack();
           }}
-          style={styles.backBtn}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
+        />
         <Text style={styles.headerTitle}>Password Recovery</Text>
       </View>
 

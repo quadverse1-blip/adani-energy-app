@@ -28,6 +28,7 @@ import { TechnicianDrawerModal } from '../../components/navigation/TechnicianDra
 import { useAuthStore } from '../../store/useAuthStore';
 import { useAttendanceStore } from '../../store/useAttendanceStore';
 import { CONFIG } from '../../config';
+import { AppBackButton } from '../../components/common/AppBackButton';
 import { COLORS, RADII, SHADOWS } from '../../constants/theme';
 import { AppCard } from '../../components/common/AppCard';
 import { AppButton } from '../../components/common/AppButton';
@@ -55,21 +56,18 @@ export const ProfileScreen: React.FC = () => {
     <View style={[styles.screen, { paddingTop: Math.max(insets.top, 16) }]}>
       {/* Top Navigation Bar */}
       <View style={styles.topNavHeader}>
-        <TouchableOpacity
-          style={styles.navHeaderBtn}
-          onPress={() => openDrawer('Profile')}
-          activeOpacity={0.7}
-        >
-          <Menu size={20} color="#0F172A" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <AppBackButton />
+          <TouchableOpacity
+            style={styles.navHeaderBtn}
+            onPress={() => openDrawer('Profile')}
+            activeOpacity={0.7}
+          >
+            <Menu size={20} color="#0F172A" />
+          </TouchableOpacity>
+        </View>
         <Text style={styles.navHeaderTitle}>Engineer Profile</Text>
-        <TouchableOpacity
-          style={styles.navHeaderBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={18} color="#475569" />
-        </TouchableOpacity>
+        <View style={{ width: 38 }} />
       </View>
 
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>

@@ -46,6 +46,7 @@ import { useAdminDrawerStore } from '../../store/useAdminDrawerStore';
 import { AdminDrawerModal } from '../../components/navigation/AdminDrawerModal';
 import { ShiftRouteModal } from '../../components/common/ShiftRouteModal';
 import { resolvePhotoUrl } from '../../utils/imageUrl';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 const { width } = Dimensions.get('window');
 
@@ -524,6 +525,8 @@ export const AttendanceLogsScreen: React.FC = () => {
           { paddingTop: Math.max(insets.top, 20) + 8 },
         ]}
       >
+        <AppBackButton style={{ marginRight: 8 }} />
+
         <TouchableOpacity delayPressIn={0}
           style={styles.menuBtn}
           onPress={() => openDrawer('AttendanceLogs')}

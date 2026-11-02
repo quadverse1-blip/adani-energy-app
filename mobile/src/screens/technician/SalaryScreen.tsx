@@ -42,6 +42,7 @@ import { TechnicianDrawerModal } from '../../components/navigation/TechnicianDra
 import { salaryService } from '../../services/salaryService';
 import { SalarySlip } from '../../types';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -167,6 +168,8 @@ export const SalaryScreen: React.FC = () => {
       {/* Top Navigation Bar */}
       <View style={[styles.topNavBar, { paddingTop: Math.max(insets.top, 14) + 6 }]}>
         <View style={styles.topNavLeft}>
+          <AppBackButton />
+
           <TouchableOpacity
             style={styles.navRoundBtn}
             onPress={() => (isSupervisor ? openSupervisorDrawer('Salary') : openTechnicianDrawer('Salary'))}
@@ -174,15 +177,6 @@ export const SalaryScreen: React.FC = () => {
             accessibilityLabel="Open Navigation Menu"
           >
             <Menu size={19} color="#0F172A" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.navRoundBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-            accessibilityLabel="Back"
-          >
-            <ArrowLeft size={18} color="#0F172A" />
           </TouchableOpacity>
         </View>
 

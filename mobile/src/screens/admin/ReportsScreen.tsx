@@ -46,6 +46,7 @@ import { AdminDrawerModal } from '../../components/navigation/AdminDrawerModal';
 import { useSupervisorDrawerStore } from '../../store/useSupervisorDrawerStore';
 import { SupervisorDrawerModal } from '../../components/navigation/SupervisorDrawerModal';
 import { useAuthStore } from '../../store/useAuthStore';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -481,6 +482,8 @@ Synchronized across all dashboards and muster reports.`,
       {/* ========================================================================= */}
       <View style={[styles.topHeaderBar, { paddingTop: Math.max(insets.top, 16) + 6 }]}>
         <View style={styles.topHeaderRow1}>
+          <AppBackButton onPress={handleBack} style={{ marginRight: 8 }} />
+
           <TouchableOpacity delayPressIn={0}
             style={styles.menuCircleBtn}
             onPress={handleMenuPress}
@@ -488,15 +491,6 @@ Synchronized across all dashboards and muster reports.`,
             accessibilityLabel="Open Navigation Menu"
           >
             <Menu size={20} color="#0F172A" />
-          </TouchableOpacity>
-
-          <TouchableOpacity delayPressIn={0}
-            style={styles.backCircleBtn}
-            onPress={handleBack}
-            activeOpacity={0.7}
-            accessibilityLabel="Go Back"
-          >
-            <ArrowLeft size={18} color="#0F172A" />
           </TouchableOpacity>
 
           <View style={{ marginLeft: 8, flex: 1, paddingRight: 40 }}>

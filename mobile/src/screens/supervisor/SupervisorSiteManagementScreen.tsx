@@ -39,6 +39,7 @@ import { siteService } from '../../services/siteService';
 import { User, Substation } from '../../types';
 import { COLORS, SHADOWS } from '../../constants/theme';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 const FALLBACK_EMPLOYEES: User[] = [
   {
@@ -507,6 +508,8 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
       {/* 1. Header Bar */}
       <View style={[styles.headerRow, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
         <View style={styles.headerLeft}>
+          <AppBackButton style={{ marginRight: 8 }} />
+
           <TouchableOpacity delayPressIn={0}
             style={styles.menuBtn}
             onPress={() => openDrawer('Sites')}
@@ -514,15 +517,6 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
             accessibilityLabel="Open Navigation Menu"
           >
             <Menu size={20} color="#0F172A" />
-          </TouchableOpacity>
-
-          <TouchableOpacity delayPressIn={0}
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-            accessibilityLabel="Back"
-          >
-            <ArrowLeft size={18} color="#0F172A" />
           </TouchableOpacity>
         </View>
 

@@ -29,6 +29,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { attendanceService } from '../../services/attendanceService';
 import { COLORS, SHADOWS } from '../../constants/theme';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 type PeriodType = 'Daily' | 'Weekly' | 'Monthly';
 type AttendanceStatusType = 'half_day' | 'late' | 'present' | 'absent';
@@ -276,6 +277,8 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
       {/* Top Header Row with Menu & Back Navigation */}
       <View style={[styles.headerRow, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
         <View style={styles.headerLeft}>
+          <AppBackButton onPress={handleBack} style={{ marginRight: 8 }} />
+
           <TouchableOpacity delayPressIn={0}
             style={styles.menuBtn}
             onPress={() => openDrawer('AttendanceLogs')}
@@ -283,15 +286,6 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
             accessibilityLabel="Open Supervisor Navigation Menu"
           >
             <Menu size={20} color="#0F172A" />
-          </TouchableOpacity>
-
-          <TouchableOpacity delayPressIn={0}
-            style={styles.backBtn}
-            onPress={handleBack}
-            activeOpacity={0.7}
-            accessibilityLabel="Back to Dashboard"
-          >
-            <ArrowLeft size={18} color="#0F172A" />
           </TouchableOpacity>
         </View>
 

@@ -37,6 +37,7 @@ import { AdminDrawerModal } from '../../components/navigation/AdminDrawerModal';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ConfirmationModal } from '../../components/common/ConfirmationModal';
 import { triggerHaptic } from '../../utils/haptics';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 export const HolidayManagementScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -276,6 +277,8 @@ export const HolidayManagementScreen: React.FC = () => {
       {/* Top Header Card */}
       <View style={[styles.headerCard, { paddingTop: Math.max(insets.top, 16) }]}>
         <View style={styles.headerRow}>
+          <AppBackButton onPress={handleBack} style={{ marginRight: 8 }} />
+
           <TouchableOpacity delayPressIn={0}
             style={styles.headerIconBtn}
             onPress={() => openDrawer('Holidays')}
@@ -283,15 +286,6 @@ export const HolidayManagementScreen: React.FC = () => {
             accessibilityLabel="Open Navigation Menu"
           >
             <Menu size={20} color="#0F172A" />
-          </TouchableOpacity>
-
-          <TouchableOpacity delayPressIn={0}
-            style={[styles.headerIconBtn, { marginLeft: 8 }]}
-            onPress={handleBack}
-            activeOpacity={0.7}
-            accessibilityLabel="Go Back"
-          >
-            <ArrowLeft size={18} color="#0F172A" />
           </TouchableOpacity>
 
           <View style={{ flex: 1, marginLeft: 12 }}>

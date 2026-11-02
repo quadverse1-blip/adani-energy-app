@@ -35,6 +35,7 @@ import { COLORS, RADII } from '../../constants/theme';
 import { AppCard } from '../../components/common/AppCard';
 import { AppButton } from '../../components/common/AppButton';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 // Safely import react-native-webview for native devices
 let WebView: any = null;
@@ -429,21 +430,18 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
       {/* Top Navigation Bar */}
       <View style={styles.topNavHeader}>
-        <TouchableOpacity delayPressIn={0}
-          style={styles.navHeaderBtn}
-          onPress={() => openDrawer('SiteDetails')}
-          activeOpacity={0.7}
-        >
-          <Menu size={20} color="#0F172A" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <AppBackButton />
+          <TouchableOpacity delayPressIn={0}
+            style={styles.navHeaderBtn}
+            onPress={() => openDrawer('SiteDetails')}
+            activeOpacity={0.7}
+          >
+            <Menu size={20} color="#0F172A" />
+          </TouchableOpacity>
+        </View>
         <Text style={styles.navHeaderTitle}>Substation Specifications</Text>
-        <TouchableOpacity delayPressIn={0}
-          style={styles.navHeaderBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={18} color="#475569" />
-        </TouchableOpacity>
+        <View style={{ width: 38 }} />
       </View>
 
       {/* Multiple Assigned Sites Switcher Bar (Rohit's 2 assigned sites: Surat ST-1 & st. joseph) */}

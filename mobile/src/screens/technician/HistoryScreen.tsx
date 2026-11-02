@@ -33,6 +33,7 @@ import { KPICard } from '../../components/common/KPICard';
 import { AttendanceCard } from '../../components/attendance/AttendanceCard';
 import { BottomSheet } from '../../components/common/BottomSheet';
 import { StatusBadge } from '../../components/common/StatusBadge';
+import { AppBackButton } from '../../components/common/AppBackButton';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { EmptyState } from '../../components/common/EmptyState';
 
@@ -222,21 +223,18 @@ export const HistoryScreen: React.FC = () => {
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
       {/* Top Header Bar */}
       <View style={styles.topNavHeader}>
-        <TouchableOpacity delayPressIn={0}
-          style={styles.navHeaderBtn}
-          onPress={() => openDrawer('History')}
-          activeOpacity={0.7}
-        >
-          <Menu size={20} color="#0F172A" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <AppBackButton />
+          <TouchableOpacity delayPressIn={0}
+            style={styles.navHeaderBtn}
+            onPress={() => openDrawer('History')}
+            activeOpacity={0.7}
+          >
+            <Menu size={20} color="#0F172A" />
+          </TouchableOpacity>
+        </View>
         <Text style={styles.navHeaderTitle}>Attendance History</Text>
-        <TouchableOpacity delayPressIn={0}
-          style={styles.navHeaderBtn}
-          onPress={() => navigation.navigate('Dashboard')}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={18} color="#475569" />
-        </TouchableOpacity>
+        <View style={{ width: 38 }} />
       </View>
 
       {/* Scope Filter: Monthly, Weekly, Daily */}

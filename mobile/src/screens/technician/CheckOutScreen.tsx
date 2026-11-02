@@ -26,12 +26,15 @@ import { AppCard } from '../../components/common/AppCard';
 import { AppButton } from '../../components/common/AppButton';
 import { ConfirmationModal } from '../../components/common/ConfirmationModal';
 import { formatTimeIST } from '../../utils/shiftUtils';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 interface CheckOutScreenProps {
   navigation: any;
 }
 
 export const CheckOutScreen: React.FC<CheckOutScreenProps> = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const {
     todayStatus,
@@ -153,11 +156,28 @@ export const CheckOutScreen: React.FC<CheckOutScreenProps> = ({ navigation }) =>
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.screenHeader}>Shift Check-Out</Text>
-      <Text style={styles.screenSub}>
-        Conclude working shift telemetry and log official departure
-      </Text>
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{
+        paddingTop: Math.max(insets.top, 16) + 8,
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+      }}>
+        <AppBackButton />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Shift Check-Out</Text>
+          <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>
+            Conclude working shift telemetry and log official departure
+          </Text>
+        </View>
+      </View>
+
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
       {/* Early departure warning banner if before 18:00 */}
       {isEarlyCheckout && isTechnician ? (
@@ -275,7 +295,8 @@ export const CheckOutScreen: React.FC<CheckOutScreenProps> = ({ navigation }) =>
         </View>
       </ConfirmationModal>
     </ScrollView>
-  );
+  </View>
+);
 };
 
 const styles = StyleSheet.create({

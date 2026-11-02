@@ -48,6 +48,7 @@ import { AppCard } from '../../components/common/AppCard';
 import { AppButton } from '../../components/common/AppButton';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useAdminDrawerStore } from '../../store/useAdminDrawerStore';
+import { AppBackButton } from '../../components/common/AppBackButton';
 import { AdminDrawerModal } from '../../components/navigation/AdminDrawerModal';
 
 const { width, height } = Dimensions.get('window');
@@ -532,6 +533,8 @@ export const SitesScreen: React.FC = () => {
           { paddingTop: Math.max(insets.top, 24) + 8 },
         ]}
       >
+        <AppBackButton style={{ marginRight: 8 }} />
+
         <TouchableOpacity delayPressIn={0}
           style={styles.menuBtn}
           onPress={() => openDrawer('Sites')}

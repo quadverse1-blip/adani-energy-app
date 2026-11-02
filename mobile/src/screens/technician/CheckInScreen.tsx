@@ -49,6 +49,7 @@ import { triggerHaptic } from '../../utils/haptics';
 import { Substation } from '../../types';
 import { COLORS } from '../../constants/theme';
 import { getShiftInfo, formatTimeIST } from '../../utils/shiftUtils';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 const { width } = Dimensions.get('window');
 const isTablet = width >= 800;
@@ -384,14 +385,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
       {/* Top Header Bar */}
       <View style={[styles.topHeaderBar, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
         <View style={styles.headerLeftWrap}>
-          <TouchableOpacity delayPressIn={0}
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-            accessibilityLabel="Back"
-          >
-            <ArrowLeft size={20} color="#0F172A" />
-          </TouchableOpacity>
+          <AppBackButton />
           <View>
             <Text style={styles.screenTitle}>Field Shift Check-In</Text>
           </View>

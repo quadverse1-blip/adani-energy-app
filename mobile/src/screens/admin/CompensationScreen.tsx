@@ -45,6 +45,7 @@ import { SalarySlip, SalarySummaryResponse, User, SalaryConfig } from '../../typ
 import { UploadSalarySlipModal } from '../../components/compensation/UploadSalarySlipModal';
 import { AdminDrawerModal } from '../../components/navigation/AdminDrawerModal';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -273,6 +274,7 @@ export const CompensationScreen: React.FC = () => {
       {/* 1. Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
+          <AppBackButton style={{ marginRight: 8 }} />
           <TouchableOpacity style={styles.menuBtn} onPress={() => openDrawer()} activeOpacity={0.7}>
             <Menu size={20} color="#0F172A" />
           </TouchableOpacity>

@@ -48,6 +48,7 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useAdminDrawerStore } from '../../store/useAdminDrawerStore';
 import { AdminDrawerModal } from '../../components/navigation/AdminDrawerModal';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 const DESIGNATION_OPTIONS = [
   'Junior Engineer',
@@ -410,6 +411,9 @@ export const EmployeesScreen: React.FC = () => {
           { paddingTop: Math.max(insets.top, 24) + 8 },
         ]}
       >
+        {/* Left-Aligned Back Button */}
+        <AppBackButton style={{ marginRight: 8 }} />
+
         {/* 3-Line Hamburger Menu Icon Button */}
         <TouchableOpacity delayPressIn={0}
           style={styles.menuBtn}

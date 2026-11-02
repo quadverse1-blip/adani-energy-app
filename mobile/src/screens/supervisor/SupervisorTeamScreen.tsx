@@ -30,6 +30,7 @@ import { AppCard } from '../../components/common/AppCard';
 import { AppButton } from '../../components/common/AppButton';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { AppBackButton } from '../../components/common/AppBackButton';
 
 export const SupervisorTeamScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -95,6 +96,7 @@ export const SupervisorTeamScreen: React.FC = () => {
         }
       >
         <View style={styles.header}>
+          <AppBackButton style={{ marginRight: 8 }} />
           <TouchableOpacity delayPressIn={0}
             style={styles.menuBtn}
             onPress={() => openDrawer('SupervisorTeam')}
