@@ -1,6 +1,7 @@
 import urllib.parse
 import uuid
 import re
+from datetime import datetime
 from io import BytesIO, StringIO
 import csv
 from typing import List, Optional, Dict, Any
@@ -58,7 +59,11 @@ async def list_employees(
             latitude=emp.get("latitude"),
             longitude=emp.get("longitude"),
             locationName=emp.get("locationName"),
-            shiftStatus=emp.get("shiftStatus", "present")
+            shiftStatus=emp.get("shiftStatus", "present"),
+            assignedBy=emp.get("assignedBy"),
+            assignedByPhone=emp.get("assignedByPhone"),
+            assignedByRole=emp.get("assignedByRole"),
+            assignedAt=emp.get("assignedAt")
         ))
     return results
 
@@ -392,7 +397,11 @@ async def get_employee(
         latitude=emp.get("latitude"),
         longitude=emp.get("longitude"),
         locationName=emp.get("locationName"),
-        shiftStatus=emp.get("shiftStatus", "present")
+        shiftStatus=emp.get("shiftStatus", "present"),
+        assignedBy=emp.get("assignedBy"),
+        assignedByPhone=emp.get("assignedByPhone"),
+        assignedByRole=emp.get("assignedByRole"),
+        assignedAt=emp.get("assignedAt")
     )
 
 @router.post("", response_model=EmployeeResponse)
@@ -408,6 +417,20 @@ async def create_employee(
     assigned_ids = emp_in.assignedSiteIds or []
     assigned_primary = assigned_ids[0] if assigned_ids else None
     
+    # Resolve dynamic assigner details from logged-in profile
+    assigner_id = token_data.get("id") or token_data.get("employeeId") or token_data.get("sub")
+    assigner = None
+    if assigner_id:
+        assigner = db.get_user_by_id(assigner_id) or db.get_employee(assigner_id) or db.find_employee_by_identifier(assigner_id)
+    if not assigner and token_data.get("employeeId"):
+        assigner = db.get_employee(token_data["employeeId"]) or db.find_employee_by_identifier(token_data["employeeId"])
+
+    assigner_role = (assigner.get("role") if assigner else None) or token_data.get("role") or "admin"
+    default_name = "Anita Sharma" if assigner_role == "admin" else "Operations Supervisor"
+    assigner_name = (assigner.get("name") if assigner else None) or token_data.get("name") or default_name
+    assigner_phone = (assigner.get("phone") or assigner.get("mobileNumber") if assigner else None) or token_data.get("phone") or ("9876543299" if assigner_role == "admin" else "9876543214")
+    now_iso = datetime.utcnow().isoformat()
+
     new_emp = {
         "_id": new_id,
         "employeeId": emp_in.employeeId,
@@ -427,7 +450,22 @@ async def create_employee(
         "latitude": emp_in.latitude,
         "longitude": emp_in.longitude,
         "locationName": emp_in.locationName,
-        "shiftStatus": emp_in.shiftStatus or "present"
+        "shiftStatus": emp_in.shiftStatus or "present",
+        "assignedBy": assigner_name if assigned_ids else None,
+        "assignedByPhone": assigner_phone if assigned_ids else None,
+        "assignedByRole": assigner_role if assigned_ids else None,
+        "assignedById": assigner_id if assigned_ids else None,
+        "assignedAt": now_iso if assigned_ids else None,
+        "siteAssignments": {
+            str(s_id): {
+                "siteId": str(s_id),
+                "assignedBy": assigner_name,
+                "assignedByPhone": assigner_phone,
+                "assignedByRole": assigner_role,
+                "assignedById": assigner_id,
+                "assignedAt": now_iso
+            } for s_id in assigned_ids
+        }
     }
     db.employees[new_id] = new_emp
     db.set_firestore_document("employees", new_id, new_emp)
@@ -459,6 +497,46 @@ async def update_employee(
             primary_site = site_ids[0]
         emp["assignedSiteId"] = primary_site
         emp["assignedSiteIds"] = site_ids
+
+        # Dynamically fetch assigner details from logged-in admin or supervisor profile
+        assigner_id = token_data.get("id") or token_data.get("employeeId") or token_data.get("sub")
+        assigner = None
+        if assigner_id:
+            assigner = db.get_user_by_id(assigner_id) or db.get_employee(assigner_id) or db.find_employee_by_identifier(assigner_id)
+        if not assigner and token_data.get("employeeId"):
+            assigner = db.get_employee(token_data["employeeId"]) or db.find_employee_by_identifier(token_data["employeeId"])
+
+        assigner_role = (assigner.get("role") if assigner else None) or token_data.get("role") or "supervisor"
+        default_name = "Anita Sharma" if assigner_role == "admin" else "Supervisor"
+        assigner_name = (assigner.get("name") if assigner else None) or token_data.get("name") or default_name
+        assigner_phone = (assigner.get("phone") or assigner.get("mobileNumber") if assigner else None) or token_data.get("phone") or ("9876543299" if assigner_role == "admin" else "9876543214")
+        now_iso = datetime.utcnow().isoformat()
+
+        if site_ids or primary_site:
+            emp["assignedBy"] = assigner_name
+            emp["assignedByPhone"] = assigner_phone
+            emp["assignedByRole"] = assigner_role
+            emp["assignedById"] = assigner_id
+            emp["assignedAt"] = now_iso
+            
+            if "siteAssignments" not in emp or not isinstance(emp.get("siteAssignments"), dict):
+                emp["siteAssignments"] = {}
+            for s_id in site_ids:
+                emp["siteAssignments"][str(s_id)] = {
+                    "siteId": str(s_id),
+                    "assignedBy": assigner_name,
+                    "assignedByPhone": assigner_phone,
+                    "assignedByRole": assigner_role,
+                    "assignedById": assigner_id,
+                    "assignedAt": now_iso
+                }
+        else:
+            emp["assignedBy"] = None
+            emp["assignedByPhone"] = None
+            emp["assignedByRole"] = None
+            emp["assignedById"] = None
+            emp["assignedAt"] = None
+            emp["siteAssignments"] = {}
 
     # Update site details if primary assigned
     if emp.get("assignedSiteId"):

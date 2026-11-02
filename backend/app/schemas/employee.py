@@ -18,6 +18,10 @@ class EmployeeCreate(BaseModel):
     locationName: Optional[str] = None
     status: Optional[str] = "active"
     shiftStatus: Optional[str] = "present"
+    assignedBy: Optional[str] = None
+    assignedByPhone: Optional[str] = None
+    assignedByRole: Optional[str] = None
+    assignedAt: Optional[str] = None
 
 class EmployeeUpdate(BaseModel):
     name: Optional[str] = None
@@ -35,6 +39,10 @@ class EmployeeUpdate(BaseModel):
     longitude: Optional[float] = None
     locationName: Optional[str] = None
     shiftStatus: Optional[str] = None
+    assignedBy: Optional[str] = None
+    assignedByPhone: Optional[str] = None
+    assignedByRole: Optional[str] = None
+    assignedAt: Optional[str] = None
 
 class EmployeeResponse(BaseModel):
     id: str
@@ -55,6 +63,10 @@ class EmployeeResponse(BaseModel):
     longitude: Optional[float] = None
     locationName: Optional[str] = None
     shiftStatus: Optional[str] = "present"
+    assignedBy: Optional[str] = None
+    assignedByPhone: Optional[str] = None
+    assignedByRole: Optional[str] = None
+    assignedAt: Optional[str] = None
 
 class BulkEmployeeItem(BaseModel):
     employeeId: str
@@ -69,6 +81,10 @@ class BulkEmployeeItem(BaseModel):
     circle: Optional[str] = None
     division: Optional[str] = None
     department: Optional[str] = "Smart Meter Operations"
+    assignedBy: Optional[str] = None
+    assignedByPhone: Optional[str] = None
+    assignedByRole: Optional[str] = None
+    assignedAt: Optional[str] = None
 
 class BulkUploadResponse(BaseModel):
     success: bool

@@ -92,10 +92,36 @@ async def get_today_attendance(
         assigned_site_ids = [str(record.get("siteId"))]
 
     assigned_sites = []
+    site_assignments = emp.get("siteAssignments") or {} if emp else {}
     for s_id in assigned_site_ids:
         raw = db.get_site(s_id)
         if raw:
             s_obj = {**raw, "id": raw.get("_id", raw.get("id"))}
+            specific_assign = site_assignments.get(str(s_id)) or {}
+            
+            # Determine assigner details
+            s_assigned_by = specific_assign.get("assignedBy") or (emp.get("assignedBy") if emp else None)
+            s_assigned_phone = specific_assign.get("assignedByPhone") or (emp.get("assignedByPhone") if emp else None)
+            s_assigned_role = specific_assign.get("assignedByRole") or (emp.get("assignedByRole") if emp else None)
+            s_assigned_at = specific_assign.get("assignedAt") or (emp.get("assignedAt") if emp else None)
+
+            # Fallback if seed or uninitialized: use site manager
+            if not s_assigned_by:
+                mgr = raw.get("manager") or {}
+                if mgr.get("name"):
+                    s_assigned_by = mgr.get("name")
+                    s_assigned_phone = mgr.get("phone", "")
+                    s_assigned_role = "supervisor"
+                else:
+                    s_assigned_by = "Anita Sharma"
+                    s_assigned_phone = "9876543299"
+                    s_assigned_role = "admin"
+
+            s_obj["assignedBy"] = s_assigned_by
+            s_obj["assignedByPhone"] = s_assigned_phone
+            s_obj["assignedByRole"] = s_assigned_role
+            s_obj["assignedAt"] = s_assigned_at
+
             if not any(x.get("id") == s_obj["id"] for x in assigned_sites):
                 assigned_sites.append(s_obj)
 
@@ -108,7 +134,11 @@ async def get_today_attendance(
             "message": "Shift Not Started",
             "record": None,
             "site": primary_site_obj,
-            "sites": assigned_sites
+            "sites": assigned_sites,
+            "assignedBy": primary_site_obj.get("assignedBy") if primary_site_obj else None,
+            "assignedByPhone": primary_site_obj.get("assignedByPhone") if primary_site_obj else None,
+            "assignedByRole": primary_site_obj.get("assignedByRole") if primary_site_obj else None,
+            "assignedAt": primary_site_obj.get("assignedAt") if primary_site_obj else None
         }
     
     # Calculate live elapsed duration if currently active
@@ -124,7 +154,11 @@ async def get_today_attendance(
         "liveElapsedMinutes": live_elapsed_minutes,
         "record": record,
         "site": primary_site_obj,
-        "sites": assigned_sites
+        "sites": assigned_sites,
+        "assignedBy": primary_site_obj.get("assignedBy") if primary_site_obj else None,
+        "assignedByPhone": primary_site_obj.get("assignedByPhone") if primary_site_obj else None,
+        "assignedByRole": primary_site_obj.get("assignedByRole") if primary_site_obj else None,
+        "assignedAt": primary_site_obj.get("assignedAt") if primary_site_obj else None
     }
 
 @router.get("/history")

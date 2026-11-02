@@ -49,3 +49,7 @@ class SiteResponse(BaseModel):
     activeEngineersCount: Optional[int] = 0
     workingHours: Optional[str] = "09:00 AM - 06:00 PM"
     status: str = "active"
+    assignedBy: Optional[str] = None
+    assignedByPhone: Optional[str] = None
+    assignedByRole: Optional[str] = None
+    assignedAt: Optional[str] = None

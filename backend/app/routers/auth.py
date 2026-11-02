@@ -67,7 +67,11 @@ async def login(credentials: LoginRequest):
         phone=user.get("phone"),
         email=user.get("email"),
         avatar=user.get("avatar"),
-        department=user.get("department")
+        department=user.get("department"),
+        assignedBy=user.get("assignedBy"),
+        assignedByPhone=user.get("assignedByPhone"),
+        assignedByRole=user.get("assignedByRole"),
+        assignedAt=user.get("assignedAt")
     )
 
     return LoginResponse(
@@ -100,7 +104,11 @@ async def get_current_user_profile(token_data: dict = Depends(get_current_user_t
         phone=user.get("phone"),
         email=user.get("email"),
         avatar=user.get("avatar"),
-        department=user.get("department")
+        department=user.get("department"),
+        assignedBy=user.get("assignedBy"),
+        assignedByPhone=user.get("assignedByPhone"),
+        assignedByRole=user.get("assignedByRole"),
+        assignedAt=user.get("assignedAt")
     )
 
 @router.post("/forgot-password")

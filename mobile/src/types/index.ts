@@ -19,6 +19,10 @@ export interface User {
   locationName?: string;
   status?: string;
   shiftStatus?: string;
+  assignedBy?: string;
+  assignedByPhone?: string;
+  assignedByRole?: string;
+  assignedAt?: string;
 }
 
 export interface ManagerInfo {
@@ -44,6 +48,10 @@ export interface Substation {
   activeEngineersCount?: number;
   status: 'active' | 'inactive';
   workingHours?: string;
+  assignedBy?: string;
+  assignedByPhone?: string;
+  assignedByRole?: string;
+  assignedAt?: string;
 }
 
 export interface PunchRecord {

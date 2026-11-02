@@ -22,6 +22,8 @@ import {
   ArrowLeft,
   Building,
   CheckCircle,
+  UserCheck,
+  PhoneCall,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTechnicianDrawerStore } from '../../store/useTechnicianDrawerStore';
@@ -537,6 +539,82 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
             </View>
           </View>
         </AppCard>
+
+        {/* Assignment Details & Assigner Authority Card */}
+        {(site.assignedBy || (user as any)?.assignedBy || site.manager?.name) && (
+          <AppCard style={styles.card}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <UserCheck size={16} color="#2563EB" />
+                <Text style={styles.sectionTitle}>ASSIGNMENT AUTHORITY</Text>
+              </View>
+              <View style={{
+                backgroundColor: ((site.assignedByRole || (user as any)?.assignedByRole || '').toLowerCase().includes('admin')) ? '#EFF6FF' : '#F5F3FF',
+                borderColor: ((site.assignedByRole || (user as any)?.assignedByRole || '').toLowerCase().includes('admin')) ? '#BFDBFE' : '#DDD6FE',
+                borderWidth: 1,
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 6,
+              }}>
+                <Text style={{
+                  fontSize: 9,
+                  fontWeight: '800',
+                  color: ((site.assignedByRole || (user as any)?.assignedByRole || '').toLowerCase().includes('admin')) ? '#1D4ED8' : '#6D28D9',
+                }}>
+                  {((site.assignedByRole || (user as any)?.assignedByRole || 'Supervisor')).toUpperCase()}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>Assigned By</Text>
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 1 }}>
+                  {site.assignedBy || (user as any)?.assignedBy || site.manager?.name || 'Operations Lead'}
+                </Text>
+                {(site.assignedByPhone || (user as any)?.assignedByPhone || site.manager?.phone) ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                    <Phone size={12} color="#059669" style={{ marginRight: 5 }} />
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginRight: 4 }}>Contact:</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const p = (site.assignedByPhone || (user as any)?.assignedByPhone || site.manager?.phone || '').replace(/[^0-9+]/g, '');
+                        if (p) Linking.openURL(`tel:${p}`);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#0284C7', textDecorationLine: 'underline' }}>
+                        {site.assignedByPhone || (user as any)?.assignedByPhone || site.manager?.phone}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </View>
+
+              {(site.assignedByPhone || (user as any)?.assignedByPhone || site.manager?.phone) ? (
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#16A34A',
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    marginLeft: 10,
+                  }}
+                  onPress={() => {
+                    const p = (site.assignedByPhone || (user as any)?.assignedByPhone || site.manager?.phone || '').replace(/[^0-9+]/g, '');
+                    if (p) Linking.openURL(`tel:${p}`);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <PhoneCall size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>Call Assigner</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </AppCard>
+        )}
 
         {/* Substation Manager Profile Card with Real Image */}
         <AppCard style={styles.card}>

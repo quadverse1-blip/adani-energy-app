@@ -23,6 +23,10 @@ export interface TodayAttendanceResult {
   record: AttendanceRecord | null;
   site: Substation | null;
   sites?: Substation[];
+  assignedBy?: string;
+  assignedByPhone?: string;
+  assignedByRole?: string;
+  assignedAt?: string;
 }
 
 export interface HistoryResult {

@@ -11,6 +11,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Image,
+  Linking,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,6 +45,9 @@ import {
   Download,
   Building2,
   Banknote,
+  Phone,
+  PhoneCall,
+  UserCheck,
 } from 'lucide-react-native';
 import { salaryService } from '../../services/salaryService';
 import { SalarySlip } from '../../types';
@@ -109,6 +113,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
     todayStatus,
     todayRecord,
     assignedSite,
+    assignedSites,
     liveElapsedSeconds,
     fetchTodayAttendance,
     incrementTimer,
@@ -795,6 +800,29 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         {/* 2B. MY ASSIGNED WORK SITE CARD (Requirement 1)                 */}
         {/* ============================================================== */}
         <View style={styles.assignedSiteCard}>
+          {/* Multiple Assigned Sites Switcher Bar if Employee has > 1 sites */}
+          {assignedSites && assignedSites.length > 1 && (
+            <View style={styles.siteTabsContainer}>
+              {assignedSites.map((siteItem) => {
+                const sId = siteItem.id || (siteItem as any)._id;
+                const isSelected = (substation?.id || (substation as any)?._id) === sId;
+                return (
+                  <TouchableOpacity
+                    key={sId}
+                    style={[styles.siteTabPill, isSelected && styles.siteTabPillActive]}
+                    onPress={() => setSubstation(siteItem)}
+                    activeOpacity={0.8}
+                  >
+                    <Building2 size={12} color={isSelected ? '#1D4ED8' : '#64748B'} style={{ marginRight: 4 }} />
+                    <Text style={[styles.siteTabPillText, isSelected && styles.siteTabPillTextActive]} numberOfLines={1}>
+                      {siteItem.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
           <View style={styles.assignedSiteHeader}>
             <View style={styles.assignedSiteIconBox}>
               <Building2 size={20} color="#2563EB" />
@@ -817,11 +845,82 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
           {substation ? (
             <View style={styles.assignedSiteBody}>
+              {/* Site Name and Location */}
               <View style={styles.assignedDetailRow}>
-                <MapPin size={14} color="#64748B" style={{ marginTop: 2, marginRight: 8 }} />
+                <MapPin size={14} color="#2563EB" style={{ marginTop: 2, marginRight: 8 }} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.assignedDetailLabel}>Site Location / Address</Text>
-                  <Text style={styles.assignedDetailValue}>{substation.address || 'Address on record'}</Text>
+                  <Text style={styles.assignedDetailLabel}>Site Name & Location</Text>
+                  <Text style={[styles.assignedDetailValue, { fontWeight: '700', color: '#0F172A' }]}>
+                    {substation.name}
+                  </Text>
+                  <Text style={styles.assignedDetailValue}>
+                    {substation.address || 'Address on record'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Assigner Authority & Contact Details (Admin/Supervisor) */}
+              <View style={styles.assignerCard}>
+                <View style={styles.assignerHeaderRow}>
+                  <View style={styles.assignerTitleLeft}>
+                    <UserCheck size={14} color="#2563EB" />
+                    <Text style={styles.assignerHeaderTitle}>ASSIGNED BY</Text>
+                  </View>
+                  <View style={[
+                    styles.assignerRoleBadge,
+                    ((substation.assignedByRole || (user as any)?.assignedByRole || '').toLowerCase().includes('admin'))
+                      ? styles.roleBadgeAdmin
+                      : styles.roleBadgeSupervisor
+                  ]}>
+                    <Text style={[
+                      styles.assignerRoleText,
+                      ((substation.assignedByRole || (user as any)?.assignedByRole || '').toLowerCase().includes('admin'))
+                        ? styles.roleTextAdmin
+                        : styles.roleTextSupervisor
+                    ]}>
+                      {((substation.assignedByRole || (user as any)?.assignedByRole || 'Supervisor')).toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.assignerBodyRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.assignerNameVal}>
+                      {substation.assignedBy || (user as any)?.assignedBy || substation.manager?.name || 'Operations Lead'}
+                    </Text>
+                    
+                    {(substation.assignedByPhone || (user as any)?.assignedByPhone || substation.manager?.phone) ? (
+                      <View style={styles.assignerPhoneRow}>
+                        <Phone size={12} color="#059669" style={{ marginRight: 5 }} />
+                        <Text style={styles.assignerPhoneLabel}>Contact:</Text>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const p = (substation.assignedByPhone || (user as any)?.assignedByPhone || substation.manager?.phone || '').replace(/[^0-9+]/g, '');
+                            if (p) Linking.openURL(`tel:${p}`);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.assignerPhoneVal}>
+                            {substation.assignedByPhone || (user as any)?.assignedByPhone || substation.manager?.phone}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {(substation.assignedByPhone || (user as any)?.assignedByPhone || substation.manager?.phone) ? (
+                    <TouchableOpacity
+                      style={styles.assignerCallBtn}
+                      onPress={() => {
+                        const p = (substation.assignedByPhone || (user as any)?.assignedByPhone || substation.manager?.phone || '').replace(/[^0-9+]/g, '');
+                        if (p) Linking.openURL(`tel:${p}`);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <PhoneCall size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={styles.assignerCallBtnText}>Call</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               </View>
 
@@ -1908,6 +2007,125 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#B45309',
     lineHeight: 18,
+  },
+  siteTabsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+    gap: 8,
+  },
+  siteTabPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  siteTabPillActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#3B82F6',
+  },
+  siteTabPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  siteTabPillTextActive: {
+    color: '#1D4ED8',
+  },
+  assignerCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    marginVertical: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  assignerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  assignerTitleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  assignerHeaderTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1E293B',
+    letterSpacing: 0.5,
+  },
+  assignerRoleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  roleBadgeAdmin: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  roleBadgeSupervisor: {
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+  },
+  assignerRoleText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  roleTextAdmin: {
+    color: '#1D4ED8',
+  },
+  roleTextSupervisor: {
+    color: '#6D28D9',
+  },
+  assignerBodyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  assignerNameVal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  assignerPhoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  assignerPhoneLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    marginRight: 4,
+  },
+  assignerPhoneVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284C7',
+    textDecorationLine: 'underline',
+  },
+  assignerCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginLeft: 10,
+  },
+  assignerCallBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   container: {
     flex: 1,

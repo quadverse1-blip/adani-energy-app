@@ -17,6 +17,10 @@ class UserProfile(BaseModel):
     email: Optional[str] = None
     avatar: Optional[str] = None
     department: Optional[str] = None
+    assignedBy: Optional[str] = None
+    assignedByPhone: Optional[str] = None
+    assignedByRole: Optional[str] = None
+    assignedAt: Optional[str] = None
 
 class LoginResponse(BaseModel):
     access_token: str

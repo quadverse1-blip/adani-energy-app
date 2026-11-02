@@ -28,7 +28,23 @@ async def list_sites(token_data: dict = Depends(get_current_user_token)):
             raw_sites = []
 
     response = []
+    emp = None
+    if user_role == "technician":
+        emp_id = token_data.get("id")
+        emp = db.get_employee(emp_id) or db.find_employee_by_identifier(emp_id)
+        
     for s in raw_sites:
+        site_assignments = emp.get("siteAssignments") or {} if emp else {}
+        specific_assign = site_assignments.get(str(s["_id"])) or {}
+        assigned_by = specific_assign.get("assignedBy") or (emp.get("assignedBy") if emp else None)
+        assigned_by_phone = specific_assign.get("assignedByPhone") or (emp.get("assignedByPhone") if emp else None)
+        assigned_by_role = specific_assign.get("assignedByRole") or (emp.get("assignedByRole") if emp else None)
+        assigned_at = specific_assign.get("assignedAt") or (emp.get("assignedAt") if emp else None)
+        if not assigned_by and s.get("manager"):
+            assigned_by = s["manager"].get("name")
+            assigned_by_phone = s["manager"].get("phone")
+            assigned_by_role = "supervisor"
+
         response.append(SiteResponse(
             id=s["_id"],
             name=s["name"],
@@ -42,13 +58,18 @@ async def list_sites(token_data: dict = Depends(get_current_user_token)):
             photoUrl=s.get("photoUrl"),
             activeEngineersCount=s.get("activeEngineersCount", 0),
             workingHours=s.get("workingHours", "09:00 AM - 06:00 PM"),
-            status=s.get("status", "active")
+            status=s.get("status", "active"),
+            assignedBy=assigned_by,
+            assignedByPhone=assigned_by_phone,
+            assignedByRole=assigned_by_role,
+            assignedAt=assigned_at
         ))
     return response
 
 @router.get("/{siteId}", response_model=SiteResponse)
 async def get_site_details(siteId: str, token_data: dict = Depends(get_current_user_token)):
     user_role = str(token_data.get("role", "technician")).lower()
+    emp = None
     if user_role == "technician":
         emp_id = token_data.get("id")
         emp = db.get_employee(emp_id) or db.find_employee_by_identifier(emp_id)
@@ -66,6 +87,18 @@ async def get_site_details(siteId: str, token_data: dict = Depends(get_current_u
     s = db.get_site(siteId)
     if not s:
         raise HTTPException(status_code=404, detail="Substation not found")
+
+    site_assignments = emp.get("siteAssignments") or {} if emp else {}
+    specific_assign = site_assignments.get(str(s["_id"])) or {}
+    assigned_by = specific_assign.get("assignedBy") or (emp.get("assignedBy") if emp else None)
+    assigned_by_phone = specific_assign.get("assignedByPhone") or (emp.get("assignedByPhone") if emp else None)
+    assigned_by_role = specific_assign.get("assignedByRole") or (emp.get("assignedByRole") if emp else None)
+    assigned_at = specific_assign.get("assignedAt") or (emp.get("assignedAt") if emp else None)
+    if not assigned_by and s.get("manager"):
+        assigned_by = s["manager"].get("name")
+        assigned_by_phone = s["manager"].get("phone")
+        assigned_by_role = "supervisor"
+
     return SiteResponse(
         id=s["_id"],
         name=s["name"],
@@ -79,7 +112,11 @@ async def get_site_details(siteId: str, token_data: dict = Depends(get_current_u
         photoUrl=s.get("photoUrl"),
         activeEngineersCount=s.get("activeEngineersCount", 0),
         workingHours=s.get("workingHours", "09:00 AM - 06:00 PM"),
-        status=s.get("status", "active")
+        status=s.get("status", "active"),
+        assignedBy=assigned_by,
+        assignedByPhone=assigned_by_phone,
+        assignedByRole=assigned_by_role,
+        assignedAt=assigned_at
     )
 
 @router.post("", response_model=SiteResponse)
