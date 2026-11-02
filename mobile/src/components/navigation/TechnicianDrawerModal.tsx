@@ -204,12 +204,6 @@ export const TechnicianDrawerModal: React.FC = () => {
               <Text style={styles.userMetaText}>
                 {user?.employeeId || 'b4S/Adani/01'}
               </Text>
-              <View style={styles.siteMiniRow}>
-                <MapPin size={10} color="#1E63F0" style={{ marginRight: 3 }} />
-                <Text style={styles.siteMiniText} numberOfLines={1}>
-                  {user?.assignedSiteId || 'st. joseph university'}
-                </Text>
-              </View>
             </View>
           </View>
 
