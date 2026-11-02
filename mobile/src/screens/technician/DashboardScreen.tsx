@@ -769,7 +769,11 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
           </View>
 
           {/* Card 4: Authorized Geofence */}
-          <View style={styles.kpiCard}>
+          <TouchableOpacity
+            style={styles.kpiCard}
+            onPress={() => navigation.navigate('SiteDetails')}
+            activeOpacity={0.75}
+          >
             <Text style={styles.kpiLabel}>AUTHORIZED GEOFENCE</Text>
             <Text style={styles.kpiMainValue}>500 m</Text>
             <View style={styles.kpiFooterRow}>
@@ -781,7 +785,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
                 <MapPin size={14} color="#9333EA" />
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Card 5: Monthly Attendance */}
           <View style={styles.kpiCard}>
@@ -795,171 +799,6 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
             </View>
           </View>
         </ScrollView>
-
-        {/* ============================================================== */}
-        {/* 2B. MY ASSIGNED WORK SITE CARD (Requirement 1)                 */}
-        {/* ============================================================== */}
-        <View style={styles.assignedSiteCard}>
-          {/* Multiple Assigned Sites Switcher Bar if Employee has > 1 sites */}
-          {assignedSites && assignedSites.length > 1 && (
-            <View style={styles.siteTabsContainer}>
-              {assignedSites.map((siteItem) => {
-                const sId = siteItem.id || (siteItem as any)._id;
-                const isSelected = (substation?.id || (substation as any)?._id) === sId;
-                return (
-                  <TouchableOpacity
-                    key={sId}
-                    style={[styles.siteTabPill, isSelected && styles.siteTabPillActive]}
-                    onPress={() => setSubstation(siteItem)}
-                    activeOpacity={0.8}
-                  >
-                    <Building2 size={12} color={isSelected ? '#1D4ED8' : '#64748B'} style={{ marginRight: 4 }} />
-                    <Text style={[styles.siteTabPillText, isSelected && styles.siteTabPillTextActive]} numberOfLines={1}>
-                      {siteItem.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-
-          <View style={styles.assignedSiteHeader}>
-            <View style={styles.assignedSiteIconBox}>
-              <Building2 size={20} color="#2563EB" />
-            </View>
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={styles.assignedSiteCardTitle}>MY ASSIGNED WORK SITE</Text>
-                <View style={[styles.assignedStatusBadge, substation ? styles.statusBadgeActive : styles.statusBadgeUnassigned]}>
-                  <View style={[styles.statusDot, { backgroundColor: substation ? '#059669' : '#DC2626' }]} />
-                  <Text style={[styles.assignedStatusBadgeText, { color: substation ? '#059669' : '#DC2626' }]}>
-                    {substation ? 'Active Assignment' : 'Unassigned'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.assignedSiteName} numberOfLines={1}>
-                {substation ? substation.name : 'No Substation Allocated'}
-              </Text>
-            </View>
-          </View>
-
-          {substation ? (
-            <View style={styles.assignedSiteBody}>
-              {/* Site Name and Location */}
-              <View style={styles.assignedDetailRow}>
-                <MapPin size={14} color="#2563EB" style={{ marginTop: 2, marginRight: 8 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.assignedDetailLabel}>Site Name & Location</Text>
-                  <Text style={[styles.assignedDetailValue, { fontWeight: '700', color: '#0F172A' }]}>
-                    {substation.name}
-                  </Text>
-                  <Text style={styles.assignedDetailValue}>
-                    {substation.address || 'Address on record'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Assigner Authority & Contact Details (Admin/Supervisor) */}
-              <View style={styles.assignerCard}>
-                <View style={styles.assignerHeaderRow}>
-                  <View style={styles.assignerTitleLeft}>
-                    <UserCheck size={14} color="#2563EB" />
-                    <Text style={styles.assignerHeaderTitle}>ASSIGNED BY</Text>
-                  </View>
-                  <View style={[
-                    styles.assignerRoleBadge,
-                    ((substation.assignedByRole || (user as any)?.assignedByRole || '').toLowerCase().includes('admin'))
-                      ? styles.roleBadgeAdmin
-                      : styles.roleBadgeSupervisor
-                  ]}>
-                    <Text style={[
-                      styles.assignerRoleText,
-                      ((substation.assignedByRole || (user as any)?.assignedByRole || '').toLowerCase().includes('admin'))
-                        ? styles.roleTextAdmin
-                        : styles.roleTextSupervisor
-                    ]}>
-                      {((substation.assignedByRole || (user as any)?.assignedByRole || 'Supervisor')).toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.assignerBodyRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.assignerNameVal}>
-                      {substation.assignedBy || (user as any)?.assignedBy || substation.manager?.name || 'Operations Lead'}
-                    </Text>
-                    
-                    {(substation.assignedByPhone || (user as any)?.assignedByPhone || substation.manager?.phone) ? (
-                      <View style={styles.assignerPhoneRow}>
-                        <Phone size={12} color="#059669" style={{ marginRight: 5 }} />
-                        <Text style={styles.assignerPhoneLabel}>Contact:</Text>
-                        <TouchableOpacity
-                          onPress={() => {
-                            const p = (substation.assignedByPhone || (user as any)?.assignedByPhone || substation.manager?.phone || '').replace(/[^0-9+]/g, '');
-                            if (p) Linking.openURL(`tel:${p}`);
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.assignerPhoneVal}>
-                            {substation.assignedByPhone || (user as any)?.assignedByPhone || substation.manager?.phone}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  {(substation.assignedByPhone || (user as any)?.assignedByPhone || substation.manager?.phone) ? (
-                    <TouchableOpacity
-                      style={styles.assignerCallBtn}
-                      onPress={() => {
-                        const p = (substation.assignedByPhone || (user as any)?.assignedByPhone || substation.manager?.phone || '').replace(/[^0-9+]/g, '');
-                        if (p) Linking.openURL(`tel:${p}`);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <PhoneCall size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
-                      <Text style={styles.assignerCallBtnText}>Call</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              </View>
-
-              <View style={styles.assignedDetailRow}>
-                <Zap size={14} color="#64748B" style={{ marginTop: 2, marginRight: 8 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.assignedDetailLabel}>Site Details & Feeder Class</Text>
-                  <Text style={styles.assignedDetailValue}>
-                    {substation.voltageClass || '220 kV GIS Substation'} • Code: {substation.code || 'ADN-SITE-001'} • 500m Authorized Geofence
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.assignedGridRow}>
-                <View style={styles.assignedGridItem}>
-                  <Text style={styles.assignedGridLabel}>ASSIGNMENT DATE</Text>
-                  <Text style={styles.assignedGridVal}>Active Today</Text>
-                </View>
-                <View style={styles.assignedGridItem}>
-                  <Text style={styles.assignedGridLabel}>WORKING HOURS</Text>
-                  <Text style={styles.assignedGridVal}>{substation.workingHours || '09:00 AM - 06:00 PM'}</Text>
-                </View>
-                <View style={styles.assignedGridItem}>
-                  <Text style={styles.assignedGridLabel}>STATUS</Text>
-                  <Text style={[styles.assignedGridVal, { color: '#059669', fontWeight: '800' }]}>
-                    {(substation.status || 'Active').toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.unassignedSiteBox}>
-              <AlertTriangle size={18} color="#D97706" style={{ marginRight: 8 }} />
-              <Text style={styles.unassignedSiteText}>
-                No substation is currently allocated to your profile. Please contact your Zonal Workforce Supervisor or Operations Admin to assign your designated work site.
-              </Text>
-            </View>
-          )}
-        </View>
 
         {/* ============================================================== */}
         {/* 3. LIVE SHIFT VERIFICATION BANNER (AS IN PHOTO)                */}
@@ -1324,75 +1163,6 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
               </View>
             </View>
           )}
-        </View>
-
-        {/* ============================================================== */}
-        {/* MY SALARY & ATTENDANCE COMPENSATION SECTION                    */}
-        {/* ============================================================== */}
-        <View style={styles.salarySectionCard}>
-          <View style={styles.salarySectionHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={styles.salarySectionIconWrap}>
-                <Banknote size={22} color="#1E40AF" />
-              </View>
-              <View>
-                <Text style={styles.salarySectionTitle}>My Salary & Compensation</Text>
-                <Text style={styles.salarySectionSub}>October 2026 • Attendance-Based Remuneration</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={styles.salaryViewAllBtn}
-              onPress={() => navigation.navigate('Salary')}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.salaryViewAllBtnText}>Full Breakdown</Text>
-              <ChevronRight size={14} color="#2563EB" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.salaryKpiRow}>
-            <View style={styles.salaryKpiCol}>
-              <Text style={styles.salaryKpiLbl}>ASSIGNED SALARY</Text>
-              <Text style={styles.salaryKpiVal}>
-                ₹{(dashboardSalarySlip?.monthlySalary || 20000).toLocaleString('en-IN')}
-              </Text>
-              <Text style={styles.salaryKpiSub}>Base remuneration</Text>
-            </View>
-            <View style={styles.salaryKpiDivider} />
-            <View style={styles.salaryKpiCol}>
-              <Text style={styles.salaryKpiLbl}>ATTENDANCE</Text>
-              <Text style={[styles.salaryKpiVal, { color: '#0F172A', fontSize: 13 }]}>
-                {dashboardSalarySlip?.presentDays || 25}P • {dashboardSalarySlip?.absentDays || 2}A • {dashboardSalarySlip?.halfDays || 2}HD
-              </Text>
-              <Text style={styles.salaryKpiSub}>{dashboardSalarySlip?.weeklyOffDays || 4} Sundays paid</Text>
-            </View>
-            <View style={styles.salaryKpiDivider} />
-            <View style={styles.salaryKpiCol}>
-              <Text style={styles.salaryKpiLbl}>DEDUCTIONS</Text>
-              <Text style={[styles.salaryKpiVal, { color: '#DC2626' }]}>
-                -₹{(dashboardSalarySlip?.totalDeductionAmount || 1500).toLocaleString('en-IN')}
-              </Text>
-              <Text style={styles.salaryKpiSub}>Absent + Half day</Text>
-            </View>
-          </View>
-
-          <View style={styles.salaryPayableBanner}>
-            <View>
-              <Text style={styles.salaryPayableBannerLbl}>FINAL PAYABLE SALARY</Text>
-              <Text style={styles.salaryPayableBannerVal}>
-                ₹{(dashboardSalarySlip?.netPay || 18500).toLocaleString('en-IN')}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.salarySlipDownloadBtn}
-              onPress={() => navigation.navigate('Salary')}
-              activeOpacity={0.85}
-            >
-              <FileText size={14} color="#065F46" style={{ marginRight: 6 }} />
-              <Text style={styles.salarySlipDownloadBtnText}>Download PDF Payslip</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </ScrollView>
 

@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   Clock,
   Sparkles,
+  Building2,
 } from 'lucide-react-native';
 import { useTechnicianDrawerStore } from '../../store/useTechnicianDrawerStore';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -71,6 +72,15 @@ const TECHNICIAN_MENU_ITEMS: NavMenuItem[] = [
     badgeColor: '#EF4444',
   },
   {
+    key: 'SiteDetails',
+    label: 'Site Management',
+    subLabel: 'Assigned substation, radar & boundary',
+    screenName: 'SiteDetails',
+    icon: Building2,
+    badge: 'SITE',
+    badgeColor: '#2563EB',
+  },
+  {
     key: 'History',
     label: 'Attendance History',
     subLabel: 'Punctuality records & shift logs',
@@ -81,8 +91,8 @@ const TECHNICIAN_MENU_ITEMS: NavMenuItem[] = [
   },
   {
     key: 'Salary',
-    label: 'Compensation & Slip',
-    subLabel: 'Verified monthly payout & slips',
+    label: 'Pay Slip & Salary',
+    subLabel: 'Verified monthly payout & PDF slip',
     screenName: 'Salary',
     icon: Banknote,
     badge: 'PAYSLIP',
