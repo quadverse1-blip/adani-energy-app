@@ -22,21 +22,25 @@ def optional_auth_checker(
 
 @router.get("/muster-roll")
 async def get_muster_roll(
-    month: int = Query(10, description="Month (1-12)"),
-    year: int = Query(2026, description="Year (e.g. 2026)"),
+    month: Optional[int] = Query(None, description="Month (1-12), defaults to current month"),
+    year: Optional[int] = Query(None, description="Year, defaults to current year"),
     siteId: Optional[str] = Query(None, description="Optional substation site ID")
 ):
     """
-    Returns official register preview muster roll matrix data and summary KPIs.
+    Returns official register preview muster roll matrix data and summary KPIs
+    with dynamic system date, horizontal days, centralized holidays, and strict P, A, WO, PH statuses.
     """
-    data = report_service.get_muster_roll_data(month=month, year=year, site_id=siteId)
+    now = datetime.now()
+    m = month if month is not None else now.month
+    y = year if year is not None else now.year
+    data = report_service.get_muster_roll_data(month=m, year=y, site_id=siteId)
     return JSONResponse(content=data)
 
 @router.get("/export")
 async def export_attendance_report(
     type: str = Query("muster", description="'muster' or 'logs'"),
-    month: int = Query(10, description="Month (1-12)"),
-    year: int = Query(2026, description="Year (e.g. 2026)"),
+    month: Optional[int] = Query(None, description="Month (1-12)"),
+    year: Optional[int] = Query(None, description="Year (e.g. 2026)"),
     siteId: Optional[str] = None,
     status: Optional[str] = None,
     rangeType: Optional[str] = Query("month", description="today, week, month, all"),
@@ -46,19 +50,24 @@ async def export_attendance_report(
     Downloads the formatted Excel spreadsheet matching the official muster roll register
     or detailed shift activity logs.
     """
+    now = datetime.now()
+    m = month if month is not None else now.month
+    y = year if year is not None else now.year
+
     if type == "logs":
         excel_stream = report_service.generate_attendance_excel(
             site_id=siteId,
             status_filter=status
         )
-        filename = f"b4S_Detailed_Shift_Logs_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"b4S_Detailed_Shift_Logs_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
     else:
         excel_stream = report_service.generate_muster_roll_excel(
-            month=month,
-            year=year,
+            month=m,
+            year=y,
             site_id=siteId
         )
-        filename = f"b4S_Attendance_Muster_Roll_October_{year}.xlsx"
+        month_name = datetime(y, m, 1).strftime("%B")
+        filename = f"b4S_Attendance_Muster_Roll_{month_name}_{y}.xlsx"
 
     return StreamingResponse(
         excel_stream,
@@ -79,7 +88,7 @@ async def export_detailed_logs(
         site_id=siteId,
         status_filter=status
     )
-    filename = f"b4S_Detailed_Shift_Logs_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"b4S_Detailed_Shift_Logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return StreamingResponse(
         excel_stream,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

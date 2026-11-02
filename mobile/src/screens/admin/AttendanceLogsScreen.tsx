@@ -50,7 +50,7 @@ import { resolvePhotoUrl } from '../../utils/imageUrl';
 const { width } = Dimensions.get('window');
 
 type PeriodType = 'Daily' | 'Weekly' | 'Monthly';
-type AttendanceStatusType = 'late' | 'half_day' | 'present' | 'absent';
+type AttendanceStatusType = 'present' | 'absent' | 'weekly_off' | 'public_holiday' | 'late' | 'half_day';
 
 interface AttendanceLogItem {
   id: string;
@@ -88,36 +88,20 @@ const STATUS_CARDS: {
   buttonLabel: string;
 }[] = [
   {
-    key: 'late',
-    title: 'Late Arrival',
-    sub: 'Technician arrived past grace period or shift start',
-    icon: AlertCircle,
-    color: '#D97706',
-    buttonLabel: 'Set as Late',
-  },
-  {
-    key: 'half_day',
-    title: 'Half Day',
-    sub: 'Partial shift (less than 6 hours completed)',
-    icon: Clock,
-    color: '#EA580C',
-    buttonLabel: 'Set as Half Day',
-  },
-  {
     key: 'present',
-    title: 'Present (Full Day)',
-    sub: 'Standard shift completed on site',
+    title: 'Present (P)',
+    sub: 'Authorized on-duty shift completed at assigned substation',
     icon: CheckCircle2,
-    color: '#10B981',
-    buttonLabel: 'Set as Present',
+    color: '#059669',
+    buttonLabel: 'Set as Present (P)',
   },
   {
     key: 'absent',
-    title: 'Absent',
-    sub: 'Unexcused or unpaid leave of absence',
+    title: 'Absent (A)',
+    sub: 'Unrecorded or non-working day without shift check-in',
     icon: AlertTriangle,
-    color: '#EF4444',
-    buttonLabel: 'Set as Absent',
+    color: '#DC2626',
+    buttonLabel: 'Set as Absent (A)',
   },
 ];
 
@@ -402,7 +386,7 @@ export const AttendanceLogsScreen: React.FC = () => {
 
   const handleOpenAdjustRow = (log: AttendanceLogItem) => {
     setEditingLogId(log.id);
-    setSelectedStatus(log.status || 'late');
+    setSelectedStatus(log.status || 'present');
     setFormEmployeeId(log.employeeId);
     setFormEmployeeName(`${log.technicianName} (${log.technicianCode})`);
     const dParts = log.date.split('-');
@@ -421,7 +405,7 @@ export const AttendanceLogsScreen: React.FC = () => {
 
   const handleOpenNewAdjust = () => {
     setEditingLogId(null);
-    setSelectedStatus('late');
+    setSelectedStatus('present');
     const defaultTech = technicians[0] || { id: 'emp_01', name: 'Rohit Sharma', employeeId: 'b4S/Adani/01' };
     setFormEmployeeId(defaultTech.id);
     setFormEmployeeName(`${defaultTech.name} (${defaultTech.employeeId})`);

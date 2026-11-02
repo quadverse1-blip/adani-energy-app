@@ -41,6 +41,8 @@ import {
   Camera as CameraIcon,
   RotateCcw,
   AlertTriangle,
+  Download,
+  Building2,
 } from 'lucide-react-native';
 import { triggerHaptic } from '../../utils/haptics';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -53,6 +55,7 @@ import { Substation } from '../../types';
 import { COLORS } from '../../constants/theme';
 import { AppCard } from '../../components/common/AppCard';
 import { ConfirmationModal } from '../../components/common/ConfirmationModal';
+import { holidayService, HolidayItem } from '../../services/holidayService';
 import { getShiftInfo, formatTimeIST } from '../../utils/shiftUtils';
 import { TechnicianDrawerModal } from '../../components/navigation/TechnicianDrawerModal';
 
@@ -96,7 +99,7 @@ const WEEKLY_HOURS_DATA: DailyWorkData[] = [
 
 export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { user } = useAuthStore();
+  const { user, refreshProfile } = useAuthStore();
   const { openDrawer } = useTechnicianDrawerStore();
 
   const {
@@ -127,6 +130,14 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
   // Holidays Modal State
   const [showHolidaysModal, setShowHolidaysModal] = useState(false);
+  const [holidaysList, setHolidaysList] = useState<HolidayItem[]>([]);
+  const [downloadingHolidaysPdf, setDownloadingHolidaysPdf] = useState(false);
+
+  useEffect(() => {
+    holidayService.getHolidays(2026).then((data) => {
+      if (data && data.length > 0) setHolidaysList(data);
+    }).catch(() => {});
+  }, []);
 
   // Mandatory Camera Photo Check-In State
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -173,18 +184,28 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
     Boolean(todayRecord?.checkIn && todayRecord?.checkOut)
   );
 
-  // Load Substation & Attendance Data
+  // Load Substation & Attendance Data strictly synchronized with DB
   const loadData = async () => {
     try {
+      const freshUser = await refreshProfile();
       await fetchTodayAttendance();
 
-      // Load Substation
-      if (user?.assignedSiteId) {
-        const site = await siteService.getSiteById(user.assignedSiteId);
-        setSubstation(site);
+      const activeUser = freshUser || user;
+      const userSiteId = activeUser?.assignedSiteId || (activeUser?.assignedSiteIds && activeUser.assignedSiteIds[0]);
+
+      // Prefer live assignedSite returned from backend /attendance/today
+      const storeSite = useAttendanceStore.getState().assignedSite;
+      if (storeSite) {
+        setSubstation(storeSite);
+      } else if (userSiteId) {
+        try {
+          const site = await siteService.getSiteById(userSiteId);
+          setSubstation(site);
+        } catch {
+          setSubstation(null);
+        }
       } else {
-        const sites = await siteService.getSites();
-        if (sites.length > 0) setSubstation(sites[0]);
+        setSubstation(null);
       }
 
       // Load Notifications from Dashboard Service
@@ -196,6 +217,12 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
       console.warn('Dashboard loadData error:', e);
     }
   };
+
+  useEffect(() => {
+    if (assignedSite) {
+      setSubstation(assignedSite);
+    }
+  }, [assignedSite]);
 
   useEffect(() => {
     loadData();
@@ -249,6 +276,13 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
   // Manual Check In Trigger: Navigates to Field Shift Check-In screen
   const handleCheckIn = () => {
+    if (!substation) {
+      Alert.alert(
+        'No Substation Assigned',
+        'You do not have an active work site assigned yet. Please contact your Supervisor or Operations Admin to allocate your designated substation.'
+      );
+      return;
+    }
     // 1. Prevent re-checkin if already checked in today
     if (isShiftActive) {
       Alert.alert('Already Checked In', 'You are already checked in. Your shift is currently in progress.');
@@ -745,6 +779,77 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         </ScrollView>
 
         {/* ============================================================== */}
+        {/* 2B. MY ASSIGNED WORK SITE CARD (Requirement 1)                 */}
+        {/* ============================================================== */}
+        <View style={styles.assignedSiteCard}>
+          <View style={styles.assignedSiteHeader}>
+            <View style={styles.assignedSiteIconBox}>
+              <Building2 size={20} color="#2563EB" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={styles.assignedSiteCardTitle}>MY ASSIGNED WORK SITE</Text>
+                <View style={[styles.assignedStatusBadge, substation ? styles.statusBadgeActive : styles.statusBadgeUnassigned]}>
+                  <View style={[styles.statusDot, { backgroundColor: substation ? '#059669' : '#DC2626' }]} />
+                  <Text style={[styles.assignedStatusBadgeText, { color: substation ? '#059669' : '#DC2626' }]}>
+                    {substation ? 'Active Assignment' : 'Unassigned'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.assignedSiteName} numberOfLines={1}>
+                {substation ? substation.name : 'No Substation Allocated'}
+              </Text>
+            </View>
+          </View>
+
+          {substation ? (
+            <View style={styles.assignedSiteBody}>
+              <View style={styles.assignedDetailRow}>
+                <MapPin size={14} color="#64748B" style={{ marginTop: 2, marginRight: 8 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.assignedDetailLabel}>Site Location / Address</Text>
+                  <Text style={styles.assignedDetailValue}>{substation.address || 'Address on record'}</Text>
+                </View>
+              </View>
+
+              <View style={styles.assignedDetailRow}>
+                <Zap size={14} color="#64748B" style={{ marginTop: 2, marginRight: 8 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.assignedDetailLabel}>Site Details & Feeder Class</Text>
+                  <Text style={styles.assignedDetailValue}>
+                    {substation.voltageClass || '220 kV GIS Substation'} • Code: {substation.code || 'ADN-SITE-001'} • 500m Authorized Geofence
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.assignedGridRow}>
+                <View style={styles.assignedGridItem}>
+                  <Text style={styles.assignedGridLabel}>ASSIGNMENT DATE</Text>
+                  <Text style={styles.assignedGridVal}>Active Today</Text>
+                </View>
+                <View style={styles.assignedGridItem}>
+                  <Text style={styles.assignedGridLabel}>WORKING HOURS</Text>
+                  <Text style={styles.assignedGridVal}>{substation.workingHours || '09:00 AM - 06:00 PM'}</Text>
+                </View>
+                <View style={styles.assignedGridItem}>
+                  <Text style={styles.assignedGridLabel}>STATUS</Text>
+                  <Text style={[styles.assignedGridVal, { color: '#059669', fontWeight: '800' }]}>
+                    {(substation.status || 'Active').toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.unassignedSiteBox}>
+              <AlertTriangle size={18} color="#D97706" style={{ marginRight: 8 }} />
+              <Text style={styles.unassignedSiteText}>
+                No substation is currently allocated to your profile. Please contact your Zonal Workforce Supervisor or Operations Admin to assign your designated work site.
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* ============================================================== */}
         {/* 3. LIVE SHIFT VERIFICATION BANNER (AS IN PHOTO)                */}
         {/* ============================================================== */}
         <View style={styles.liveVerificationBanner}>
@@ -1237,7 +1342,20 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
             </View>
 
             <ScrollView style={styles.notifList} showsVerticalScrollIndicator={false}>
-              {ADANI_HOLIDAYS_2026.map((h, idx) => (
+              {(holidaysList.length > 0
+                ? holidaysList.map((item) => {
+                    const parts = (item.date || '').split('-');
+                    const dt = new Date((item.date || '2026-01-01') + 'T00:00:00');
+                    const mName = dt.toLocaleDateString('en-US', { month: 'short' });
+                    return {
+                      date: `${parts[2] || '01'} ${mName} ${parts[0] || '2026'}`,
+                      day: item.day || 'Day',
+                      name: item.name,
+                      type: item.type || 'Gazetted',
+                    };
+                  })
+                : ADANI_HOLIDAYS_2026
+              ).map((h, idx) => (
                 <View key={idx} style={styles.holidayRow}>
                   <View style={styles.holidayDateCol}>
                     <Text style={styles.holidayDateText}>{h.date.split(' ')[0]}</Text>
@@ -1256,13 +1374,50 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
               ))}
             </ScrollView>
 
-            <TouchableOpacity
-              style={styles.modalDoneBtn}
-              onPress={() => setShowHolidaysModal(false)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.modalDoneBtnText}>Dismiss Calendar</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#EFF6FF',
+                  borderWidth: 1,
+                  borderColor: '#BFDBFE',
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                }}
+                onPress={async () => {
+                  setDownloadingHolidaysPdf(true);
+                  try {
+                    await holidayService.downloadHolidaysPdf(2026);
+                  } catch (e: any) {
+                    Alert.alert('Download Error', e.message || 'Failed to download holiday calendar.');
+                  } finally {
+                    setDownloadingHolidaysPdf(false);
+                  }
+                }}
+                disabled={downloadingHolidaysPdf}
+                activeOpacity={0.8}
+              >
+                {downloadingHolidaysPdf ? (
+                  <ActivityIndicator size="small" color="#1E63F0" />
+                ) : (
+                  <>
+                    <Download size={14} color="#1E63F0" style={{ marginRight: 6 }} />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E63F0' }}>Download PDF</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalDoneBtn, { flex: 1, marginTop: 0 }]}
+                onPress={() => setShowHolidaysModal(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.modalDoneBtnText}>Dismiss</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1549,6 +1704,128 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  assignedSiteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  assignedSiteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  assignedSiteIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  assignedSiteCardTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  assignedSiteName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  assignedStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusBadgeActive: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  statusBadgeUnassigned: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 5,
+  },
+  assignedStatusBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  assignedSiteBody: {
+    gap: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  assignedDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  assignedDetailLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  assignedDetailValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1E293B',
+    marginTop: 1,
+  },
+  assignedGridRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  assignedGridItem: {
+    flex: 1,
+  },
+  assignedGridLabel: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  assignedGridVal: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  unassignedSiteBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 10,
+    padding: 12,
+  },
+  unassignedSiteText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#B45309',
+    lineHeight: 18,
   },
   container: {
     flex: 1,

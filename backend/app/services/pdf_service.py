@@ -1,5 +1,6 @@
 import io
 from datetime import datetime
+from app.core.database import db
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
@@ -368,22 +369,30 @@ def generate_holidays_pdf(year: int = 2026) -> bytes:
     story.append(t_policy)
     story.append(Spacer(1, 14))
 
-    # 3. Holidays Table
-    holidays_list = [
-        ("26 Jan 2026", "Monday", "Republic Day", "National Gazetted", "Paid Holiday"),
-        ("15 Feb 2026", "Sunday", "Maha Shivaratri", "Gazetted", "Paid Holiday / Sunday"),
-        ("03 Mar 2026", "Tuesday", "Holi (Dhulivandan)", "Gazetted", "Paid Holiday"),
-        ("20 Mar 2026", "Friday", "Eid-ul-Fitr (Ramzan Eid)", "Gazetted", "Paid Holiday"),
-        ("14 Apr 2026", "Tuesday", "Dr. Ambedkar Jayanti", "Gazetted", "Paid Holiday"),
-        ("01 May 2026", "Friday", "Maharashtra / Gujarat Day", "Regional Gazetted", "Paid Holiday"),
-        ("15 Aug 2026", "Saturday", "Independence Day", "National Gazetted", "Paid Holiday"),
-        ("04 Sep 2026", "Friday", "Janmashtami (Gokulashtami)", "Gazetted", "Paid Holiday"),
-        ("02 Oct 2026", "Friday", "Mahatma Gandhi Jayanti", "National Gazetted", "Paid Holiday"),
-        ("20 Oct 2026", "Tuesday", "Dussehra (Vijayadashami)", "Gazetted", "Paid Holiday"),
-        ("08 Nov 2026", "Sunday", "Diwali (Deepavali Laxmi Pujan)", "Gazetted", "Paid Holiday / Sunday"),
-        ("09 Nov 2026", "Monday", "Diwali Balipratipada", "Gazetted", "Paid Holiday"),
-        ("25 Dec 2026", "Friday", "Christmas Day", "Gazetted", "Paid Holiday"),
-    ]
+    # 3. Holidays Table (Dynamically loaded from centralized Holiday Database)
+    db_holidays = db.get_all_holidays(year=year)
+    holidays_list = []
+    if db_holidays:
+        for h in db_holidays:
+            raw_date = h.get("date", "")
+            try:
+                dt = datetime.strptime(raw_date, "%Y-%m-%d")
+                d_str = dt.strftime("%d %b %Y")
+                day_str = h.get("day") or dt.strftime("%A")
+            except Exception:
+                d_str = raw_date
+                day_str = h.get("day", "")
+            name_str = h.get("name", "Public Holiday")
+            type_str = h.get("type", "Gazetted")
+            paid_str = "Paid Holiday / Sunday" if day_str == "Sunday" else "Paid Holiday"
+            holidays_list.append((d_str, day_str, name_str, type_str, paid_str))
+    if not holidays_list:
+        holidays_list = [
+            ("26 Jan 2026", "Monday", "Republic Day", "National Gazetted", "Paid Holiday"),
+            ("15 Aug 2026", "Saturday", "Independence Day", "National Gazetted", "Paid Holiday"),
+            ("02 Oct 2026", "Friday", "Mahatma Gandhi Jayanti", "National Gazetted", "Paid Holiday"),
+            ("25 Dec 2026", "Friday", "Christmas Day", "Gazetted", "Paid Holiday"),
+        ]
 
     table_data = [
         [

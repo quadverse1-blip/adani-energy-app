@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Activity,
   List,
+  Calendar,
 } from 'lucide-react-native';
 import { useAdminDrawerStore } from '../../store/useAdminDrawerStore';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -99,6 +100,15 @@ const MENU_ITEMS: NavMenuItem[] = [
     subLabel: 'Shift wages & overtime',
     screenName: 'Salary',
     icon: Banknote,
+  },
+  {
+    key: 'Holidays',
+    label: 'Holiday Management',
+    subLabel: 'Centralized public holidays',
+    screenName: 'Holidays',
+    icon: Calendar,
+    badge: 'PH SYNC',
+    badgeColor: '#8B5CF6',
   },
 ];
 

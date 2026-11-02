@@ -659,6 +659,126 @@ for day in range(1, 24):
 
 
 # -------------------------------------------------------------
+SEED_HOLIDAYS = [
+    {
+        "_id": "hol_2026_01_26",
+        "name": "Republic Day",
+        "date": "2026-01-26",
+        "day": "Monday",
+        "description": "National Gazetted Holiday",
+        "type": "National Gazetted",
+        "status": "active"
+    },
+    {
+        "_id": "hol_2026_02_15",
+        "name": "Maha Shivaratri",
+        "date": "2026-02-15",
+        "day": "Sunday",
+        "description": "Gazetted Holiday",
+        "type": "Gazetted",
+        "status": "active"
+    },
+    {
+        "_id": "hol_2026_03_03",
+        "name": "Holi (Dhulivandan)",
+        "date": "2026-03-03",
+        "day": "Tuesday",
+        "description": "Festival of Colors",
+        "type": "Gazetted",
+        "status": "active"
+    },
+    {
+        "_id": "hol_2026_03_20",
+        "name": "Eid-ul-Fitr (Ramzan Eid)",
+        "date": "2026-03-20",
+        "day": "Friday",
+        "description": "Gazetted Holiday",
+        "type": "Gazetted",
+        "status": "active"
+    },
+    {
+        "_id": "hol_2026_04_14",
+        "name": "Dr. Ambedkar Jayanti",
+        "date": "2026-04-14",
+        "day": "Tuesday",
+        "description": "Birth anniversary of Dr. B.R. Ambedkar",
+        "type": "Gazetted",
+        "status": "active"
+    },
+    {
+        "_id": "hol_2026_05_01",
+        "name": "Maharashtra / Gujarat Day",
+        "date": "2026-05-01",
+        "day": "Friday",
+        "description": "Regional State Foundation Day",
+        "type": "Regional",
+        "status": "active"
+    },
+    {
+        "_id": "hol_2026_08_15",
+        "name": "Independence Day",
+        "date": "2026-08-15",
+        "day": "Saturday",
+        "description": "National Gazetted Holiday",
+        "type": "National Gazetted",
+        "status": "active"
+    },
+    {
+        "_id": "hol_2026_09_04",
+        "name": "Janmashtami (Gokulashtami)",
+        "date": "2026-09-04",
+        "day": "Friday",
+        "description": "Lord Krishna Birthday",
+        "type": "Gazetted",
+        "status": "active"
+    },
+    {
+        "_id": "hol_2026_10_02",
+        "name": "Mahatma Gandhi Jayanti",
+        "date": "2026-10-02",
+        "day": "Friday",
+        "description": "National Gazetted Holiday",
+        "type": "National Gazetted",
+        "status": "active"
+    },
+    {
+        "_id": "hol_2026_10_20",
+        "name": "Dussehra (Vijayadashami)",
+        "date": "2026-10-20",
+        "day": "Tuesday",
+        "description": "Gazetted Holiday",
+        "type": "Gazetted",
+        "status": "active"
+    },
+    {
+        "_id": "hol_2026_11_08",
+        "name": "Diwali (Deepavali Laxmi Pujan)",
+        "date": "2026-11-08",
+        "day": "Sunday",
+        "description": "Festival of Lights",
+        "type": "Gazetted",
+        "status": "active"
+    },
+    {
+        "_id": "hol_2026_11_09",
+        "name": "Diwali Balipratipada",
+        "date": "2026-11-09",
+        "day": "Monday",
+        "description": "New Year / Balipratipada",
+        "type": "Gazetted",
+        "status": "active"
+    },
+    {
+        "_id": "hol_2026_12_25",
+        "name": "Christmas Day",
+        "date": "2026-12-25",
+        "day": "Friday",
+        "description": "Gazetted Holiday",
+        "type": "Gazetted",
+        "status": "active"
+    }
+]
+
 # Firestore REST Data Converter & Helpers
 # -------------------------------------------------------------
 def to_firestore_value(val: Any) -> dict:
@@ -808,6 +928,7 @@ class DatabaseManager:
         self._raw_employees: Dict[str, dict] = {e["_id"]: e for e in SEED_EMPLOYEES}
         self._raw_sites: Dict[str, dict] = {s["_id"]: s for s in SEED_SITES}
         self._raw_attendance: Dict[str, dict] = {a["_id"]: a for a in SEED_ATTENDANCE}
+        self._raw_holidays: Dict[str, dict] = {h["_id"]: h for h in SEED_HOLIDAYS}
         self.gps_events: List[dict] = []
         self.audit_logs: List[dict] = []
 
@@ -818,6 +939,7 @@ class DatabaseManager:
         self.employees = FirestoreCollectionDictWrapper(self, "employees", self._raw_employees)
         self.sites = FirestoreCollectionDictWrapper(self, "sites", self._raw_sites)
         self.attendance = FirestoreCollectionDictWrapper(self, "attendance", self._raw_attendance)
+        self.holidays = FirestoreCollectionDictWrapper(self, "holidays", self._raw_holidays)
 
         # Initialize connection
         self.connect_to_firebase()
@@ -1129,5 +1251,42 @@ class DatabaseManager:
         self._raw_attendance[record["_id"]] = record
         self.set_firestore_document_async("attendance", record["_id"], record)
         return record
+
+
+    def get_all_holidays(self, year: Optional[int] = None) -> List[dict]:
+        all_h = list(self.holidays.values())
+        if year:
+            y_prefix = f"{year}-"
+            all_h = [h for h in all_h if str(h.get("date", "")).startswith(y_prefix)]
+        all_h.sort(key=lambda x: str(x.get("date", "")))
+        return all_h
+
+    def get_holiday_by_id(self, holiday_id: str) -> Optional[dict]:
+        return self.holidays.get(holiday_id)
+
+    def get_holiday_by_date(self, date_str: str) -> Optional[dict]:
+        target = str(date_str).strip()
+        for h in self.holidays.values():
+            if str(h.get("date", "")).strip() == target and h.get("status") != "deleted":
+                return h
+        return None
+
+    def save_holiday(self, holiday_data: dict) -> dict:
+        h_id = holiday_data.get("_id") or f"hol_{holiday_data.get('date', '').replace('-', '_')}"
+        holiday_data["_id"] = h_id
+        if "status" not in holiday_data:
+            holiday_data["status"] = "active"
+        if "updatedAt" not in holiday_data:
+            holiday_data["updatedAt"] = datetime.utcnow().isoformat() + "Z"
+        self._raw_holidays[h_id] = holiday_data
+        self.set_firestore_document_async("holidays", h_id, holiday_data)
+        return holiday_data
+
+    def delete_holiday(self, holiday_id: str) -> bool:
+        if holiday_id in self.holidays:
+            del self.holidays[holiday_id]
+            self.delete_firestore_document_async("holidays", holiday_id)
+            return True
+        return False
 
 db = DatabaseManager()

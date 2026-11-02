@@ -47,3 +47,9 @@ class AdjustAttendanceRequest(BaseModel):
     checkOutTime: Optional[str] = None
     duration: Optional[str] = None
     adminRemarks: Optional[str] = None
+
+class MarkAttendanceRequest(BaseModel):
+    employeeId: str
+    date: str
+    status: str = "P"
+    adminRemarks: Optional[str] = None

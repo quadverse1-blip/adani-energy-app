@@ -32,13 +32,18 @@ async def login(credentials: LoginRequest):
             detail="Account is currently inactive. Please contact Operations Administrator."
         )
 
+    primary_site = user.get("assignedSiteId") or (user.get("assignedSiteIds", [None])[0] if user.get("assignedSiteIds") else None)
+    site_ids = user.get("assignedSiteIds") or []
+    if primary_site and primary_site not in site_ids:
+        site_ids = [primary_site] + site_ids
+
     token_data = {
         "id": user["_id"],
         "employeeId": user.get("employeeId"),
         "name": user.get("name"),
         "role": user.get("role", "technician"),
         "designation": user.get("designation"),
-        "assignedSiteId": user.get("assignedSiteId")
+        "assignedSiteId": primary_site
     }
 
     access_token = create_access_token(token_data)
@@ -49,8 +54,8 @@ async def login(credentials: LoginRequest):
         name=user.get("name", ""),
         role=user.get("role", "technician"),
         designation=user.get("designation", ""),
-        assignedSiteId=user.get("assignedSiteId"),
-        assignedSiteIds=user.get("assignedSiteIds", []),
+        assignedSiteId=primary_site,
+        assignedSiteIds=site_ids,
         phone=user.get("phone"),
         email=user.get("email"),
         avatar=user.get("avatar"),
@@ -65,18 +70,25 @@ async def login(credentials: LoginRequest):
 
 @router.get("/me", response_model=UserProfile)
 async def get_current_user_profile(token_data: dict = Depends(get_current_user_token)):
-    user = db.get_employee(token_data["id"])
+    user = db.get_employee(token_data["id"]) or db.find_employee_by_identifier(token_data["id"])
+    if not user and token_data.get("employeeId"):
+        user = db.get_employee(token_data["employeeId"]) or db.find_employee_by_identifier(token_data["employeeId"])
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
+    primary_site = user.get("assignedSiteId") or (user.get("assignedSiteIds", [None])[0] if user.get("assignedSiteIds") else None)
+    site_ids = user.get("assignedSiteIds") or []
+    if primary_site and primary_site not in site_ids:
+        site_ids = [primary_site] + site_ids
+
     return UserProfile(
         id=user["_id"],
         employeeId=user.get("employeeId", ""),
         name=user.get("name", ""),
         role=user.get("role", "technician"),
         designation=user.get("designation", ""),
-        assignedSiteId=user.get("assignedSiteId"),
-        assignedSiteIds=user.get("assignedSiteIds", []),
+        assignedSiteId=primary_site,
+        assignedSiteIds=site_ids,
         phone=user.get("phone"),
         email=user.get("email"),
         avatar=user.get("avatar"),

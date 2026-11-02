@@ -49,6 +49,7 @@ import { SupervisorDrawerModal } from '../../components/navigation/SupervisorDra
 import { AttendanceRecord, Substation } from '../../types';
 import { AppButton } from '../../components/common/AppButton';
 import { ConfirmationModal } from '../../components/common/ConfirmationModal';
+import { holidayService } from '../../services/holidayService';
 import { getShiftInfo } from '../../utils/shiftUtils';
 
 interface StaffAttendanceItem {
@@ -479,12 +480,13 @@ export const SupervisorDashboardScreen: React.FC = () => {
 
               <TouchableOpacity
                 style={styles.headerPillBtn}
-                onPress={() =>
-                  Alert.alert(
-                    'Adani Holiday Calendar 2026',
-                    '2026 Gazetted Holidays: \n• Republic Day (Jan 26)\n• Holi (Mar 03)\n• Independence Day (Aug 15)\n• Gandhi Jayanti (Oct 02)\n• Diwali (Nov 08)'
-                  )
-                }
+                onPress={async () => {
+                  try {
+                    await holidayService.downloadHolidaysPdf(2026);
+                  } catch (e: any) {
+                    Alert.alert('Holiday Calendar', e.message || 'Unable to download holiday calendar.');
+                  }
+                }}
                 activeOpacity={0.7}
               >
                 <Calendar size={13} color="#475569" />

@@ -15,6 +15,7 @@ interface AuthState {
   login: (username: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
   setUser: (user: User | null) => void;
+  refreshProfile: () => Promise<User | null>;
   clearError: () => void;
 }
 
@@ -43,6 +44,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     } catch {
       set({ user: null, token: null, isInitialized: true });
+    }
+  },
+
+  refreshProfile: async () => {
+    try {
+      const profile = await authService.getProfile();
+      set({ user: profile });
+      return profile;
+    } catch (e) {
+      console.warn('refreshProfile error:', e);
+      return null;
     }
   },
 

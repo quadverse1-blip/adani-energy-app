@@ -129,69 +129,20 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
   const cameraRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
 
-  // 1. Load Substations (ensure Surat ST-1 and St. Joseph University exist matching user's photo)
+  // 1. Load Substations assigned strictly to this employee (Backend enforces role-based assignment)
   useEffect(() => {
     (async () => {
       try {
         const fetchedSites = await siteService.getSites();
-        // Ensure both Surat ST-1 and St. Joseph University are present with exact codes and real manager details
-        const defaultSurat: Substation = {
-          id: 'site_surat_01',
-          name: 'Surat ST-1',
-          code: 'ADN-SITE-010',
-          address: 'Ring Road, Textile Market Hub, Surat, Gujarat 395002',
-          latitude: 21.1926,
-          longitude: 72.7997,
-          radiusMeters: 500,
-          status: 'active',
-          voltageClass: '66 kV Substation & Smart Feeder',
-          manager: {
-            name: 'Dhaval Patel',
-            phone: '+91 98251 98765',
-            email: 'dhaval.patel@adani.com',
-            designation: 'Zonal Project Lead',
-          },
-        };
-
-        const defaultSJU: Substation = {
-          id: 'site_st_joseph',
-          name: 'st. joseph university',
-          code: 'ADN-SITE-006',
-          address: '36 Lalbagh Main Rd, Shanti Nagar, Bengaluru, Karnataka 560027',
-          latitude: 12.9610,
-          longitude: 77.5963,
-          radiusMeters: 500,
-          status: 'active',
-          voltageClass: '33 kV Substation & Smart Meter Feeder',
-          manager: {
-            name: 'Father Victor',
-            phone: '+91 98450 12345',
-            email: 'facilities@sju.edu.in',
-            designation: 'Campus Facility Director',
-          },
-        };
-
-        const combinedList: Substation[] = [];
-        // Add Surat ST-1 first
-        const foundSurat = fetchedSites.find((s) => s.id === 'site_surat_01' || s.name.toLowerCase().includes('surat'));
-        combinedList.push(foundSurat ? { ...defaultSurat, ...foundSurat, manager: foundSurat.manager || defaultSurat.manager, code: 'ADN-SITE-010' } : defaultSurat);
-
-        // Add St. Joseph University second
-        const foundSJU = fetchedSites.find((s) => s.id === 'site_st_joseph' || s.name.toLowerCase().includes('joseph'));
-        combinedList.push(foundSJU ? { ...defaultSJU, ...foundSJU, manager: foundSJU.manager || defaultSJU.manager, code: 'ADN-SITE-006' } : defaultSJU);
-
-        // Include any other assigned sites
-        if (user?.assignedSiteIds && user.assignedSiteIds.length > 0) {
-          const assignedIds = user.assignedSiteIds;
-          fetchedSites.forEach((s) => {
-            if (assignedIds.includes(s.id) && !combinedList.some((c) => c.id === s.id)) {
-              combinedList.push(s);
-            }
-          });
+        setSites(fetchedSites);
+        if (fetchedSites.length > 0) {
+          const matchPrimary = user?.assignedSiteId
+            ? fetchedSites.find((s) => s.id === user.assignedSiteId)
+            : null;
+          setSelectedSite(matchPrimary || fetchedSites[0]);
+        } else {
+          setSelectedSite(null);
         }
-
-        setSites(combinedList);
-        setSelectedSite(combinedList[0]); // Default to Surat ST-1
       } catch (e) {
         console.warn('Failed to load substations:', e);
       }
@@ -307,6 +258,15 @@ export const CheckInScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
       Alert.alert(
         'Already Checked In',
         'You have already recorded your check-in for today. Re-check in is not allowed.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (!selectedSite) {
+      Alert.alert(
+        'No Assigned Substation',
+        'You do not have a work site assigned yet. Please contact your Supervisor or Operations Admin to assign a designated substation.',
         [{ text: 'OK' }]
       );
       return;

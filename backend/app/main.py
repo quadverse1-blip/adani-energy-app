@@ -12,7 +12,8 @@ from app.routers import (
     salary,
     dashboard,
     tracking,
-    reports
+    reports,
+    holidays
 )
 
 app = FastAPI(
@@ -45,6 +46,7 @@ app.include_router(salary.router, prefix=settings.API_V1_STR)
 app.include_router(dashboard.router, prefix=settings.API_V1_STR)
 app.include_router(tracking.router, prefix=settings.API_V1_STR)
 app.include_router(reports.router, prefix=settings.API_V1_STR)
+app.include_router(holidays.router, prefix=settings.API_V1_STR)
 
 # Also mount directly under root without prefix as requested by prompt endpoints
 app.include_router(auth.router)
@@ -55,6 +57,7 @@ app.include_router(salary.router)
 app.include_router(dashboard.router)
 app.include_router(tracking.router)
 app.include_router(reports.router)
+app.include_router(holidays.router)
 
 # Automatic 24-Hour Photo Deletion Scheduler
 @app.on_event("startup")

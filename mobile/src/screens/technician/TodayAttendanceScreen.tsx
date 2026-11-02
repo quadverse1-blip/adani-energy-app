@@ -36,6 +36,7 @@ import * as Sharing from 'expo-sharing';
 import { Paths, File as ExpoFile } from 'expo-file-system';
 import { Linking } from 'react-native';
 import { apiClient } from '../../services/api';
+import { holidayService, HolidayItem } from '../../services/holidayService';
 import { formatTimeIST } from '../../utils/shiftUtils';
 
 interface TodayAttendanceScreenProps {
@@ -75,6 +76,13 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
   const [refreshing, setRefreshing] = useState(false);
   const [showHolidaysModal, setShowHolidaysModal] = useState(false);
   const [downloadingHolidays, setDownloadingHolidays] = useState(false);
+  const [holidaysList, setHolidaysList] = useState<HolidayItem[]>([]);
+
+  useEffect(() => {
+    holidayService.getHolidays(2026).then((data) => {
+      if (data && data.length > 0) setHolidaysList(data);
+    }).catch(() => {});
+  }, []);
 
   const handleDownloadHolidaysPdf = async () => {
     setDownloadingHolidays(true);
@@ -554,7 +562,20 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
                 Official corporate holiday calendar approved for Adani Energy Solutions & Smart Meter Workforce.
               </Text>
 
-              {ADANI_HOLIDAYS_2026.map((item, idx) => (
+              {(holidaysList.length > 0
+                ? holidaysList.map((h) => {
+                    const parts = (h.date || '').split('-');
+                    const dt = new Date((h.date || '2026-01-01') + 'T00:00:00');
+                    const mName = dt.toLocaleDateString('en-US', { month: 'short' });
+                    return {
+                      date: `${parts[2] || '01'} ${mName} ${parts[0] || '2026'}`,
+                      day: h.day || 'Day',
+                      name: h.name,
+                      type: h.type || 'Gazetted',
+                    };
+                  })
+                : ADANI_HOLIDAYS_2026
+              ).map((item, idx) => (
                 <View key={idx} style={styles.holidayRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.holidayName}>{item.name}</Text>

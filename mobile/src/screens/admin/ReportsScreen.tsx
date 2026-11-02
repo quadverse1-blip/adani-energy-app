@@ -17,6 +17,8 @@ import {
 import {
   Calendar,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   X,
   Check,
   Building2,
@@ -28,11 +30,14 @@ import {
   ArrowLeft,
   FileText,
   Menu,
+  Info,
+  Sparkles,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { siteService } from '../../services/siteService';
-import { reportService, MusterRecord } from '../../services/reportService';
+import { attendanceService } from '../../services/attendanceService';
+import { reportService, MusterRecord, MusterDay } from '../../services/reportService';
 import { Substation } from '../../types';
 import { SHADOWS } from '../../constants/theme';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
@@ -42,107 +47,9 @@ import { useSupervisorDrawerStore } from '../../store/useSupervisorDrawerStore';
 import { SupervisorDrawerModal } from '../../components/navigation/SupervisorDrawerModal';
 import { useAuthStore } from '../../store/useAuthStore';
 
-const { width } = Dimensions.get('window');
-
-const DEFAULT_MUSTER_RECORDS: MusterRecord[] = [
-  {
-    sr: 1,
-    employeeCode: 'b4S/Adani/01',
-    employeeName: 'Rohit Sharma',
-    designation: 'Junior Engineer',
-    circle: 'Gujarat Circle',
-    division: 'Surat Division',
-    days: {
-      1: 'A', 2: 'HL', 3: 'A', 4: 'P', 5: 'P', 6: 'P', 7: 'A', 8: 'P', 9: 'A', 10: 'A',
-      11: 'O', 12: 'P', 13: 'A', 14: 'P', 15: 'A', 16: 'A', 17: 'P', 18: 'O', 19: 'A', 20: 'HL',
-      21: 'P', 22: 'P', 23: 'A', 24: 'A', 25: 'O', 26: '-', 27: '-', 28: '-', 29: '-', 30: '-', 31: '-'
-    },
-    summary: { P: 9, WOP: 3, A: 11, OD: 0, WO: 0, PL: 0, PH: 2, Total: 14 }
-  },
-  {
-    sr: 2,
-    employeeCode: 'b4S/Adani/02',
-    employeeName: 'Amit Kumar',
-    designation: 'Junior Engineer',
-    circle: 'Prc',
-    division: 'Office',
-    days: {
-      1: 'A', 2: 'HL', 3: 'A', 4: 'O', 5: 'A', 6: 'A', 7: 'A', 8: 'A', 9: 'A', 10: 'A',
-      11: 'O', 12: 'A', 13: 'A', 14: 'A', 15: 'A', 16: 'A', 17: 'A', 18: 'O', 19: 'A', 20: 'HL',
-      21: 'P', 22: 'A', 23: 'A', 24: 'A', 25: 'O', 26: '-', 27: '-', 28: '-', 29: '-', 30: '-', 31: '-'
-    },
-    summary: { P: 1, WOP: 4, A: 18, OD: 0, WO: 0, PL: 0, PH: 2, Total: 7 }
-  },
-  {
-    sr: 3,
-    employeeCode: 'b4S/Adani/03',
-    employeeName: 'Sandeep Yadav',
-    designation: 'Junior Engineer',
-    circle: 'Prc',
-    division: 'Bundgarden',
-    days: {
-      1: 'A', 2: 'HL', 3: 'A', 4: 'O', 5: 'A', 6: 'A', 7: 'A', 8: 'A', 9: 'A', 10: 'A',
-      11: 'O', 12: 'A', 13: 'A', 14: 'A', 15: 'A', 16: 'A', 17: 'A', 18: 'O', 19: 'A', 20: 'HL',
-      21: 'A', 22: 'A', 23: 'A', 24: 'A', 25: 'O', 26: '-', 27: '-', 28: '-', 29: '-', 30: '-', 31: '-'
-    },
-    summary: { P: 0, WOP: 4, A: 19, OD: 0, WO: 0, PL: 0, PH: 2, Total: 6 }
-  },
-  {
-    sr: 4,
-    employeeCode: 'b4S/Adani/04',
-    employeeName: 'Vikash Singh',
-    designation: 'Junior Engineer',
-    circle: 'Prc',
-    division: 'Bundgarden',
-    days: {
-      1: 'A', 2: 'HL', 3: 'A', 4: 'O', 5: 'A', 6: 'A', 7: 'A', 8: 'A', 9: 'A', 10: 'A',
-      11: 'O', 12: 'A', 13: 'A', 14: 'A', 15: 'A', 16: 'A', 17: 'A', 18: 'O', 19: 'A', 20: 'HL',
-      21: 'A', 22: 'A', 23: 'A', 24: 'A', 25: 'O', 26: '-', 27: '-', 28: '-', 29: '-', 30: '-', 31: '-'
-    },
-    summary: { P: 0, WOP: 4, A: 19, OD: 0, WO: 0, PL: 0, PH: 2, Total: 6 }
-  },
-  {
-    sr: 5,
-    employeeCode: 'b4S/Adani/05',
-    employeeName: 'Neha Patil',
-    designation: 'Supervisor',
-    circle: 'Prc',
-    division: 'Office',
-    days: {
-      1: 'A', 2: 'HL', 3: 'A', 4: 'O', 5: 'A', 6: 'A', 7: 'A', 8: 'A', 9: 'A', 10: 'A',
-      11: 'O', 12: 'A', 13: 'A', 14: 'A', 15: 'A', 16: 'A', 17: 'A', 18: 'O', 19: 'A', 20: 'HL',
-      21: 'A', 22: 'A', 23: 'A', 24: 'A', 25: 'O', 26: '-', 27: '-', 28: '-', 29: '-', 30: '-', 31: '-'
-    },
-    summary: { P: 0, WOP: 4, A: 19, OD: 0, WO: 0, PL: 0, PH: 2, Total: 6 }
-  },
-  {
-    sr: 6,
-    employeeCode: 'b4S/Adani/06',
-    employeeName: 'Harsh Parmar',
-    designation: 'Junior Engineer',
-    circle: 'Prc',
-    division: 'st. joseph university',
-    days: {
-      1: 'A', 2: 'HL', 3: 'A', 4: 'P', 5: 'P', 6: 'A', 7: 'A', 8: 'A', 9: 'A', 10: 'A',
-      11: 'O', 12: 'A', 13: 'A', 14: 'P', 15: 'A', 16: 'A', 17: 'A', 18: 'O', 19: 'A', 20: 'HL',
-      21: 'A', 22: 'A', 23: 'A', 24: 'A', 25: 'O', 26: '-', 27: '-', 28: '-', 29: '-', 30: '-', 31: '-'
-    },
-    summary: { P: 3, WOP: 3, A: 17, OD: 0, WO: 0, PL: 0, PH: 2, Total: 8 }
-  },
-  {
-    sr: 7,
-    employeeCode: 'SUPER01',
-    employeeName: 'Suresh Patil',
-    designation: 'Area Operations Supervisor',
-    circle: 'Maharashtra Circle',
-    division: 'Pune Division',
-    days: {
-      1: 'A', 2: 'HL', 3: 'A', 4: 'O', 5: 'A', 6: 'A', 7: 'A', 8: 'A', 9: 'A', 10: 'A',
-      11: 'O', 12: 'A', 13: 'A', 14: 'A', 15: 'A', 16: 'A', 17: 'A', 18: 'O', 19: 'A', 20: 'HL',
-      21: 'P', 22: 'P', 23: 'A', 24: 'A', 25: 'O', 26: '-', 27: '-', 28: '-', 29: '-', 30: '-', 31: '-'
-    },
-    summary: { P: 2, WOP: 4, A: 17, OD: 0, WO: 0, PL: 0, PH: 2, Total: 8 }
-  }
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
 export const ReportsScreen: React.FC = () => {
@@ -172,31 +79,185 @@ export const ReportsScreen: React.FC = () => {
     }
   };
 
-  // Selected Month & Year
-  const [selectedMonth, setSelectedMonth] = useState<number>(10);
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
-  const [fromDate, setFromDate] = useState<string>('01-10-2026');
-  const [toDate, setToDate] = useState<string>('31-10-2026');
+  // 1. Dynamic System Date Initialization (Requirement 1)
+  const systemDate = useMemo(() => new Date(), []);
+  const [selectedMonth, setSelectedMonth] = useState<number>(systemDate.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(systemDate.getFullYear());
+
+  // Date range display strings
+  const daysInSelectedMonth = useMemo(() => {
+    return new Date(selectedYear, selectedMonth, 0).getDate();
+  }, [selectedYear, selectedMonth]);
+
+  const fromDateStr = `01-${String(selectedMonth).padStart(2, '0')}-${selectedYear}`;
+  const toDateStr = `${String(daysInSelectedMonth).padStart(2, '0')}-${String(selectedMonth).padStart(2, '0')}-${selectedYear}`;
 
   // Site Filter Dropdown
   const [selectedSiteFilter, setSelectedSiteFilter] = useState<string>('all');
   const [showSitePickerModal, setShowSitePickerModal] = useState<boolean>(false);
   const [sites, setSites] = useState<Substation[]>([]);
 
-  // Muster Records & KPI Statistics
-  const [musterRecords, setMusterRecords] = useState<MusterRecord[]>(DEFAULT_MUSTER_RECORDS);
+  // Muster Roll & Days Metadata
+  const [musterRecords, setMusterRecords] = useState<MusterRecord[]>([]);
+  const [daysMeta, setDaysMeta] = useState<MusterDay[]>([]);
+  const [monthName, setMonthName] = useState<string>(
+    `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`
+  );
+
+  // Strict 4 Status KPI Stats (Requirement 2 & 5)
   const [musterStats, setMusterStats] = useState({
-    totalShifts: 21,
-    present: 1,
-    lateArrivals: 1,
-    halfDays: 9,
-    avgDuration: '10h 14m',
-    compliance: '52.4%',
+    totalShifts: 0,
+    present: 0,
+    absent: 0,
+    weeklyOff: 0,
+    publicHolidays: 0,
+    compliance: '0%',
   });
 
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [exporting, setExporting] = useState<boolean>(false);
+
+  // Admin Attendance Marking Modal State (Requirement 2)
+  const [markModalVisible, setMarkModalVisible] = useState<boolean>(false);
+  const [markEmpId, setMarkEmpId] = useState<string>('');
+  const [markEmpName, setMarkEmpName] = useState<string>('');
+  const [markDate, setMarkDate] = useState<string>('');
+  const [markStatus, setMarkStatus] = useState<'P' | 'A'>('P');
+  const [markRemarks, setMarkRemarks] = useState<string>('Marked Present by Operations Admin');
+  const [savingMark, setSavingMark] = useState<boolean>(false);
+
+  // Calendar Picker for Mark Attendance Modal
+  const [showMarkDatePicker, setShowMarkDatePicker] = useState<boolean>(false);
+  const [markCalYear, setMarkCalYear] = useState<number>(new Date().getFullYear());
+  const [markCalMonth, setMarkCalMonth] = useState<number>(new Date().getMonth());
+
+  const WEEKDAY_NAMES_MARK = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+  const handlePrevMarkCalMonth = () => {
+    if (markCalMonth === 0) {
+      setMarkCalMonth(11);
+      setMarkCalYear((prev) => prev - 1);
+    } else {
+      setMarkCalMonth((prev) => prev - 1);
+    }
+  };
+
+  const handleNextMarkCalMonth = () => {
+    if (markCalMonth === 11) {
+      setMarkCalMonth(0);
+      setMarkCalYear((prev) => prev + 1);
+    } else {
+      setMarkCalMonth((prev) => prev + 1);
+    }
+  };
+
+  const handleSelectMarkCalDay = (day: number) => {
+    const mm = String(markCalMonth + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    const pickedDate = `${markCalYear}-${mm}-${dd}`;
+    setMarkDate(pickedDate);
+    setShowMarkDatePicker(false);
+  };
+
+  const handleSelectMarkToday = () => {
+    const today = new Date();
+    setMarkCalYear(today.getFullYear());
+    setMarkCalMonth(today.getMonth());
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    setMarkDate(`${today.getFullYear()}-${mm}-${dd}`);
+    setShowMarkDatePicker(false);
+  };
+
+  const daysInMarkCalMonth = new Date(markCalYear, markCalMonth + 1, 0).getDate();
+  const markCalFirstDayOffset = new Date(markCalYear, markCalMonth, 1).getDay();
+
+  const handleOpenMarkModal = (emp?: MusterRecord, dayDate?: string) => {
+    if (user?.role !== 'admin') {
+      Alert.alert('Permission Denied', 'Only Operations Administrators have permission to mark or adjust attendance records.');
+      return;
+    }
+
+    if (emp) {
+      setMarkEmpId(emp.employeeCode || emp.employeeName);
+      setMarkEmpName(`${emp.employeeName} (${emp.employeeCode})`);
+    } else if (musterRecords.length > 0) {
+      setMarkEmpId(musterRecords[0].employeeCode || musterRecords[0].employeeName);
+      setMarkEmpName(`${musterRecords[0].employeeName} (${musterRecords[0].employeeCode})`);
+    } else {
+      setMarkEmpId('');
+      setMarkEmpName('');
+    }
+
+    if (dayDate) {
+      setMarkDate(dayDate);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dayDate)) {
+        const p = dayDate.split('-');
+        setMarkCalYear(parseInt(p[0], 10));
+        setMarkCalMonth(parseInt(p[1], 10) - 1);
+      }
+    } else {
+      const today = new Date();
+      const dStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      setMarkDate(dStr);
+      setMarkCalYear(today.getFullYear());
+      setMarkCalMonth(today.getMonth());
+    }
+
+    setShowMarkDatePicker(false);
+    setMarkStatus('P');
+    setMarkRemarks('Marked Present by Operations Admin');
+    setMarkModalVisible(true);
+  };
+
+  const handleSaveAttendanceMark = async () => {
+    if (!markEmpId) {
+      Alert.alert('Select Employee', 'Please select a field employee.');
+      return;
+    }
+    if (!markDate) {
+      Alert.alert('Select Date', 'Please enter a valid date in YYYY-MM-DD format.');
+      return;
+    }
+
+    setSavingMark(true);
+    try {
+      const res = await attendanceService.markAttendance({
+        employeeId: markEmpId,
+        date: markDate,
+        status: markStatus,
+        adminRemarks: markRemarks,
+      });
+
+      Alert.alert(
+        'Attendance Updated',
+        `Successfully recorded ${markStatus} for ${markEmpName || markEmpId} on ${markDate}.
+
+Synchronized across all dashboards and muster reports.`,
+        [{ text: 'OK' }]
+      );
+      setMarkModalVisible(false);
+      fetchMusterData();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Failed to mark attendance';
+      Alert.alert('Attendance Update Error', msg);
+    } finally {
+      setSavingMark(false);
+    }
+  };
+
+  // Holiday Details Popup Modal
+  const [holidayTooltip, setHolidayTooltip] = useState<{
+    visible: boolean;
+    name: string;
+    date: string;
+    empName?: string;
+  }>({
+    visible: false,
+    name: '',
+    date: '',
+  });
 
   const fetchMusterData = async () => {
     setLoading(true);
@@ -207,11 +268,20 @@ export const ReportsScreen: React.FC = () => {
       ]);
       setSites(siteList);
 
-      if (musterRes && musterRes.records && musterRes.records.length > 0) {
+      if (musterRes && musterRes.records) {
         setMusterRecords(musterRes.records);
-        if (musterRes.stats) setMusterStats(musterRes.stats);
-      } else {
-        setMusterRecords(DEFAULT_MUSTER_RECORDS);
+        setDaysMeta(musterRes.days || []);
+        setMonthName(musterRes.monthName || `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`);
+        if (musterRes.stats) {
+          setMusterStats({
+            totalShifts: musterRes.stats.totalShifts,
+            present: musterRes.stats.present,
+            absent: musterRes.stats.absent,
+            weeklyOff: musterRes.stats.weeklyOff,
+            publicHolidays: musterRes.stats.publicHolidays,
+            compliance: musterRes.stats.compliance,
+          });
+        }
       }
     } catch (err) {
       console.warn('ReportsScreen load error:', err);
@@ -230,7 +300,18 @@ export const ReportsScreen: React.FC = () => {
       const musterRes = await reportService.getMusterRoll(selectedMonth, selectedYear, selectedSiteFilter);
       if (musterRes && musterRes.records) {
         setMusterRecords(musterRes.records);
-        if (musterRes.stats) setMusterStats(musterRes.stats);
+        setDaysMeta(musterRes.days || []);
+        setMonthName(musterRes.monthName);
+        if (musterRes.stats) {
+          setMusterStats({
+            totalShifts: musterRes.stats.totalShifts,
+            present: musterRes.stats.present,
+            absent: musterRes.stats.absent,
+            weeklyOff: musterRes.stats.weeklyOff,
+            publicHolidays: musterRes.stats.publicHolidays,
+            compliance: musterRes.stats.compliance,
+          });
+        }
       }
     } catch (e) {
       console.warn(e);
@@ -239,26 +320,39 @@ export const ReportsScreen: React.FC = () => {
     }
   };
 
-  const handleSelectMonth = (m: number, y: number) => {
-    setSelectedMonth(m);
-    setSelectedYear(y);
-    if (m === 10) {
-      setFromDate('01-10-2026');
-      setToDate('31-10-2026');
+  // Month navigation handlers
+  const handlePrevMonth = () => {
+    if (selectedMonth === 1) {
+      setSelectedMonth(12);
+      setSelectedYear((prev) => prev - 1);
     } else {
-      setFromDate('01-09-2026');
-      setToDate('30-09-2026');
+      setSelectedMonth((prev) => prev - 1);
     }
   };
 
-  // Download Official Muster Roll Excel (.xlsx)
+  const handleNextMonth = () => {
+    if (selectedMonth === 12) {
+      setSelectedMonth(1);
+      setSelectedYear((prev) => prev + 1);
+    } else {
+      setSelectedMonth((prev) => prev + 1);
+    }
+  };
+
+  const handleResetToCurrentMonth = () => {
+    const now = new Date();
+    setSelectedMonth(now.getMonth() + 1);
+    setSelectedYear(now.getFullYear());
+  };
+
+  // Download Official Muster Roll Excel (.xlsx) (Requirement 5)
   const handleDownloadMusterExcel = async () => {
     setExporting(true);
     try {
       await reportService.downloadMusterRollExcel(selectedMonth, selectedYear, selectedSiteFilter);
       Alert.alert(
         'Excel Report Downloaded',
-        'Official Attendance Muster Roll (.xlsx) has been successfully generated and downloaded.'
+        `Official Attendance Muster Roll for ${monthName} (.xlsx) has been generated with horizontal dates and P, A, WO, PH statuses.`
       );
     } catch (err: any) {
       Alert.alert('Download Error', err.message || 'Failed to download Excel report');
@@ -274,7 +368,7 @@ export const ReportsScreen: React.FC = () => {
     } else {
       Alert.alert(
         'Export PDF Report',
-        'Generating print-ready PDF for October 2026 Muster Roll. You can save or share it directly.',
+        `Generating printable attendance register for ${monthName}.`,
         [{ text: 'OK' }]
       );
     }
@@ -286,46 +380,98 @@ export const ReportsScreen: React.FC = () => {
     return found ? found.name : 'All Sites';
   }, [selectedSiteFilter, sites]);
 
-  // Days 1 to 31 array
-  const daysHeader = Array.from({ length: 31 }, (_, i) => i + 1);
+  // Fallback days meta if not loaded yet
+  const displayDays: MusterDay[] = useMemo(() => {
+    if (daysMeta.length > 0) return daysMeta;
+    const list: MusterDay[] = [];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const now = new Date();
+    for (let d = 1; d <= daysInSelectedMonth; d++) {
+      const dt = new Date(selectedYear, selectedMonth - 1, d);
+      const dayName = dayNames[dt.getDay()];
+      const isToday =
+        dt.getDate() === now.getDate() &&
+        dt.getMonth() === now.getMonth() &&
+        dt.getFullYear() === now.getFullYear();
+      list.push({
+        day: d,
+        date: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+        dayName,
+        label: `${String(d).padStart(2, '0')} ${dayName}`,
+        isSunday: dt.getDay() === 0,
+        isHoliday: false,
+        isToday,
+      });
+    }
+    return list;
+  }, [daysMeta, daysInSelectedMonth, selectedYear, selectedMonth]);
 
-  // Status cell style renderer
-  const renderDayCell = (val: string = '-') => {
-    let color = '#94A3B8';
-    let fontWeight: any = '600';
+  // Strictly 4 permitted attendance statuses renderer (Requirement 2 & 4)
+  const renderStatusCell = (
+    val: string = '-',
+    holidayName?: string,
+    row?: MusterRecord,
+    dm?: MusterDay
+  ) => {
+    let textColor = '#94A3B8';
+    let bgColor = '#FFFFFF';
+    let borderColor = '#E2E8F0';
 
     if (val === 'P') {
-      color = '#10B981'; // Green Present
-      fontWeight = '800';
+      textColor = '#166534'; // Green Present
+      bgColor = '#DCFCE7';
+      borderColor = '#BBF7D0';
     } else if (val === 'A') {
-      color = '#EF4444'; // Red Absent
-      fontWeight = '800';
-    } else if (val === 'HL') {
-      color = '#EA580C'; // Orange / Amber Holiday
-      fontWeight = '800';
-    } else if (val === 'O') {
-      color = '#2563EB'; // Blue Weekly Off
-      fontWeight = '800';
+      textColor = '#991B1B'; // Red Absent
+      bgColor = '#FEE2E2';
+      borderColor = '#FECACA';
+    } else if (val === 'WO') {
+      textColor = '#1E40AF'; // Blue Weekly Off
+      bgColor = '#DBEAFE';
+      borderColor = '#BFDBFE';
+    } else if (val === 'PH') {
+      textColor = '#6B21A8'; // Purple Public Holiday
+      bgColor = '#F3E8FF';
+      borderColor = '#E9D5FF';
     }
 
+    const isPH = val === 'PH';
+    const isInteractive = isPH || user?.role === 'admin';
+
     return (
-      <Text style={[styles.dayCellText, { color, fontWeight }]}>
-        {val}
-      </Text>
+      <TouchableOpacity
+        style={[
+          styles.statusBadge,
+          { backgroundColor: bgColor, borderColor },
+          isPH && { borderWidth: 1.5 },
+        ]}
+        activeOpacity={isInteractive ? 0.7 : 1}
+        onPress={() => {
+          if (isPH && holidayName) {
+            setHolidayTooltip({
+              visible: true,
+              name: holidayName,
+              date: dm?.date || '',
+              empName: row?.employeeName,
+            });
+          } else if (user?.role === 'admin' && row && dm) {
+            handleOpenMarkModal(row, dm.date);
+          }
+        }}
+      >
+        <Text style={[styles.statusBadgeText, { color: textColor }]}>
+          {val}
+        </Text>
+      </TouchableOpacity>
     );
   };
 
   return (
     <View style={styles.container}>
       {/* ========================================================================= */}
-      {/* 1. TOP HEADER APP BAR (MATCHING REFERENCE IMAGE 1)                       */}
+      {/* 1. TOP HEADER APP BAR                                                    */}
       {/* ========================================================================= */}
-      <View
-        style={[
-          styles.topHeaderBar,
-          { paddingTop: Math.max(insets.top, 16) + 6 },
-        ]}
-      >
+      <View style={[styles.topHeaderBar, { paddingTop: Math.max(insets.top, 16) + 6 }]}>
         <View style={styles.topHeaderRow1}>
           <TouchableOpacity
             style={styles.menuCircleBtn}
@@ -346,7 +492,7 @@ export const ReportsScreen: React.FC = () => {
           </TouchableOpacity>
 
           <View style={{ marginLeft: 8, flex: 1, paddingRight: 40 }}>
-            <Text style={styles.mainTitle} numberOfLines={1}>Reports & Muster Roll</Text>
+            <Text style={styles.mainTitle} numberOfLines={1}>Reports & Export</Text>
           </View>
         </View>
 
@@ -367,8 +513,30 @@ export const ReportsScreen: React.FC = () => {
             ) : (
               <FileSpreadsheet size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
             )}
-            <Text style={styles.btnPrimaryGreenText}>Download .xlsx</Text>
+            <Text style={styles.btnPrimaryGreenText}>Download Excel (.xlsx)</Text>
           </TouchableOpacity>
+
+          {user?.role === 'admin' ? (
+            <TouchableOpacity
+              style={styles.btnBlueMark}
+              onPress={() => handleOpenMarkModal()}
+              activeOpacity={0.8}
+            >
+              <Check size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
+              <Text style={styles.btnBlueMarkText}>Mark Present (P)</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {user?.role === 'admin' ? (
+            <TouchableOpacity
+              style={styles.btnPurple}
+              onPress={() => navigation.navigate('Holidays')}
+              activeOpacity={0.8}
+            >
+              <Calendar size={13} color="#6B21A8" style={{ marginRight: 5 }} />
+              <Text style={styles.btnPurpleText}>Manage Holidays</Text>
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity
             style={styles.btnSecondary}
@@ -385,7 +553,7 @@ export const ReportsScreen: React.FC = () => {
             activeOpacity={0.8}
           >
             <Printer size={13} color="#334155" style={{ marginRight: 5 }} />
-            <Text style={styles.btnSecondaryText}>Export PDF</Text>
+            <Text style={styles.btnSecondaryText}>Print / PDF</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -402,88 +570,64 @@ export const ReportsScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* ========================================================================= */}
-        {/* 2. REPORT PARAMETERS & DATE FILTER CARD                                  */}
+        {/* 2. DYNAMIC REAL-TIME CALENDAR & MONTH NAVIGATOR (Requirement 1)          */}
         {/* ========================================================================= */}
         <View style={[styles.filterCard, SHADOWS.sm]}>
           <View style={styles.filterCardHeader}>
             <View style={styles.filterTitleRow}>
-              <Filter size={15} color="#2563EB" style={{ marginRight: 6 }} />
-              <Text style={styles.filterCardTitle}>REPORT PARAMETERS & DATE FILTER</Text>
+              <Calendar size={16} color="#1E63F0" style={{ marginRight: 6 }} />
+              <Text style={styles.filterCardTitle}>REAL-TIME ATTENDANCE CALENDAR</Text>
             </View>
 
-            {/* Quick Month Pills */}
-            <View style={styles.monthPillsRow}>
+            {/* Month & Year Stepper */}
+            <View style={styles.monthNavRow}>
               <TouchableOpacity
-                style={[
-                  styles.monthPill,
-                  selectedMonth === 10 && styles.monthPillActive,
-                ]}
-                onPress={() => handleSelectMonth(10, 2026)}
-                activeOpacity={0.75}
+                style={styles.monthNavArrow}
+                onPress={handlePrevMonth}
+                activeOpacity={0.7}
               >
-                {selectedMonth === 10 && (
-                  <Check size={12} color="#059669" style={{ marginRight: 4 }} />
-                )}
-                <Text
-                  style={[
-                    styles.monthPillText,
-                    selectedMonth === 10 && styles.monthPillTextActive,
-                  ]}
-                >
-                  Current Month: October 2026
-                </Text>
+                <ChevronLeft size={16} color="#1E293B" />
               </TouchableOpacity>
 
+              <View style={styles.currentMonthBadge}>
+                <Text style={styles.currentMonthText}>{monthName}</Text>
+              </View>
+
               <TouchableOpacity
-                style={[
-                  styles.monthPill,
-                  selectedMonth === 9 && styles.monthPillActive,
-                ]}
-                onPress={() => handleSelectMonth(9, 2026)}
-                activeOpacity={0.75}
+                style={styles.monthNavArrow}
+                onPress={handleNextMonth}
+                activeOpacity={0.7}
               >
-                {selectedMonth === 9 && (
-                  <Check size={12} color="#059669" style={{ marginRight: 4 }} />
-                )}
-                <Text
-                  style={[
-                    styles.monthPillText,
-                    selectedMonth === 9 && styles.monthPillTextActive,
-                  ]}
-                >
-                  September 2026
-                </Text>
+                <ChevronRight size={16} color="#1E293B" />
+              </TouchableOpacity>
+
+              {/* Jump to Today Button */}
+              <TouchableOpacity
+                style={styles.todayJumpBtn}
+                onPress={handleResetToCurrentMonth}
+                activeOpacity={0.8}
+              >
+                <Sparkles size={12} color="#1E63F0" style={{ marginRight: 4 }} />
+                <Text style={styles.todayJumpBtnText}>Current Month</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* From Date | To Date | Deployment Location / Site */}
+          {/* Date Parameters & Deployment Site Filter */}
           <View style={styles.filterInputsRow}>
             <View style={styles.inputCol}>
               <Text style={styles.inputLabel}>From Date</Text>
               <View style={styles.inputBoxWrap}>
-                <TextInput
-                  style={styles.inputField}
-                  value={fromDate}
-                  onChangeText={setFromDate}
-                  placeholder="01-10-2026"
-                  placeholderTextColor="#94A3B8"
-                />
-                <Calendar size={16} color="#64748B" />
+                <Text style={styles.inputFieldStatic}>{fromDateStr}</Text>
+                <Calendar size={14} color="#64748B" />
               </View>
             </View>
 
             <View style={styles.inputCol}>
               <Text style={styles.inputLabel}>To Date</Text>
               <View style={styles.inputBoxWrap}>
-                <TextInput
-                  style={styles.inputField}
-                  value={toDate}
-                  onChangeText={setToDate}
-                  placeholder="31-10-2026"
-                  placeholderTextColor="#94A3B8"
-                />
-                <Calendar size={16} color="#64748B" />
+                <Text style={styles.inputFieldStatic}>{toDateStr}</Text>
+                <Calendar size={14} color="#64748B" />
               </View>
             </View>
 
@@ -497,57 +641,50 @@ export const ReportsScreen: React.FC = () => {
                 <Text style={styles.dropdownSelectText} numberOfLines={1}>
                   {selectedSiteLabel}
                 </Text>
-                <ChevronDown size={16} color="#64748B" />
+                <ChevronDown size={14} color="#64748B" />
               </TouchableOpacity>
             </View>
           </View>
         </View>
 
         {/* ========================================================================= */}
-        {/* 3. KPI STAT SUMMARY CARDS ROW (EXACT 6 CARDS FROM PHOTO 1)                */}
+        {/* 3. STRICT 4 STATUS KPI STATS (P, A, WO, PH) (Requirement 2 & 5)           */}
         {/* ========================================================================= */}
         {isWide ? (
           <View style={styles.kpiCardsRowWide}>
-            {/* Card 1: TOTAL SHIFTS */}
-            <View style={[styles.kpiCardWide, SHADOWS.sm]}>
-              <Text style={styles.kpiLabel}>TOTAL SHIFTS</Text>
-              <Text style={styles.kpiValueDark}>{musterStats.totalShifts}</Text>
-              <Text style={styles.kpiSub}>Logged shift records</Text>
-            </View>
-
-            {/* Card 2: PRESENT */}
+            {/* PRESENT (P) */}
             <View style={[styles.kpiCardWide, styles.kpiCardBorderGreen, SHADOWS.sm]}>
-              <Text style={[styles.kpiLabel, { color: '#059669' }]}>PRESENT</Text>
+              <Text style={[styles.kpiLabel, { color: '#059669' }]}>PRESENT (P)</Text>
               <Text style={[styles.kpiValueDark, { color: '#059669' }]}>{musterStats.present}</Text>
-              <Text style={styles.kpiSub}>Verified on-site shifts</Text>
+              <Text style={styles.kpiSub}>On-duty completed shifts</Text>
             </View>
 
-            {/* Card 3: LATE ARRIVALS */}
-            <View style={[styles.kpiCardWide, styles.kpiCardBorderAmber, SHADOWS.sm]}>
-              <Text style={[styles.kpiLabel, { color: '#D97706' }]}>LATE ARRIVALS</Text>
-              <Text style={[styles.kpiValueDark, { color: '#D97706' }]}>{musterStats.lateArrivals}</Text>
-              <Text style={styles.kpiSub}>09:00 – 10:30 AM</Text>
+            {/* ABSENT (A) */}
+            <View style={[styles.kpiCardWide, styles.kpiCardBorderRed, SHADOWS.sm]}>
+              <Text style={[styles.kpiLabel, { color: '#DC2626' }]}>ABSENT (A)</Text>
+              <Text style={[styles.kpiValueDark, { color: '#DC2626' }]}>{musterStats.absent}</Text>
+              <Text style={styles.kpiSub}>Unrecorded working days</Text>
             </View>
 
-            {/* Card 4: HALF DAYS */}
-            <View style={[styles.kpiCardWide, styles.kpiCardBorderOrange, SHADOWS.sm]}>
-              <Text style={[styles.kpiLabel, { color: '#EA580C' }]}>HALF DAYS</Text>
-              <Text style={[styles.kpiValueDark, { color: '#EA580C' }]}>{musterStats.halfDays}</Text>
-              <Text style={styles.kpiSub}>After 10:30 AM check-in</Text>
+            {/* WEEKLY OFF (WO) */}
+            <View style={[styles.kpiCardWide, styles.kpiCardBorderBlue, SHADOWS.sm]}>
+              <Text style={[styles.kpiLabel, { color: '#2563EB' }]}>WEEKLY OFF (WO)</Text>
+              <Text style={[styles.kpiValueDark, { color: '#2563EB' }]}>{musterStats.weeklyOff}</Text>
+              <Text style={styles.kpiSub}>Scheduled Sundays</Text>
             </View>
 
-            {/* Card 5: AVG DURATION */}
-            <View style={[styles.kpiCardWide, SHADOWS.sm]}>
-              <Text style={styles.kpiLabel}>AVG DURATION</Text>
-              <Text style={styles.kpiValueDark}>{musterStats.avgDuration}</Text>
-              <Text style={styles.kpiSub}>Shift duration avg</Text>
+            {/* PUBLIC HOLIDAYS (PH) */}
+            <View style={[styles.kpiCardWide, styles.kpiCardBorderPurple, SHADOWS.sm]}>
+              <Text style={[styles.kpiLabel, { color: '#7C3AED' }]}>PUBLIC HOLIDAYS (PH)</Text>
+              <Text style={[styles.kpiValueDark, { color: '#7C3AED' }]}>{musterStats.publicHolidays}</Text>
+              <Text style={styles.kpiSub}>Centralized gazetted holidays</Text>
             </View>
 
-            {/* Card 6: COMPLIANCE */}
+            {/* COMPLIANCE */}
             <View style={[styles.kpiCardWide, SHADOWS.sm]}>
               <Text style={styles.kpiLabel}>COMPLIANCE</Text>
               <Text style={styles.kpiValueDark}>{musterStats.compliance}</Text>
-              <Text style={styles.kpiSub}>Geofence accuracy</Text>
+              <Text style={styles.kpiSub}>Present / Scheduled ratio</Text>
             </View>
           </View>
         ) : (
@@ -556,73 +693,43 @@ export const ReportsScreen: React.FC = () => {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.kpiCardsScroll}
           >
-            {/* Card 1: TOTAL SHIFTS */}
-            <View style={[styles.kpiCard, SHADOWS.sm]}>
-              <Text style={styles.kpiLabel}>TOTAL SHIFTS</Text>
-              <Text style={styles.kpiValueDark}>{musterStats.totalShifts}</Text>
-              <Text style={styles.kpiSub}>Logged shift records</Text>
-            </View>
-
-            {/* Card 2: PRESENT */}
             <View style={[styles.kpiCard, styles.kpiCardBorderGreen, SHADOWS.sm]}>
-              <Text style={[styles.kpiLabel, { color: '#059669' }]}>PRESENT</Text>
+              <Text style={[styles.kpiLabel, { color: '#059669' }]}>PRESENT (P)</Text>
               <Text style={[styles.kpiValueDark, { color: '#059669' }]}>{musterStats.present}</Text>
-              <Text style={styles.kpiSub}>Verified on-site shifts</Text>
+              <Text style={styles.kpiSub}>On-duty completed</Text>
             </View>
 
-            {/* Card 3: LATE ARRIVALS */}
-            <View style={[styles.kpiCard, styles.kpiCardBorderAmber, SHADOWS.sm]}>
-              <Text style={[styles.kpiLabel, { color: '#D97706' }]}>LATE ARRIVALS</Text>
-              <Text style={[styles.kpiValueDark, { color: '#D97706' }]}>{musterStats.lateArrivals}</Text>
-              <Text style={styles.kpiSub}>09:00 – 10:30 AM</Text>
+            <View style={[styles.kpiCard, styles.kpiCardBorderRed, SHADOWS.sm]}>
+              <Text style={[styles.kpiLabel, { color: '#DC2626' }]}>ABSENT (A)</Text>
+              <Text style={[styles.kpiValueDark, { color: '#DC2626' }]}>{musterStats.absent}</Text>
+              <Text style={styles.kpiSub}>Unrecorded days</Text>
             </View>
 
-            {/* Card 4: HALF DAYS */}
-            <View style={[styles.kpiCard, styles.kpiCardBorderOrange, SHADOWS.sm]}>
-              <Text style={[styles.kpiLabel, { color: '#EA580C' }]}>HALF DAYS</Text>
-              <Text style={[styles.kpiValueDark, { color: '#EA580C' }]}>{musterStats.halfDays}</Text>
-              <Text style={styles.kpiSub}>After 10:30 AM check-in</Text>
+            <View style={[styles.kpiCard, styles.kpiCardBorderBlue, SHADOWS.sm]}>
+              <Text style={[styles.kpiLabel, { color: '#2563EB' }]}>WEEKLY OFF (WO)</Text>
+              <Text style={[styles.kpiValueDark, { color: '#2563EB' }]}>{musterStats.weeklyOff}</Text>
+              <Text style={styles.kpiSub}>Scheduled Sundays</Text>
             </View>
 
-            {/* Card 5: AVG DURATION */}
-            <View style={[styles.kpiCard, SHADOWS.sm]}>
-              <Text style={styles.kpiLabel}>AVG DURATION</Text>
-              <Text style={styles.kpiValueDark}>{musterStats.avgDuration}</Text>
-              <Text style={styles.kpiSub}>Shift duration avg</Text>
+            <View style={[styles.kpiCard, styles.kpiCardBorderPurple, SHADOWS.sm]}>
+              <Text style={[styles.kpiLabel, { color: '#7C3AED' }]}>PUBLIC HOLIDAYS (PH)</Text>
+              <Text style={[styles.kpiValueDark, { color: '#7C3AED' }]}>{musterStats.publicHolidays}</Text>
+              <Text style={styles.kpiSub}>Centralized holidays</Text>
             </View>
 
-            {/* Card 6: COMPLIANCE */}
             <View style={[styles.kpiCard, SHADOWS.sm]}>
               <Text style={styles.kpiLabel}>COMPLIANCE</Text>
               <Text style={styles.kpiValueDark}>{musterStats.compliance}</Text>
-              <Text style={styles.kpiSub}>Geofence accuracy</Text>
+              <Text style={styles.kpiSub}>Present ratio</Text>
             </View>
           </ScrollView>
         )}
 
         {/* ========================================================================= */}
-        {/* 4. VIEW SELECTOR TABS                                                     */}
-        {/* ========================================================================= */}
-        <View style={styles.tabsStrip}>
-          <View style={styles.tabButtonsGroup}>
-            <View style={[styles.viewTab, styles.viewTabActive]}>
-              <Grid size={15} color="#2563EB" style={{ marginRight: 6 }} />
-              <Text style={[styles.viewTabText, styles.viewTabTextActive]}>
-                Muster Roll Matrix (Template View)
-              </Text>
-            </View>
-          </View>
-
-          <Text style={styles.tabRightCaption}>
-            Format matches the downloaded Excel register
-          </Text>
-        </View>
-
-        {/* ========================================================================= */}
-        {/* 5. OFFICIAL REGISTER PREVIEW CARD (MATCHING PHOTO 1 & PHOTO 2)             */}
+        {/* 4. HORIZONTAL ATTENDANCE REGISTER (Requirement 1, 2, 4)                  */}
         {/* ========================================================================= */}
         <View style={[styles.registerCard, SHADOWS.md]}>
-          {/* Dark Navy Register Header Banner */}
+          {/* Header Banner */}
           <View style={styles.registerDarkHeader}>
             <View style={styles.registerHeaderTop}>
               <View style={styles.b4sLogoBadge}>
@@ -630,9 +737,9 @@ export const ReportsScreen: React.FC = () => {
               </View>
 
               <View style={{ marginLeft: 10, flex: 1, paddingRight: 6 }}>
-                <Text style={styles.registerSmallLabel}>OFFICIAL REGISTER PREVIEW</Text>
+                <Text style={styles.registerSmallLabel}>HORIZONTAL ATTENDANCE CALENDAR</Text>
                 <Text style={styles.registerTitle} numberOfLines={1}>
-                  ATTENDANCE REGISTER • OCT 2026
+                  ATTENDANCE REGISTER • {monthName.toUpperCase()}
                 </Text>
               </View>
 
@@ -653,136 +760,288 @@ export const ReportsScreen: React.FC = () => {
 
             <View style={styles.registerHeaderBottom}>
               <Text style={styles.registerSubtitle} numberOfLines={1}>
-                b4S SOLUTIONS PVT. LTD. • {selectedSiteLabel.toUpperCase()} • 31 DAYS
+                {selectedSiteLabel.toUpperCase()} • {displayDays.length} DAYS • ONLY P, A, WO, PH
               </Text>
               <Text style={styles.swipeHintText}>
-                Swipe ⇆ to view days 1–31
+                ⇆ Scroll horizontally to view all days
               </Text>
             </View>
           </View>
 
-          {/* Unified Horizontal Scrollable Register Table (Swipe to view all days) */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <View>
-              {/* Header Row */}
-              <View style={styles.matrixHeaderRow}>
-                <Text style={[styles.mthCell, { width: 36, textAlign: 'center' }]}>SR.</Text>
-                <Text style={[styles.mthCell, { width: 105 }]}>Employee Code</Text>
-                <Text style={[styles.mthCell, { width: 125 }]}>Employee Name</Text>
-                <Text style={[styles.mthCell, { width: 135 }]}>Designation</Text>
-                <Text style={[styles.mthCell, { width: 105 }]}>CIRCLE</Text>
-                <Text style={[styles.mthCell, { width: 115 }]}>Division</Text>
-
-                {/* 1 - 31 Days Header Cells */}
-                {daysHeader.map((d) => (
-                  <Text key={d} style={[styles.mthDayCell, { width: 28 }]}>
-                    {d}
-                  </Text>
-                ))}
-
-                {/* Summary Totals Columns Header */}
-                <Text style={[styles.mthSummaryCell, { width: 32 }]}>P</Text>
-                <Text style={[styles.mthSummaryCell, { width: 38 }]}>WOP</Text>
-                <Text style={[styles.mthSummaryCell, { width: 32 }]}>A</Text>
-                <Text style={[styles.mthSummaryCell, { width: 34 }]}>OD</Text>
-                <Text style={[styles.mthSummaryCell, { width: 34 }]}>WO</Text>
-                <Text style={[styles.mthSummaryCell, { width: 32 }]}>PL</Text>
-                <Text style={[styles.mthSummaryCell, { width: 34 }]}>PH</Text>
-                <Text style={[styles.mthSummaryCell, { width: 44, fontWeight: '900' }]}>Total</Text>
+          {/* Frozen Employee Column + Horizontally Scrollable Dates Layout */}
+          <View style={styles.gridContainer}>
+            {/* FROZEN LEFT COLUMN: Employee Info (Requirement 4) */}
+            <View style={styles.frozenColumn}>
+              {/* Header Cell */}
+              <View style={[styles.frozenHeaderCell, { height: 46 }]}>
+                <Text style={styles.frozenHeaderLabel}>EMPLOYEE</Text>
               </View>
 
-              {/* Data Rows */}
+              {/* Rows */}
               {loading ? (
-                <View style={{ height: 260, justifyContent: 'center', alignItems: 'center' }}>
-                  <LoadingSpinner message="Loading muster roll register..." />
+                <View style={{ height: 200, justifyContent: 'center', alignItems: 'center' }}>
+                  <LoadingSpinner message="" />
                 </View>
               ) : (
                 musterRecords.map((row, index) => (
                   <View
                     key={row.sr || index}
                     style={[
-                      styles.matrixDataRow,
+                      styles.frozenRowCell,
+                      { height: 46 },
                       index % 2 === 1 && { backgroundColor: '#F8FAFC' },
                     ]}
                   >
-                    <Text style={[styles.mtdCell, { width: 36, textAlign: 'center', color: '#64748B' }]}>
-                      {row.sr}
+                    <Text style={styles.frozenEmpName} numberOfLines={1}>
+                      {row.sr}. {row.employeeName}
                     </Text>
-                    <Text style={[styles.mtdCell, { width: 105, fontWeight: '700', color: '#0F172A' }]}>
-                      {row.employeeCode}
-                    </Text>
-                    <Text style={[styles.mtdCell, { width: 125, fontWeight: '700', color: '#0F172A' }]}>
-                      {row.employeeName}
-                    </Text>
-                    <Text style={[styles.mtdCell, { width: 135, color: '#475569' }]}>
-                      {row.designation}
-                    </Text>
-                    <Text style={[styles.mtdCell, { width: 105, color: '#475569' }]}>
-                      {row.circle}
-                    </Text>
-                    <Text style={[styles.mtdCell, { width: 115, color: '#475569' }]}>
-                      {row.division}
-                    </Text>
-
-                    {/* Days 1 to 31 */}
-                    {daysHeader.map((d) => (
-                      <View key={d} style={[styles.mtdDayBox, { width: 28 }]}>
-                        {renderDayCell(row.days[d])}
-                      </View>
-                    ))}
-
-                    {/* Summary Columns */}
-                    <Text style={[styles.mtdSumCell, { width: 32, color: '#059669', fontWeight: '800' }]}>
-                      {row.summary.P}
-                    </Text>
-                    <Text style={[styles.mtdSumCell, { width: 38, color: '#0F172A' }]}>
-                      {row.summary.WOP}
-                    </Text>
-                    <Text style={[styles.mtdSumCell, { width: 32, color: '#DC2626', fontWeight: '800' }]}>
-                      {row.summary.A}
-                    </Text>
-                    <Text style={[styles.mtdSumCell, { width: 34, color: '#64748B' }]}>
-                      {row.summary.OD}
-                    </Text>
-                    <Text style={[styles.mtdSumCell, { width: 34, color: '#64748B' }]}>
-                      {row.summary.WO}
-                    </Text>
-                    <Text style={[styles.mtdSumCell, { width: 32, color: '#64748B' }]}>
-                      {row.summary.PL}
-                    </Text>
-                    <Text style={[styles.mtdSumCell, { width: 34, color: '#D97706', fontWeight: '800' }]}>
-                      {row.summary.PH}
-                    </Text>
-                    <Text style={[styles.mtdSumCell, { width: 44, fontWeight: '900', color: '#0F172A' }]}>
-                      {row.summary.Total}
+                    <Text style={styles.frozenEmpSub} numberOfLines={1}>
+                      {row.employeeCode} • {row.designation}
                     </Text>
                   </View>
                 ))
               )}
             </View>
-          </ScrollView>
 
-          {/* Bottom Footer & Legend (Photo 1 & 2) */}
-          <View style={styles.registerFooter}>
-            <View style={styles.legendWrap}>
-              <Text style={styles.legendPrefix}>Legend: </Text>
-              <Text style={[styles.legendItem, { color: '#059669' }]}>P = Present</Text>
-              <Text style={[styles.legendItem, { color: '#2563EB' }]}>WO = Weekly Off</Text>
-              <Text style={[styles.legendItem, { color: '#EA580C' }]}>PH = Public Holiday</Text>
-              <Text style={[styles.legendItem, { color: '#DC2626' }]}>A = Absent</Text>
-              <Text style={[styles.legendItem, { color: '#7C3AED' }]}>OD = On Duty</Text>
-              <Text style={[styles.legendItem, { color: '#475569' }]}>PL = Leave</Text>
-              <Text style={[styles.legendItem, { color: '#475569' }]}>WOP = Without Pay</Text>
+            {/* HORIZONTALLY SCROLLABLE DATES & SUMMARY (Requirement 4) */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+              <View>
+                {/* Horizontal Header Row: Dates & Summaries */}
+                <View style={[styles.scrollableHeaderRow, { height: 46 }]}>
+                  {/* Days 1 to daysInMonth Header Cells (01 Sun, 02 Mon, etc.) */}
+                  {displayDays.map((dm) => {
+                    const isToday = dm.isToday;
+                    const isSunday = dm.isSunday;
+                    const isHoliday = dm.isHoliday;
+
+                    return (
+                      <View
+                        key={dm.day}
+                        style={[
+                          styles.dayColHeader,
+                          { width: 50 },
+                          isSunday && styles.sundayColHeader,
+                          isHoliday && styles.holidayColHeader,
+                          isToday && styles.todayColHeader,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.dayColNum,
+                            isToday && styles.todayColNum,
+                            isHoliday && { color: '#6B21A8' },
+                          ]}
+                        >
+                          {String(dm.day).padStart(2, '0')}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.dayColDay,
+                            isToday && styles.todayColDay,
+                            isSunday && { color: '#2563EB' },
+                            isHoliday && { color: '#7C3AED' },
+                          ]}
+                        >
+                          {dm.dayName}
+                        </Text>
+                        {isToday ? (
+                          <View style={styles.todayDot} />
+                        ) : null}
+                      </View>
+                    );
+                  })}
+
+                  {/* Employee-wise Attendance Summary Column Headers (Requirement 5) */}
+                  <View style={[styles.summaryColHeader, { width: 44, backgroundColor: '#ECFDF5' }]}>
+                    <Text style={[styles.summaryColHeaderText, { color: '#059669' }]}>P</Text>
+                    <Text style={styles.summaryColHeaderSub}>Present</Text>
+                  </View>
+                  <View style={[styles.summaryColHeader, { width: 44, backgroundColor: '#FEF2F2' }]}>
+                    <Text style={[styles.summaryColHeaderText, { color: '#DC2626' }]}>A</Text>
+                    <Text style={styles.summaryColHeaderSub}>Absent</Text>
+                  </View>
+                  <View style={[styles.summaryColHeader, { width: 44, backgroundColor: '#EFF6FF' }]}>
+                    <Text style={[styles.summaryColHeaderText, { color: '#2563EB' }]}>WO</Text>
+                    <Text style={styles.summaryColHeaderSub}>Off</Text>
+                  </View>
+                  <View style={[styles.summaryColHeader, { width: 44, backgroundColor: '#FAF5FF' }]}>
+                    <Text style={[styles.summaryColHeaderText, { color: '#7C3AED' }]}>PH</Text>
+                    <Text style={styles.summaryColHeaderSub}>Holiday</Text>
+                  </View>
+                  <View style={[styles.summaryColHeader, { width: 50, backgroundColor: '#0F172A' }]}>
+                    <Text style={[styles.summaryColHeaderText, { color: '#FFFFFF' }]}>Total</Text>
+                    <Text style={[styles.summaryColHeaderSub, { color: '#94A3B8' }]}>Days</Text>
+                  </View>
+                </View>
+
+                {/* Data Rows for Each Employee */}
+                {loading ? (
+                  <View style={{ height: 200 }} />
+                ) : (
+                  musterRecords.map((row, index) => (
+                    <View
+                      key={row.sr || index}
+                      style={[
+                        styles.scrollableDataRow,
+                        { height: 46 },
+                        index % 2 === 1 && { backgroundColor: '#F8FAFC' },
+                      ]}
+                    >
+                      {/* Days 1 to daysInMonth Data Cells */}
+                      {displayDays.map((dm) => {
+                        const codeVal = row.days[dm.day] || '-';
+                        const holName =
+                          row.dayHolidayNames?.[dm.day] || dm.holidayName;
+
+                        return (
+                          <View
+                            key={dm.day}
+                            style={[
+                              styles.dayDataCell,
+                              { width: 50 },
+                              dm.isToday && styles.todayDataCell,
+                            ]}
+                          >
+                            {renderStatusCell(codeVal, holName, row, dm)}
+                          </View>
+                        );
+                      })}
+
+                      {/* Summary Values for this employee */}
+                      <View style={[styles.summaryDataCell, { width: 44, backgroundColor: '#F0FDF4' }]}>
+                        <Text style={[styles.summaryValText, { color: '#059669' }]}>
+                          {row.summary.P}
+                        </Text>
+                      </View>
+                      <View style={[styles.summaryDataCell, { width: 44, backgroundColor: '#FEF2F2' }]}>
+                        <Text style={[styles.summaryValText, { color: '#DC2626' }]}>
+                          {row.summary.A}
+                        </Text>
+                      </View>
+                      <View style={[styles.summaryDataCell, { width: 44, backgroundColor: '#EFF6FF' }]}>
+                        <Text style={[styles.summaryValText, { color: '#2563EB' }]}>
+                          {row.summary.WO}
+                        </Text>
+                      </View>
+                      <View style={[styles.summaryDataCell, { width: 44, backgroundColor: '#FAF5FF' }]}>
+                        <Text style={[styles.summaryValText, { color: '#7C3AED' }]}>
+                          {row.summary.PH}
+                        </Text>
+                      </View>
+                      <View style={[styles.summaryDataCell, { width: 50, backgroundColor: '#F1F5F9' }]}>
+                        <Text style={[styles.summaryValText, { color: '#0F172A', fontWeight: '900' }]}>
+                          {row.summary.Total}
+                        </Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            </ScrollView>
+          </View>
+
+          {/* Strict 4 Status Legend Bar (Requirement 2) */}
+          <View style={styles.legendContainer}>
+            <View style={styles.legendHeaderRow}>
+              <Info size={14} color="#1E63F0" style={{ marginRight: 6 }} />
+              <Text style={styles.legendTitle}>STRICT ATTENDANCE STATUS OPTIONS (ONLY 4 PERMITTED)</Text>
             </View>
 
-            <Text style={styles.legendRightNote}>
-              Calculated over 31 days in October 2026
-            </Text>
+            <View style={styles.legendGrid}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendBox, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
+                  <Text style={[styles.legendCode, { color: '#166534' }]}>P</Text>
+                </View>
+                <View style={{ marginLeft: 8 }}>
+                  <Text style={styles.legendLabel}>Present</Text>
+                  <Text style={styles.legendDesc}>Verified shift completed</Text>
+                </View>
+              </View>
+
+              <View style={styles.legendItem}>
+                <View style={[styles.legendBox, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}>
+                  <Text style={[styles.legendCode, { color: '#991B1B' }]}>A</Text>
+                </View>
+                <View style={{ marginLeft: 8 }}>
+                  <Text style={styles.legendLabel}>Absent</Text>
+                  <Text style={styles.legendDesc}>Unexcused absence</Text>
+                </View>
+              </View>
+
+              <View style={styles.legendItem}>
+                <View style={[styles.legendBox, { backgroundColor: '#DBEAFE', borderColor: '#BFDBFE' }]}>
+                  <Text style={[styles.legendCode, { color: '#1E40AF' }]}>WO</Text>
+                </View>
+                <View style={{ marginLeft: 8 }}>
+                  <Text style={styles.legendLabel}>Weekly Off</Text>
+                  <Text style={styles.legendDesc}>Scheduled Sunday rest day</Text>
+                </View>
+              </View>
+
+              <View style={styles.legendItem}>
+                <View style={[styles.legendBox, { backgroundColor: '#F3E8FF', borderColor: '#E9D5FF' }]}>
+                  <Text style={[styles.legendCode, { color: '#6B21A8' }]}>PH</Text>
+                </View>
+                <View style={{ marginLeft: 8 }}>
+                  <Text style={styles.legendLabel}>Public Holiday</Text>
+                  <Text style={styles.legendDesc}>Centralized gazetted holiday</Text>
+                </View>
+              </View>
+            </View>
           </View>
         </View>
       </ScrollView>
 
-      {/* Deployment Site Filter Modal */}
+      {/* Public Holiday Info Modal (Requirement 4) */}
+      <Modal
+        visible={holidayTooltip.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setHolidayTooltip({ visible: false, name: '', date: '' })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.holidayModalCard}>
+            <View style={styles.holidayModalHeader}>
+              <View style={styles.phModalBadge}>
+                <Text style={styles.phModalBadgeText}>PH</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.holidayModalTitle}>{holidayTooltip.name}</Text>
+                <Text style={styles.holidayModalDate}>{holidayTooltip.date}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setHolidayTooltip({ visible: false, name: '', date: '' })}
+                style={{ padding: 4 }}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.holidayModalBody}>
+              <Text style={styles.holidayModalText}>
+                This date is declared a <Text style={{ fontWeight: '800' }}>Gazetted Public Holiday</Text> in the centralized Holiday Management sheet.
+              </Text>
+              <Text style={[styles.holidayModalText, { marginTop: 6, color: '#059669', fontWeight: '700' }]}>
+                ✓ Attendance automatically marked as PH throughout the entire platform.
+              </Text>
+              {holidayTooltip.empName ? (
+                <Text style={[styles.holidayModalText, { marginTop: 6, color: '#64748B' }]}>
+                  Employee: {holidayTooltip.empName}
+                </Text>
+              ) : null}
+            </View>
+
+            <TouchableOpacity
+              style={styles.holidayModalCloseBtn}
+              onPress={() => setHolidayTooltip({ visible: false, name: '', date: '' })}
+            >
+              <Text style={styles.holidayModalCloseBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Substation Site Filter Picker Modal */}
       <Modal
         visible={showSitePickerModal}
         transparent
@@ -790,19 +1049,23 @@ export const ReportsScreen: React.FC = () => {
         onRequestClose={() => setShowSitePickerModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.pickerModalCard, SHADOWS.lg]}>
-            <View style={styles.pickerModalHeader}>
-              <Text style={styles.pickerModalTitle}>Select Deployment Site</Text>
-              <TouchableOpacity onPress={() => setShowSitePickerModal(false)}>
-                <X size={18} color="#64748B" />
+          <View style={styles.sitePickerCard}>
+            <View style={styles.sitePickerHeader}>
+              <Building2 size={18} color="#1E63F0" style={{ marginRight: 8 }} />
+              <Text style={styles.sitePickerTitle}>Filter by Substation Location</Text>
+              <TouchableOpacity
+                onPress={() => setShowSitePickerModal(false)}
+                style={{ padding: 4, marginLeft: 'auto' }}
+              >
+                <X size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 300 }}>
+            <ScrollView style={{ maxHeight: 320 }}>
               <TouchableOpacity
                 style={[
-                  styles.pickerItem,
-                  selectedSiteFilter === 'all' && styles.pickerItemActive,
+                  styles.siteOptionItem,
+                  selectedSiteFilter === 'all' && styles.siteOptionItemActive,
                 ]}
                 onPress={() => {
                   setSelectedSiteFilter('all');
@@ -811,21 +1074,23 @@ export const ReportsScreen: React.FC = () => {
               >
                 <Text
                   style={[
-                    styles.pickerItemText,
-                    selectedSiteFilter === 'all' && styles.pickerItemTextActive,
+                    styles.siteOptionText,
+                    selectedSiteFilter === 'all' && styles.siteOptionTextActive,
                   ]}
                 >
-                  All Sites (Company-wide)
+                  All Substation Locations
                 </Text>
-                {selectedSiteFilter === 'all' && <Check size={16} color="#2563EB" />}
+                {selectedSiteFilter === 'all' && (
+                  <Check size={16} color="#1E63F0" />
+                )}
               </TouchableOpacity>
 
               {sites.map((s) => (
                 <TouchableOpacity
                   key={s.id}
                   style={[
-                    styles.pickerItem,
-                    selectedSiteFilter === s.id && styles.pickerItemActive,
+                    styles.siteOptionItem,
+                    selectedSiteFilter === s.id && styles.siteOptionItemActive,
                   ]}
                   onPress={() => {
                     setSelectedSiteFilter(s.id);
@@ -834,13 +1099,15 @@ export const ReportsScreen: React.FC = () => {
                 >
                   <Text
                     style={[
-                      styles.pickerItemText,
-                      selectedSiteFilter === s.id && styles.pickerItemTextActive,
+                      styles.siteOptionText,
+                      selectedSiteFilter === s.id && styles.siteOptionTextActive,
                     ]}
                   >
-                    {s.name} ({s.code})
+                    {s.name}
                   </Text>
-                  {selectedSiteFilter === s.id && <Check size={16} color="#2563EB" />}
+                  {selectedSiteFilter === s.id && (
+                    <Check size={16} color="#1E63F0" />
+                  )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -848,7 +1115,251 @@ export const ReportsScreen: React.FC = () => {
         </View>
       </Modal>
 
-      {user?.role === 'supervisor' ? <SupervisorDrawerModal /> : <AdminDrawerModal />}
+      {/* Admin Attendance Marking Modal (Requirement 2 & 3) */}
+      <Modal
+        visible={markModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMarkModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.markModalCard, SHADOWS.md]}>
+            <View style={styles.markModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.markModalTitle}>Mark Attendance Record</Text>
+                <Text style={styles.markModalSub}>
+                  Centralized sync across Admin, Supervisor, and Employee dashboards
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setMarkModalVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.markModalBody}>
+              {/* Employee Selector */}
+              <Text style={styles.inputFieldLabel}>FIELD EMPLOYEE</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {musterRecords.map((mr) => {
+                    const isSelected = markEmpId === (mr.employeeCode || mr.employeeName);
+                    return (
+                      <TouchableOpacity
+                        key={mr.employeeCode || mr.sr}
+                        style={[styles.empPill, isSelected && styles.empPillActive]}
+                        onPress={() => {
+                          setMarkEmpId(mr.employeeCode || mr.employeeName);
+                          setMarkEmpName(`${mr.employeeName} (${mr.employeeCode})`);
+                        }}
+                      >
+                        <Text style={[styles.empPillText, isSelected && styles.empPillTextActive]}>
+                          {mr.employeeName}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+
+              {/* Date Input with Interactive Calendar Picker */}
+              <Text style={styles.inputFieldLabel}>ATTENDANCE DATE (YYYY-MM-DD)</Text>
+              <View style={styles.dateInputRow}>
+                <TextInput
+                  style={styles.dateTextInput}
+                  value={markDate}
+                  onChangeText={(val) => {
+                    setMarkDate(val);
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                      const p = val.split('-');
+                      setMarkCalYear(parseInt(p[0], 10));
+                      setMarkCalMonth(parseInt(p[1], 10) - 1);
+                    }
+                  }}
+                  placeholder="2026-11-01"
+                  placeholderTextColor="#94A3B8"
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.dateCalendarIconBtn,
+                    showMarkDatePicker && styles.dateCalendarIconBtnActive,
+                  ]}
+                  onPress={() => setShowMarkDatePicker((prev) => !prev)}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Pick attendance date"
+                >
+                  <Calendar size={18} color={showMarkDatePicker ? '#FFFFFF' : '#1E63F0'} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Inline Interactive Calendar Picker */}
+              {showMarkDatePicker && (
+                <View style={styles.calPickerBox}>
+                  <View style={styles.calNavHeader}>
+                    <TouchableOpacity
+                      style={styles.calNavBtn}
+                      onPress={handlePrevMarkCalMonth}
+                      activeOpacity={0.7}
+                    >
+                      <ChevronLeft size={16} color="#334155" />
+                    </TouchableOpacity>
+
+                    <Text style={styles.calMonthYearTitle}>
+                      {MONTH_NAMES[markCalMonth]} {markCalYear}
+                    </Text>
+
+                    <TouchableOpacity
+                      style={styles.calNavBtn}
+                      onPress={handleNextMarkCalMonth}
+                      activeOpacity={0.7}
+                    >
+                      <ChevronRight size={16} color="#334155" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.calWeekdaysRow}>
+                    {WEEKDAY_NAMES_MARK.map((w, idx) => (
+                      <View key={idx} style={styles.calWeekdayCell}>
+                        <Text
+                          style={[
+                            styles.calWeekdayText,
+                            (idx === 0 || idx === 6) && styles.calWeekendText,
+                          ]}
+                        >
+                          {w}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <View style={styles.calDaysMatrix}>
+                    {Array.from({ length: markCalFirstDayOffset }).map((_, i) => (
+                      <View key={`empty-mark-${i}`} style={styles.calDayCell} />
+                    ))}
+
+                    {Array.from({ length: daysInMarkCalMonth }).map((_, i) => {
+                      const day = i + 1;
+                      const mm = String(markCalMonth + 1).padStart(2, '0');
+                      const dd = String(day).padStart(2, '0');
+                      const cellDate = `${markCalYear}-${mm}-${dd}`;
+                      const isSelected = markDate === cellDate;
+                      const isSunday = (markCalFirstDayOffset + i) % 7 === 0;
+
+                      return (
+                        <TouchableOpacity
+                          key={`mark-day-${day}`}
+                          style={[
+                            styles.calDayCell,
+                            isSelected && styles.calDayCellSelected,
+                          ]}
+                          onPress={() => handleSelectMarkCalDay(day)}
+                          activeOpacity={0.65}
+                        >
+                          <Text
+                            style={[
+                              styles.calDayText,
+                              isSunday && styles.calDaySundayText,
+                              isSelected && styles.calDayTextSelected,
+                            ]}
+                          >
+                            {day}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <View style={styles.calFooterActions}>
+                    <TouchableOpacity
+                      style={styles.calTodayBtn}
+                      onPress={handleSelectMarkToday}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.calTodayBtnText}>Select Today</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.calCloseBtn}
+                      onPress={() => setShowMarkDatePicker(false)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.calCloseBtnText}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Strict Permitted Statuses (P vs A) */}
+              <Text style={[styles.inputFieldLabel, { marginTop: 12 }]}>ATTENDANCE STATUS (STRICT 4 RULES)</Text>
+              <View style={styles.statusButtonsRow}>
+                <TouchableOpacity
+                  style={[styles.statusOptionBtn, markStatus === 'P' && styles.statusOptionBtnPActive]}
+                  onPress={() => setMarkStatus('P')}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.statusCircle, { backgroundColor: '#059669' }]} />
+                  <Text style={[styles.statusOptionText, markStatus === 'P' && { color: '#059669', fontWeight: '800' }]}>
+                    P • Present (On Duty)
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.statusOptionBtn, markStatus === 'A' && styles.statusOptionBtnAActive]}
+                  onPress={() => setMarkStatus('A')}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.statusCircle, { backgroundColor: '#DC2626' }]} />
+                  <Text style={[styles.statusOptionText, markStatus === 'A' && { color: '#DC2626', fontWeight: '800' }]}>
+                    A • Absent (Off Duty)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Admin Remarks */}
+              <Text style={[styles.inputFieldLabel, { marginTop: 12 }]}>ADMIN REMARKS / AUDIT LOG</Text>
+              <TextInput
+                style={[styles.textInput, { height: 60, textAlignVertical: 'top' }]}
+                value={markRemarks}
+                onChangeText={setMarkRemarks}
+                placeholder="Operations admin authorization note..."
+                placeholderTextColor="#94A3B8"
+                multiline
+              />
+            </View>
+
+            <View style={styles.markModalFooter}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setMarkModalVisible(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.saveMarkBtn}
+                onPress={handleSaveAttendanceMark}
+                disabled={savingMark}
+                activeOpacity={0.85}
+              >
+                {savingMark ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Check size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.saveMarkBtnText}>Save & Synchronize</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Drawer Modals */}
+      <AdminDrawerModal />
+      <SupervisorDrawerModal />
     </View>
   );
 };
@@ -860,98 +1371,95 @@ const styles = StyleSheet.create({
   },
   topHeaderBar: {
     backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
   },
   topHeaderRow1: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   menuCircleBtn: {
     width: 36,
     height: 36,
-    borderRadius: 8,
+    borderRadius: 18,
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginRight: 6,
   },
   backCircleBtn: {
     width: 36,
     height: 36,
-    borderRadius: 8,
+    borderRadius: 18,
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginRight: 8,
+    marginLeft: 8,
   },
   mainTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.2,
-  },
-  mainSubtitle: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
   },
   topActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  btnSecondary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 6,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  btnSecondaryText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-  },
   btnPrimaryGreen: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 6,
     backgroundColor: '#059669',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
   btnPrimaryGreenText: {
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
-    color: '#FFFFFF',
+  },
+  btnPurple: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: 8,
+  },
+  btnPurpleText: {
+    color: '#6B21A8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  btnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: 8,
+  },
+  btnSecondaryText: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '600',
   },
   mainScroll: {
     flex: 1,
   },
   mainScrollContent: {
-    padding: 12,
-    maxWidth: 1440,
-    width: '100%',
-    alignSelf: 'center',
+    padding: 16,
+    gap: 14,
   },
-
-  /* Parameter Filter Card */
   filterCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
@@ -959,9 +1467,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   filterTitleRow: {
     flexDirection: 'row',
@@ -971,40 +1482,53 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#1E293B',
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
   },
-  monthPillsRow: {
+  monthNavRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  monthPill: {
+  monthNavArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  currentMonthBadge: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  currentMonthText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E63F0',
+  },
+  todayJumpBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
     borderRadius: 6,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  monthPillActive: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#059669',
-  },
-  monthPillText: {
+  todayJumpBtnText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  monthPillTextActive: {
-    color: '#059669',
     fontWeight: '700',
+    color: '#1E63F0',
   },
   filterInputsRow: {
     flexDirection: 'row',
-    gap: 14,
     flexWrap: 'wrap',
+    gap: 10,
   },
   inputCol: {
     flex: 1,
@@ -1012,174 +1536,118 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 6,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 4,
   },
   inputBoxWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E2E8F0',
     borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 40,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
-  inputField: {
-    flex: 1,
+  inputFieldStatic: {
     fontSize: 12,
+    fontWeight: '700',
     color: '#0F172A',
-    fontWeight: '600',
-    padding: 0,
   },
   dropdownSelectText: {
-    flex: 1,
     fontSize: 12,
-    color: '#0F172A',
     fontWeight: '600',
+    color: '#0F172A',
+    flex: 1,
   },
-
-  /* KPI Summary Stat Cards */
   kpiCardsRowWide: {
     flexDirection: 'row',
-    alignItems: 'stretch',
     gap: 10,
-    marginBottom: 18,
   },
   kpiCardWide: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderLeftWidth: 4,
-    borderLeftColor: '#CBD5E1',
-  },
-  kpiCardsScroll: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
-  },
-  kpiCard: {
-    width: 130,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderLeftWidth: 4,
-    borderLeftColor: '#CBD5E1',
+  },
+  kpiCardsScroll: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  kpiCard: {
+    width: 140,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   kpiCardBorderGreen: {
+    borderLeftWidth: 4,
     borderLeftColor: '#059669',
   },
-  kpiCardBorderAmber: {
-    borderLeftColor: '#D97706',
+  kpiCardBorderRed: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#DC2626',
   },
-  kpiCardBorderOrange: {
-    borderLeftColor: '#EA580C',
+  kpiCardBorderBlue: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#2563EB',
+  },
+  kpiCardBorderPurple: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#7C3AED',
   },
   kpiLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     color: '#64748B',
-    letterSpacing: 0.5,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   kpiValueDark: {
     fontSize: 20,
     fontWeight: '900',
     color: '#0F172A',
-    marginBottom: 4,
   },
   kpiSub: {
     fontSize: 10,
     color: '#94A3B8',
+    marginTop: 2,
   },
-
-  /* View Selector Tabs Strip */
-  tabsStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  tabButtonsGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  viewTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  viewTabActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
-  },
-  viewTabText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  viewTabTextActive: {
-    color: '#2563EB',
-    fontWeight: '800',
-  },
-  tabRightCaption: {
-    fontSize: 11,
-    color: '#64748B',
-    fontStyle: 'italic',
-  },
-
-  /* Official Register Container */
   registerCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
   },
   registerDarkHeader: {
     backgroundColor: '#0B192C',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    padding: 14,
   },
   registerHeaderTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
   },
   b4sLogoBadge: {
-    width: 38,
-    height: 28,
+    backgroundColor: '#1E63F0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   b4sLogoText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '900',
-    color: '#1E3A8A',
-    letterSpacing: -0.5,
+    color: '#FFFFFF',
   },
   registerSmallLabel: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#60A5FA',
-    letterSpacing: 0.8,
+    color: '#93C5FD',
   },
   registerTitle: {
     fontSize: 13,
@@ -1187,173 +1655,605 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginTop: 1,
   },
-  registerSubtitle: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#94A3B8',
+  registerDownloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E63F0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  registerDownloadBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
   registerHeaderBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
-    flexWrap: 'wrap',
-    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  registerSubtitle: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94A3B8',
+    flex: 1,
   },
   swipeHintText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#60A5FA',
-    backgroundColor: 'rgba(96, 165, 250, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  registerDownloadBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#059669',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  registerDownloadBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  /* Unified Matrix Table Styles */
-  matrixHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0F172A',
-    height: 38,
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
-  },
-  mthCell: {
-    color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: '700',
-    paddingHorizontal: 6,
-  },
-  mthDayCell: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  mthSummaryCell: {
     color: '#93C5FD',
+    fontWeight: '700',
+  },
+  gridContainer: {
+    flexDirection: 'row',
+  },
+  frozenColumn: {
+    width: 145,
+    backgroundColor: '#FFFFFF',
+    borderRightWidth: 2,
+    borderRightColor: '#CBD5E1',
+    zIndex: 10,
+  },
+  frozenHeaderCell: {
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  frozenHeaderLabel: {
     fontSize: 10,
     fontWeight: '800',
-    textAlign: 'center',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
-  matrixDataRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 42,
-    backgroundColor: '#FFFFFF',
+  frozenRowCell: {
+    justifyContent: 'center',
+    paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#F1F5F9',
   },
-  mtdCell: {
+  frozenEmpName: {
     fontSize: 11,
-    paddingHorizontal: 6,
+    fontWeight: '700',
+    color: '#0F172A',
   },
-  mtdDayBox: {
+  frozenEmpSub: {
+    fontSize: 9,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  scrollableHeaderRow: {
+    flexDirection: 'row',
+    backgroundColor: '#0F172A',
+  },
+  dayColHeader: {
     alignItems: 'center',
     justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#1E293B',
+    paddingVertical: 4,
   },
-  dayCellText: {
+  sundayColHeader: {
+    backgroundColor: '#1E293B',
+  },
+  holidayColHeader: {
+    backgroundColor: '#2E1065',
+  },
+  todayColHeader: {
+    backgroundColor: '#1E3A8A',
+    borderTopWidth: 2,
+    borderTopColor: '#60A5FA',
+  },
+  dayColNum: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  todayColNum: {
+    color: '#93C5FD',
+  },
+  dayColDay: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  todayColDay: {
+    color: '#BFDBFE',
+  },
+  todayDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#60A5FA',
+    marginTop: 1,
+  },
+  summaryColHeader: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#CBD5E1',
+    paddingVertical: 4,
+  },
+  summaryColHeaderText: {
     fontSize: 11,
-    textAlign: 'center',
+    fontWeight: '900',
   },
-  mtdSumCell: {
+  summaryColHeaderSub: {
+    fontSize: 8,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  scrollableDataRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  dayDataCell: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#F1F5F9',
+    paddingHorizontal: 2,
+  },
+  todayDataCell: {
+    backgroundColor: 'rgba(239, 246, 255, 0.7)',
+  },
+  statusBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 28,
+  },
+  statusBadgeText: {
     fontSize: 11,
-    textAlign: 'center',
+    fontWeight: '900',
   },
-
-  /* Register Footer & Legend */
-  registerFooter: {
-    backgroundColor: '#F8FAFC',
+  summaryDataCell: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+  },
+  summaryValText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  legendContainer: {
+    padding: 14,
+    backgroundColor: '#FAFAFA',
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
   },
-  legendWrap: {
+  legendHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    flexWrap: 'wrap',
+    marginBottom: 10,
   },
-  legendPrefix: {
+  legendTitle: {
     fontSize: 10,
     fontWeight: '800',
     color: '#334155',
+    letterSpacing: 0.5,
+  },
+  legendGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
   },
   legendItem: {
-    fontSize: 10,
-    fontWeight: '700',
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 140,
   },
-  legendRightNote: {
+  legendBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  legendCode: {
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  legendLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  legendDesc: {
     fontSize: 10,
     color: '#64748B',
-    fontWeight: '500',
   },
-
-  /* Site Picker Modal */
+  btnBlueMark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E63F0',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  btnBlueMarkText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  markModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  dateInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingRight: 4,
+  },
+  dateTextInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  dateCalendarIconBtn: {
+    padding: 7,
+    borderRadius: 6,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dateCalendarIconBtnActive: {
+    backgroundColor: '#1E63F0',
+  },
+  calPickerBox: {
+    marginTop: 8,
+    marginBottom: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    padding: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  calNavHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  calNavBtn: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  calMonthYearTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  calWeekdaysRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  calWeekdayCell: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  calWeekdayText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  calWeekendText: {
+    color: '#EF4444',
+  },
+  calDaysMatrix: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calDayCell: {
+    width: '14.28%',
+    aspectRatio: 1.15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    marginVertical: 2,
+  },
+  calDayCellSelected: {
+    backgroundColor: '#1E63F0',
+  },
+  calDayText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  calDaySundayText: {
+    color: '#EF4444',
+  },
+  calDayTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  calFooterActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  calTodayBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: '#EFF6FF',
+  },
+  calTodayBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E63F0',
+  },
+  calCloseBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+  },
+  calCloseBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  markModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  markModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  markModalSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  markModalBody: {
+    padding: 16,
+  },
+  inputFieldLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  empPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  empPillActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#3B82F6',
+  },
+  empPillText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  empPillTextActive: {
+    color: '#1D4ED8',
+    fontWeight: '700',
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  statusButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statusOptionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  statusOptionBtnPActive: {
+    borderColor: '#059669',
+    backgroundColor: '#F0FDF4',
+  },
+  statusOptionBtnAActive: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+  statusCircle: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  statusOptionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  markModalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    padding: 16,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
+  },
+  cancelBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  saveMarkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E63F0',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  saveMarkBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
   },
-  pickerModalCard: {
-    width: Math.min(width * 0.9, 360),
+  holidayModalCard: {
+    width: '100%',
+    maxWidth: 400,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 14,
+    padding: 18,
   },
-  pickerModalHeader: {
+  holidayModalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
+  },
+  phModalBadge: {
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  phModalBadgeText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#6B21A8',
+  },
+  holidayModalTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  holidayModalDate: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  holidayModalBody: {
+    marginBottom: 16,
+  },
+  holidayModalText: {
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 18,
+  },
+  holidayModalCloseBtn: {
+    backgroundColor: '#1E63F0',
+    paddingVertical: 9,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  holidayModalCloseBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  sitePickerCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+  },
+  sitePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
-    marginBottom: 8,
   },
-  pickerModalTitle: {
+  sitePickerTitle: {
     fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
   },
-  pickerItem: {
+  siteOptionItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
-  pickerItemActive: {
+  siteOptionItemActive: {
     backgroundColor: '#EFF6FF',
   },
-  pickerItemText: {
+  siteOptionText: {
     fontSize: 13,
     color: '#334155',
   },
-  pickerItemTextActive: {
+  siteOptionTextActive: {
     fontWeight: '700',
-    color: '#2563EB',
+    color: '#1E63F0',
   },
 });
+
+export default ReportsScreen;

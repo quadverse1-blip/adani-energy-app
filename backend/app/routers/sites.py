@@ -9,7 +9,24 @@ router = APIRouter(prefix="/sites", tags=["Substations"])
 
 @router.get("", response_model=List[SiteResponse])
 async def list_sites(token_data: dict = Depends(get_current_user_token)):
+    user_role = str(token_data.get("role", "technician")).lower()
     raw_sites = db.get_all_sites()
+    
+    # Requirement: Employees should only see the sites assigned to them.
+    # Employees must not see other employees' assigned sites.
+    if user_role == "technician":
+        emp_id = token_data.get("id")
+        emp = db.get_employee(emp_id) or db.find_employee_by_identifier(emp_id)
+        if emp:
+            assigned_ids = set()
+            if emp.get("assignedSiteId"):
+                assigned_ids.add(str(emp["assignedSiteId"]))
+            for s_id in emp.get("assignedSiteIds", []):
+                assigned_ids.add(str(s_id))
+            raw_sites = [s for s in raw_sites if str(s.get("_id")) in assigned_ids or str(s.get("id")) in assigned_ids]
+        else:
+            raw_sites = []
+
     response = []
     for s in raw_sites:
         response.append(SiteResponse(
@@ -31,6 +48,21 @@ async def list_sites(token_data: dict = Depends(get_current_user_token)):
 
 @router.get("/{siteId}", response_model=SiteResponse)
 async def get_site_details(siteId: str, token_data: dict = Depends(get_current_user_token)):
+    user_role = str(token_data.get("role", "technician")).lower()
+    if user_role == "technician":
+        emp_id = token_data.get("id")
+        emp = db.get_employee(emp_id) or db.find_employee_by_identifier(emp_id)
+        if emp:
+            assigned_ids = set()
+            if emp.get("assignedSiteId"):
+                assigned_ids.add(str(emp["assignedSiteId"]))
+            for s_id in emp.get("assignedSiteIds", []):
+                assigned_ids.add(str(s_id))
+            if siteId not in assigned_ids:
+                raise HTTPException(status_code=403, detail="You do not have permission to view unassigned substations.")
+        else:
+            raise HTTPException(status_code=403, detail="No substation assignment found for your profile.")
+
     s = db.get_site(siteId)
     if not s:
         raise HTTPException(status_code=404, detail="Substation not found")
@@ -72,6 +104,7 @@ async def create_site(
         "status": site_in.status or "active"
     }
     db.sites[site_id] = new_site
+    db.set_firestore_document("sites", site_id, new_site)
     return SiteResponse(id=site_id, **new_site)
 
 @router.put("/{siteId}", response_model=SiteResponse)
@@ -89,6 +122,8 @@ async def update_site(
         update_data["manager"] = update_data["manager"]
         
     s.update(update_data)
+    db.sites[s["_id"]] = s
+    db.set_firestore_document("sites", s["_id"], s)
     return SiteResponse(id=s["_id"], **s)
 
 @router.delete("/{siteId}")

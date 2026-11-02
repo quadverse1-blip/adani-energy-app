@@ -8,6 +8,7 @@ import { TrackingScreen } from '../screens/admin/TrackingScreen';
 import { AttendanceLogsScreen } from '../screens/admin/AttendanceLogsScreen';
 import { ReportsScreen } from '../screens/admin/ReportsScreen';
 import { CompensationScreen } from '../screens/admin/CompensationScreen';
+import { HolidayManagementScreen } from '../screens/admin/HolidayManagementScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -30,6 +31,7 @@ export const AdminNavigator: React.FC = () => {
         name="Salary"
         component={CompensationScreen}
       />
+      <Stack.Screen name="Holidays" component={HolidayManagementScreen} />
     </Stack.Navigator>
   );
 };

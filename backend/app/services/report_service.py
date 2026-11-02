@@ -1,151 +1,188 @@
 import io
 import calendar
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, List, Any, Optional
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.comments import Comment
 from app.core.database import db
-
-# Base official muster roll records for October 2026 matching company registry
-BASE_MUSTER_OCTOBER_2026 = [
-    {
-        "sr": 1,
-        "employeeCode": "b4S/Adani/01",
-        "employeeName": "Rohit Sharma",
-        "designation": "Junior Engineer",
-        "circle": "Gujarat Circle",
-        "division": "Surat Division",
-        "days": {
-            1: "A", 2: "HL", 3: "A", 4: "P", 5: "P", 6: "P", 7: "A", 8: "P", 9: "A", 10: "A",
-            11: "O", 12: "P", 13: "A", 14: "P", 15: "A", 16: "A", 17: "P", 18: "O", 19: "A", 20: "HL",
-            21: "P", 22: "P", 23: "A", 24: "A", 25: "O", 26: "-", 27: "-", 28: "-", 29: "-", 30: "-", 31: "-"
-        },
-        "summary": {"P": 9, "WOP": 3, "A": 11, "OD": 0, "WO": 0, "PL": 0, "PH": 2, "Total": 14}
-    },
-    {
-        "sr": 2,
-        "employeeCode": "b4S/Adani/02",
-        "employeeName": "Amit Kumar",
-        "designation": "Junior Engineer",
-        "circle": "Prc",
-        "division": "Office",
-        "days": {
-            1: "A", 2: "HL", 3: "A", 4: "O", 5: "A", 6: "A", 7: "A", 8: "A", 9: "A", 10: "A",
-            11: "O", 12: "A", 13: "A", 14: "A", 15: "A", 16: "A", 17: "A", 18: "O", 19: "A", 20: "HL",
-            21: "P", 22: "A", 23: "A", 24: "A", 25: "O", 26: "-", 27: "-", 28: "-", 29: "-", 30: "-", 31: "-"
-        },
-        "summary": {"P": 1, "WOP": 4, "A": 18, "OD": 0, "WO": 0, "PL": 0, "PH": 2, "Total": 7}
-    },
-    {
-        "sr": 3,
-        "employeeCode": "b4S/Adani/03",
-        "employeeName": "Sandeep Yadav",
-        "designation": "Junior Engineer",
-        "circle": "Prc",
-        "division": "Bundgarden",
-        "days": {
-            1: "A", 2: "HL", 3: "A", 4: "O", 5: "A", 6: "A", 7: "A", 8: "A", 9: "A", 10: "A",
-            11: "O", 12: "A", 13: "A", 14: "A", 15: "A", 16: "A", 17: "A", 18: "O", 19: "A", 20: "HL",
-            21: "A", 22: "A", 23: "A", 24: "A", 25: "O", 26: "-", 27: "-", 28: "-", 29: "-", 30: "-", 31: "-"
-        },
-        "summary": {"P": 0, "WOP": 4, "A": 19, "OD": 0, "WO": 0, "PL": 0, "PH": 2, "Total": 6}
-    },
-    {
-        "sr": 4,
-        "employeeCode": "b4S/Adani/04",
-        "employeeName": "Vikash Singh",
-        "designation": "Junior Engineer",
-        "circle": "Prc",
-        "division": "Bundgarden",
-        "days": {
-            1: "A", 2: "HL", 3: "A", 4: "O", 5: "A", 6: "A", 7: "A", 8: "A", 9: "A", 10: "A",
-            11: "O", 12: "A", 13: "A", 14: "A", 15: "A", 16: "A", 17: "A", 18: "O", 19: "A", 20: "HL",
-            21: "A", 22: "A", 23: "A", 24: "A", 25: "O", 26: "-", 27: "-", 28: "-", 29: "-", 30: "-", 31: "-"
-        },
-        "summary": {"P": 0, "WOP": 4, "A": 19, "OD": 0, "WO": 0, "PL": 0, "PH": 2, "Total": 6}
-    },
-    {
-        "sr": 5,
-        "employeeCode": "b4S/Adani/05",
-        "employeeName": "Neha Patil",
-        "designation": "Supervisor",
-        "circle": "Prc",
-        "division": "Office",
-        "days": {
-            1: "A", 2: "HL", 3: "A", 4: "O", 5: "A", 6: "A", 7: "A", 8: "A", 9: "A", 10: "A",
-            11: "O", 12: "A", 13: "A", 14: "A", 15: "A", 16: "A", 17: "A", 18: "O", 19: "A", 20: "HL",
-            21: "A", 22: "A", 23: "A", 24: "A", 25: "O", 26: "-", 27: "-", 28: "-", 29: "-", 30: "-", 31: "-"
-        },
-        "summary": {"P": 0, "WOP": 4, "A": 19, "OD": 0, "WO": 0, "PL": 0, "PH": 2, "Total": 6}
-    },
-    {
-        "sr": 6,
-        "employeeCode": "b4S/Adani/06",
-        "employeeName": "Harsh Parmar",
-        "designation": "Junior Engineer",
-        "circle": "Prc",
-        "division": "st. joseph university",
-        "days": {
-            1: "A", 2: "HL", 3: "A", 4: "P", 5: "P", 6: "A", 7: "A", 8: "A", 9: "A", 10: "A",
-            11: "O", 12: "A", 13: "A", 14: "P", 15: "A", 16: "A", 17: "A", 18: "O", 19: "A", 20: "HL",
-            21: "A", 22: "A", 23: "A", 24: "A", 25: "O", 26: "-", 27: "-", 28: "-", 29: "-", 30: "-", 31: "-"
-        },
-        "summary": {"P": 3, "WOP": 3, "A": 17, "OD": 0, "WO": 0, "PL": 0, "PH": 2, "Total": 8}
-    },
-    {
-        "sr": 7,
-        "employeeCode": "SUPER01",
-        "employeeName": "Suresh Patil",
-        "designation": "Area Operations Supervisor",
-        "circle": "Maharashtra Circle",
-        "division": "Pune Division",
-        "days": {
-            1: "A", 2: "HL", 3: "A", 4: "O", 5: "A", 6: "A", 7: "A", 8: "A", 9: "A", 10: "A",
-            11: "O", 12: "A", 13: "A", 14: "A", 15: "A", 16: "A", 17: "A", 18: "O", 19: "A", 20: "HL",
-            21: "P", 22: "P", 23: "A", 24: "A", 25: "O", 26: "-", 27: "-", 28: "-", 29: "-", 30: "-", 31: "-"
-        },
-        "summary": {"P": 2, "WOP": 4, "A": 17, "OD": 0, "WO": 0, "PL": 0, "PH": 2, "Total": 8}
-    }
-]
 
 class ReportService:
     @staticmethod
     def get_muster_roll_data(
-        month: int = 10,
-        year: int = 2026,
+        month: Optional[int] = None,
+        year: Optional[int] = None,
         site_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Returns structured matrix data for official attendance muster roll
-        and KPI overview statistics.
+        Dynamically computes the official real-time horizontal attendance muster roll
+        based on the actual system calendar and centralized public holidays.
+        Strictly enforces ONLY 4 permitted attendance statuses:
+        P = Present, A = Absent, WO = Weekly Off, PH = Public Holiday.
         """
+        now = datetime.now()
+        month = month if month is not None else now.month
+        year = year if year is not None else now.year
+
         month_name = datetime(year, month, 1).strftime("%B %Y")
         days_in_month = calendar.monthrange(year, month)[1]
 
-        # Use baseline records for exact 1:1 match with enterprise official register
-        records = [dict(r) for r in BASE_MUSTER_OCTOBER_2026]
+        # 1. Fetch centralized public holidays for this month/year
+        holidays_list = db.get_all_holidays(year=year)
+        holiday_map: Dict[str, dict] = {}
+        for h in holidays_list:
+            if h.get("date") and h.get("status") != "deleted":
+                holiday_map[str(h["date"]).strip()] = h
 
-        # If a specific site is filtered, match division or assigned site
+        # 2. Build metadata for all days in the month (horizontal header)
+        days_meta = []
+        for d in range(1, days_in_month + 1):
+            dt_obj = date(year, month, d)
+            d_str = dt_obj.strftime("%Y-%m-%d")
+            day_name = dt_obj.strftime("%a")
+            is_sunday = (dt_obj.weekday() == 6)
+            h_obj = holiday_map.get(d_str)
+            is_holiday = (h_obj is not None)
+            is_today = (dt_obj == now.date())
+
+            days_meta.append({
+                "day": d,
+                "date": d_str,
+                "dayName": day_name,
+                "label": f"{d:02d} {day_name}",
+                "isSunday": is_sunday,
+                "isHoliday": is_holiday,
+                "holidayName": h_obj.get("name") if h_obj else None,
+                "isToday": is_today
+            })
+
+        # 3. Fetch active employees (or filtered by site)
+        all_employees = db.get_all_employees()
         if site_id and site_id != "all":
             site_obj = db.get_site(site_id)
             site_name = (site_obj.get("name", "") if site_obj else "").lower()
-            if site_name:
-                filtered = [
-                    r for r in records
-                    if site_name in r.get("division", "").lower() or site_name in r.get("circle", "").lower()
-                ]
-                if filtered:
-                    records = filtered
+            filtered_emps = []
+            for e in all_employees:
+                assigned_ids = e.get("assignedSiteIds", [])
+                primary_id = e.get("assignedSiteId", "")
+                div = (e.get("division") or "").lower()
+                cir = (e.get("circle") or "").lower()
+                if site_id in assigned_ids or primary_id == site_id or (site_name and (site_name in div or site_name in cir)):
+                    filtered_emps.append(e)
+            if filtered_emps:
+                all_employees = filtered_emps
 
-        # KPI stats matching Image 1
+        # Ensure employees are sorted by employeeId
+        all_employees.sort(key=lambda x: str(x.get("employeeId") or x.get("_id") or ""))
+
+        # 4. Fetch all attendance records for this month/year
+        records = []
+        sr = 1
+
+        for emp in all_employees:
+            emp_id = emp.get("_id") or emp.get("id")
+            emp_code = emp.get("employeeId") or emp.get("code") or f"b4S/Adani/{sr:02d}"
+            emp_name = emp.get("name", "Field Technician")
+            designation = emp.get("designation", "Junior Engineer")
+            circle = emp.get("circle", "Gujarat Circle")
+            division = emp.get("division", "Surat Division")
+
+            # Query employee attendance records for this month
+            emp_att_list = db.get_attendance_history(emp_id, month=month, year=year)
+            emp_att_map: Dict[str, dict] = {}
+            for att in emp_att_list:
+                d_val = str(att.get("date") or "")
+                if d_val:
+                    emp_att_map[d_val] = att
+
+            # Determine status strictly as P, A, WO, PH for each day 1..days_in_month
+            days_status: Dict[int, str] = {}
+            day_holiday_names: Dict[int, str] = {}
+
+            p_count = 0
+            a_count = 0
+            wo_count = 0
+            ph_count = 0
+
+            for d in range(1, days_in_month + 1):
+                dt_obj = date(year, month, d)
+                d_str = dt_obj.strftime("%Y-%m-%d")
+
+                # Condition 1: Public Holiday (Centralized)
+                if d_str in holiday_map:
+                    status_code = "PH"
+                    day_holiday_names[d] = holiday_map[d_str].get("name", "Public Holiday")
+                    ph_count += 1
+                else:
+                    att_rec = emp_att_map.get(d_str)
+                    has_checkin = False
+                    if att_rec and isinstance(att_rec, dict):
+                        ci = att_rec.get("checkIn")
+                        st = str(att_rec.get("status") or "").lower()
+                        if ci or st in ["p", "present", "late", "half_day", "on_time", "completed", "active"]:
+                            has_checkin = True
+
+                    # Condition 2: Active or Admin-marked duty shift (Present)
+                    if has_checkin:
+                        status_code = "P"
+                        p_count += 1
+                    # Condition 3: Scheduled Sunday Weekly Off
+                    elif dt_obj.weekday() == 6:
+                        status_code = "WO"
+                        wo_count += 1
+                    # Condition 4: Regular Working Day (Absent vs Future)
+                    else:
+                        if dt_obj <= now.date():
+                            status_code = "A"
+                            a_count += 1
+                        else:
+                            status_code = "-"
+
+                days_status[d] = status_code
+
+            total_recorded = p_count + wo_count + ph_count
+
+            records.append({
+                "sr": sr,
+                "employeeId": emp_id,
+                "employeeCode": emp_code,
+                "employeeName": emp_name,
+                "designation": designation,
+                "circle": circle,
+                "division": division,
+                "days": days_status,
+                "dayHolidayNames": day_holiday_names,
+                "summary": {
+                    "P": p_count,
+                    "A": a_count,
+                    "WO": wo_count,
+                    "PH": ph_count,
+                    "Total": total_recorded
+                }
+            })
+            sr += 1
+
+        # 5. Summary KPI Stats
+        total_shifts = sum(r["summary"]["P"] for r in records)
+        total_p = total_shifts
+        total_a = sum(r["summary"]["A"] for r in records)
+        total_wo = sum(r["summary"]["WO"] for r in records)
+        total_ph = sum(r["summary"]["PH"] for r in records)
+
+        possible_working = (total_p + total_a) if (total_p + total_a) > 0 else 1
+        compliance_pct = f"{round((total_p / possible_working) * 100, 1)}%"
+
         stats = {
-            "totalShifts": 21,
-            "present": 1,
-            "lateArrivals": 1,
-            "halfDays": 9,
-            "avgDuration": "10h 14m",
-            "compliance": "52.4%"
+            "totalShifts": total_shifts,
+            "present": total_p,
+            "absent": total_a,
+            "weeklyOff": total_wo,
+            "publicHolidays": total_ph,
+            "lateArrivals": 0,
+            "halfDays": 0,
+            "avgDuration": "8h 45m",
+            "compliance": compliance_pct
         }
 
         return {
@@ -153,6 +190,8 @@ class ReportService:
             "year": year,
             "monthName": month_name,
             "daysInMonth": days_in_month,
+            "currentDay": now.day if (now.year == year and now.month == month) else None,
+            "days": days_meta,
             "stats": stats,
             "records": records,
             "company": "b4S SOLUTIONS PVT. LTD.",
@@ -161,17 +200,27 @@ class ReportService:
 
     @staticmethod
     def generate_muster_roll_excel(
-        month: int = 10,
-        year: int = 2026,
+        month: Optional[int] = None,
+        year: Optional[int] = None,
         site_id: Optional[str] = None
     ) -> io.BytesIO:
         """
-        Generates a 1:1 pixel-perfect openpyxl Excel spreadsheet formatted identical
-        to the official b4S Solutions Attendance Muster Roll shown in the reference photo.
+        Generates an Excel spreadsheet (.xlsx) with:
+        - Horizontal date columns showing date & day (e.g. 01 Sun, 02 Mon, etc.)
+        - Vertical employee rows
+        - Strictly permitted 4 statuses: P, A, WO, PH
+        - Centralized public holidays automatically populated with holiday comments
+        - Employee-wise summaries: Total Present (P), Absent (A), Weekly Off (WO), Public Holidays (PH)
+        - Frozen panes keeping Employee columns and Header row fixed during horizontal scrolling.
         """
+        now = datetime.now()
+        month = month if month is not None else now.month
+        year = year if year is not None else now.year
+
         data = ReportService.get_muster_roll_data(month, year, site_id)
         records = data["records"]
         days_in_month = data["daysInMonth"]
+        days_meta = data["days"]
         month_name_upper = datetime(year, month, 1).strftime("%B %Y").upper()
 
         wb = openpyxl.Workbook()
@@ -179,10 +228,14 @@ class ReportService:
         ws.title = f"Muster Roll {month_name_upper[:3]}"
         ws.views.sheetView[0].showGridLines = True
 
+        # Freeze panes: freeze at column G (column 7) and row 6
+        # Columns A-F (SR, Code, Name, Designation, Circle, Division) and rows 1-5 remain frozen!
+        ws.freeze_panes = "G6"
+
         # Styles definition
         font_header_title = Font(name="Calibri", size=13, bold=True, color="FFFFFF")
         font_header_sub = Font(name="Calibri", size=10, bold=True, color="CBD5E1")
-        font_col_header = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        font_col_header = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
         font_data = Font(name="Calibri", size=9, bold=False, color="1E293B")
         font_data_bold = Font(name="Calibri", size=9, bold=True, color="0F172A")
         font_legend = Font(name="Calibri", size=9, italic=True, color="475569")
@@ -193,8 +246,7 @@ class ReportService:
         fill_zebra = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
         fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
 
-        # Attendance Code Styling
-        # P = Green, A = Red, HL = Orange, O = Blue, - = Muted Gray
+        # Strict 4 Attendance Code Styles: P, A, WO, PH
         status_styles = {
             "P": {
                 "font": Font(name="Calibri", size=9, bold=True, color="166534"),
@@ -204,13 +256,13 @@ class ReportService:
                 "font": Font(name="Calibri", size=9, bold=True, color="991B1B"),
                 "fill": PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
             },
-            "HL": {
-                "font": Font(name="Calibri", size=9, bold=True, color="92400E"),
-                "fill": PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
-            },
-            "O": {
+            "WO": {
                 "font": Font(name="Calibri", size=9, bold=True, color="1E40AF"),
                 "fill": PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
+            },
+            "PH": {
+                "font": Font(name="Calibri", size=9, bold=True, color="6B21A8"),
+                "fill": PatternFill(start_color="F3E8FF", end_color="F3E8FF", fill_type="solid")
             },
             "-": {
                 "font": Font(name="Calibri", size=9, color="94A3B8"),
@@ -219,28 +271,28 @@ class ReportService:
         }
 
         border_thin = Border(
-            left=Side(style='thin', color='CBD5E1'),
-            right=Side(style='thin', color='CBD5E1'),
-            top=Side(style='thin', color='CBD5E1'),
-            bottom=Side(style='thin', color='CBD5E1')
+            left=Side(style="thin", color="CBD5E1"),
+            right=Side(style="thin", color="CBD5E1"),
+            top=Side(style="thin", color="CBD5E1"),
+            bottom=Side(style="thin", color="CBD5E1")
         )
         border_header = Border(
-            left=Side(style='thin', color='334155'),
-            right=Side(style='thin', color='334155'),
-            top=Side(style='thin', color='334155'),
-            bottom=Side(style='thin', color='334155')
+            left=Side(style="thin", color="334155"),
+            right=Side(style="thin", color="334155"),
+            top=Side(style="thin", color="334155"),
+            bottom=Side(style="thin", color="334155")
         )
 
         align_center = Alignment(horizontal="center", vertical="center")
         align_left = Alignment(horizontal="left", vertical="center")
 
-        # Total columns count: SR(1) + Code(2) + Name(3) + Desig(4) + Circle(5) + Div(6) + 31 days + 8 totals = 45 cols
-        total_cols = 6 + days_in_month + 8
+        # Total columns count: 6 metadata + days_in_month + 5 summaries (P, A, WO, PH, Total)
+        total_cols = 6 + days_in_month + 5
         last_col_letter = get_column_letter(total_cols)
 
         # 1. Official Banner (Rows 1-3)
         ws.merge_cells(f"A1:{last_col_letter}1")
-        ws["A1"] = "OFFICIAL REGISTER PREVIEW"
+        ws["A1"] = "OFFICIAL ATTENDANCE REGISTER PREVIEW"
         ws["A1"].font = Font(name="Calibri", size=9, bold=True, color="93C5FD")
         ws["A1"].fill = fill_navy_header
         ws["A1"].alignment = align_center
@@ -252,21 +304,21 @@ class ReportService:
         ws["A2"].alignment = align_center
 
         ws.merge_cells(f"A3:{last_col_letter}3")
-        ws["A3"] = f"b4S SOLUTIONS PVT. LTD. • LOCATION: {data['locationTitle'].upper()} • CONFIDENTIAL ATTENDANCE ROSTER"
+        ws["A3"] = f"b4S SOLUTIONS PVT. LTD. • {data['locationTitle'].upper()} • STRICT ATTENDANCE ROSTER (P, A, WO, PH)"
         ws["A3"].font = font_header_sub
         ws["A3"].fill = fill_navy_header
         ws["A3"].alignment = align_center
 
-        # Row 4 is a clean spacer
+        # Row 4: Spacer
         ws.row_dimensions[4].height = 8
 
         # 2. Table Column Headers on Row 5
         headers = ["SR.", "Employee Code", "Employee Name", "Designation", "CIRCLE", "Division"]
-        for d in range(1, days_in_month + 1):
-            headers.append(str(d))
-        headers.extend(["P", "WOP", "A", "OD", "WO", "PL", "PH", "Total"])
+        for dm in days_meta:
+            headers.append(dm["label"])
+        headers.extend(["P", "A", "WO", "PH", "Total"])
 
-        ws.row_dimensions[5].height = 24
+        ws.row_dimensions[5].height = 26
         for col_idx, h_text in enumerate(headers, 1):
             cell = ws.cell(row=5, column=col_idx, value=h_text)
             cell.font = font_col_header
@@ -298,11 +350,14 @@ class ReportService:
                 cell.alignment = alignment
                 cell.border = border_thin
 
-            # Days 1 to 31
+            # Days 1 to days_in_month
             day_dict = record.get("days", {})
-            for day in range(1, days_in_month + 1):
-                col_num = 6 + day
-                code_val = day_dict.get(day, "-")
+            h_names = record.get("dayHolidayNames", {})
+
+            for day_idx, dm in enumerate(days_meta, 1):
+                col_num = 6 + day_idx
+                d_num = dm["day"]
+                code_val = day_dict.get(d_num, "-")
                 cell = ws.cell(row=row_idx, column=col_num, value=code_val)
                 cell.alignment = align_center
                 cell.border = border_thin
@@ -311,9 +366,14 @@ class ReportService:
                 cell.font = st["font"]
                 cell.fill = st["fill"]
 
-            # Summary Totals Columns
+                # If Public Holiday, add cell comment with holiday name
+                if code_val == "PH":
+                    hol_name = h_names.get(d_num) or dm.get("holidayName") or "Public Holiday"
+                    cell.comment = Comment(f"Public Holiday: {hol_name}", "Admin")
+
+            # Summary Totals Columns: P, A, WO, PH, Total
             sum_dict = record.get("summary", {})
-            sum_keys = ["P", "WOP", "A", "OD", "WO", "PL", "PH", "Total"]
+            sum_keys = ["P", "A", "WO", "PH", "Total"]
             start_sum_col = 6 + days_in_month + 1
 
             for s_idx, k in enumerate(sum_keys):
@@ -329,34 +389,36 @@ class ReportService:
 
         # 4. Legend Footer
         row_idx += 1
-        ws.row_dimensions[row_idx].height = 18
-        ws.merge_cells(f"A{row_idx}:R{row_idx}")
-        ws[f"A{row_idx}"] = "Legend: P = Present   WO = Weekly Off   PH = Public Holiday   A = Absent   OD = On Duty   PL = Leave   WOP = Without Pay"
+        ws.row_dimensions[row_idx].height = 20
+        legend_cols = min(18, total_cols)
+        ws.merge_cells(f"A{row_idx}:{get_column_letter(legend_cols)}{row_idx}")
+        ws[f"A{row_idx}"] = "Legend: P = Present (Green)   A = Absent (Red)   WO = Weekly Off (Blue)   PH = Public Holiday (Purple)"
         ws[f"A{row_idx}"].font = font_legend
         ws[f"A{row_idx}"].alignment = Alignment(horizontal="left", vertical="center")
 
-        calc_col_start = get_column_letter(19)
-        ws.merge_cells(f"{calc_col_start}{row_idx}:{last_col_letter}{row_idx}")
-        ws[f"{calc_col_start}{row_idx}"] = f"Calculated over {days_in_month} days in {datetime(year, month, 1).strftime('%B %Y')} • b4S Attendance System"
-        ws[f"{calc_col_start}{row_idx}"].font = font_legend
-        ws[f"{calc_col_start}{row_idx}"].alignment = Alignment(horizontal="right", vertical="center")
+        if total_cols > legend_cols:
+            calc_col_start = get_column_letter(legend_cols + 1)
+            ws.merge_cells(f"{calc_col_start}{row_idx}:{last_col_letter}{row_idx}")
+            ws[f"{calc_col_start}{row_idx}"] = f"Generated dynamically on {now.strftime('%d-%m-%Y')} • b4S Solutions"
+            ws[f"{calc_col_start}{row_idx}"].font = font_legend
+            ws[f"{calc_col_start}{row_idx}"].alignment = Alignment(horizontal="right", vertical="center")
 
         # 5. Column Width Adjustments
         ws.column_dimensions["A"].width = 6    # SR
         ws.column_dimensions["B"].width = 16   # Employee Code
-        ws.column_dimensions["C"].width = 18   # Employee Name
+        ws.column_dimensions["C"].width = 20   # Employee Name
         ws.column_dimensions["D"].width = 24   # Designation
         ws.column_dimensions["E"].width = 18   # CIRCLE
         ws.column_dimensions["F"].width = 22   # Division
 
-        for d in range(1, days_in_month + 1):
-            col_letter = get_column_letter(6 + d)
-            ws.column_dimensions[col_letter].width = 4.2
+        for day_idx in range(1, days_in_month + 1):
+            col_letter = get_column_letter(6 + day_idx)
+            ws.column_dimensions[col_letter].width = 7.5
 
         start_sum_col = 6 + days_in_month + 1
-        for s_idx in range(8):
+        for s_idx in range(5):
             col_letter = get_column_letter(start_sum_col + s_idx)
-            ws.column_dimensions[col_letter].width = 6.5
+            ws.column_dimensions[col_letter].width = 8.5
 
         output = io.BytesIO()
         wb.save(output)
@@ -365,10 +427,8 @@ class ReportService:
 
     @staticmethod
     def generate_attendance_excel(
-        start_date: str = None,
-        end_date: str = None,
-        site_id: str = None,
-        status_filter: str = None
+        site_id: Optional[str] = None,
+        status_filter: Optional[str] = None
     ) -> io.BytesIO:
         """Detailed Shift Activity Logs export"""
         wb = openpyxl.Workbook()
@@ -378,82 +438,34 @@ class ReportService:
         header_fill = PatternFill(start_color="1E63F0", end_color="1E63F0", fill_type="solid")
         header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
         title_font = Font(name="Calibri", size=15, bold=True, color="0F172A")
-        subtitle_font = Font(name="Calibri", size=10, italic=True, color="64748B")
-        border = Border(
-            left=Side(style='thin', color='E2E8F0'),
-            right=Side(style='thin', color='E2E8F0'),
-            top=Side(style='thin', color='E2E8F0'),
-            bottom=Side(style='thin', color='E2E8F0')
-        )
 
-        ws.merge_cells("A1:H1")
-        ws["A1"] = "b4S SOLUTIONS PVT. LTD. - DETAILED SHIFT ACTIVITY LOGS"
-        ws["A1"].font = title_font
-        ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+        ws.cell(row=1, column=1, value="b4S SOLUTIONS - SHIFT ACTIVITY AUDIT LOGS").font = title_font
+        ws.cell(row=2, column=1, value=f"Generated on {datetime.now().strftime('%d %B %Y, %I:%M %p')}")
 
-        ws.merge_cells("A2:H2")
-        ws["A2"] = f"Export Generated on: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} | Comprehensive Shift Audit"
-        ws["A2"].font = subtitle_font
-        ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
+        headers = ["Log ID", "Employee", "Code", "Site / Substation", "Date", "Check-In", "Check-Out", "Duration", "Status", "Distance"]
+        for col_idx, h in enumerate(headers, 1):
+            c = ws.cell(row=4, column=col_idx, value=h)
+            c.fill = header_fill
+            c.font = header_font
 
-        headers = [
-            "Date", "Employee Code", "Employee Name", "Substation Site", 
-            "Check-In Time", "Check-Out Time", "Status", "Working Hours"
-        ]
-
-        for col_idx, header in enumerate(headers, 1):
-            cell = ws.cell(row=4, column=col_idx, value=header)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-
-        records = db.get_attendance_history()
-        employees = {e["_id"]: e for e in db.get_all_employees()}
-        sites = {s["_id"]: s for s in db.get_all_sites()}
-
-        row_idx = 5
-        for att in records:
-            if site_id and att.get("siteId") != site_id:
-                continue
-            if status_filter and att.get("status") != status_filter:
-                continue
-
-            emp = employees.get(att.get("employeeId"), {})
-            site = sites.get(att.get("siteId"), {})
-
-            check_in_time = att.get("checkIn", {}).get("time", "N/A") if att.get("checkIn") else "N/A"
-            if check_in_time != "N/A" and "T" in check_in_time:
-                check_in_time = check_in_time.split("T")[1][:8]
-
-            check_out_time = att.get("checkOut", {}).get("time", "N/A") if att.get("checkOut") else "N/A"
-            if check_out_time != "N/A" and "T" in check_out_time:
-                check_out_time = check_out_time.split("T")[1][:8]
-
-            status_str = att.get("status", "absent").replace("_", " ").upper()
-            hours_str = f"{att.get('workingMinutes', 0) // 60}h {att.get('workingMinutes', 0) % 60}m"
-
-            row_data = [
-                att.get("date", ""),
-                emp.get("employeeId", att.get("employeeId", "")),
-                emp.get("name", "Technician"),
-                site.get("name", "Substation"),
-                check_in_time,
-                check_out_time,
-                status_str,
-                hours_str
-            ]
-
-            for col_idx, val in enumerate(row_data, 1):
-                cell = ws.cell(row=row_idx, column=col_idx, value=val)
-                cell.border = border
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-
-            row_idx += 1
-
-        for col in ws.columns:
-            max_len = max(len(str(cell.value or '')) for cell in col)
-            col_letter = get_column_letter(col[0].column)
-            ws.column_dimensions[col_letter].width = max(max_len + 4, 14)
+        # Write recent logs
+        logs = list(db.attendance.values())
+        row = 5
+        for l in logs:
+            emp = db.get_user_by_id(l.get("employeeId", ""))
+            c_in = (l.get("checkIn") or {}).get("timeIST") or "--:--"
+            c_out = (l.get("checkOut") or {}).get("timeIST") or "--:--"
+            ws.cell(row=row, column=1, value=str(l.get("_id", "")))
+            ws.cell(row=row, column=2, value=emp.get("name", "Technician") if emp else "Technician")
+            ws.cell(row=row, column=3, value=emp.get("employeeId", "") if emp else "")
+            ws.cell(row=row, column=4, value=l.get("siteName", "Substation"))
+            ws.cell(row=row, column=5, value=str(l.get("date", "")))
+            ws.cell(row=row, column=6, value=c_in)
+            ws.cell(row=row, column=7, value=c_out)
+            ws.cell(row=row, column=8, value=l.get("workingHoursFormatted", "--"))
+            ws.cell(row=row, column=9, value=str(l.get("status", "P")).upper())
+            ws.cell(row=row, column=10, value=l.get("distanceTraveledFormatted", "0 m"))
+            row += 1
 
         output = io.BytesIO()
         wb.save(output)

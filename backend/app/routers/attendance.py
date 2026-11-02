@@ -1,20 +1,22 @@
 import logging
+import uuid
 from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
-from app.core.security import get_current_user_token
+from app.core.security import get_current_user_token, require_roles
 from app.core.database import db
 from app.services.attendance_service import attendance_service
 from app.services.storage_service import storage_service
 from app.utils.datetime_utils import format_datetime_ist
-
-logger = logging.getLogger(__name__)
 from app.schemas.attendance import (
     CheckInRequest,
     CheckOutRequest,
     AttendanceResponse,
     AdjustAttendanceRequest,
+    MarkAttendanceRequest,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
@@ -61,19 +63,32 @@ async def get_today_attendance(
     token_data: dict = Depends(get_current_user_token)
 ):
     emp_id = token_data["id"]
+    emp = db.get_employee(emp_id) or db.find_employee_by_identifier(emp_id)
     today_str = datetime.utcnow().strftime("%Y-%m-%d")
     record = db.get_today_attendance(emp_id, today_str)
     if record:
         record = attendance_service.apply_auto_checkout_if_needed(record)
+    
+    # Derive assigned site dynamically from latest employee DB state
+    assigned_site_id = None
+    if emp:
+        assigned_site_id = emp.get("assignedSiteId") or (emp.get("assignedSiteIds", [None])[0] if emp.get("assignedSiteIds") else None)
+        resolved_site_id = assigned_site_id
+    else:
+        resolved_site_id = record.get("siteId") if record else None
+    raw_site = db.get_site(resolved_site_id) if resolved_site_id else None
+    
+    site_obj = None
+    if raw_site:
+        site_obj = {**raw_site, "id": raw_site.get("_id", raw_site.get("id"))}
+
     if not record:
-        emp = db.get_employee(emp_id) or db.find_employee_by_identifier(emp_id)
-        site = db.get_site(emp.get("assignedSiteId", "")) if emp else None
         return {
             "status": "not_started",
             "liveElapsedMinutes": 0,
             "message": "Shift Not Started",
             "record": None,
-            "site": site
+            "site": site_obj
         }
     
     # Calculate live elapsed duration if currently active
@@ -84,12 +99,11 @@ async def get_today_attendance(
         now = datetime.utcnow()
         live_elapsed_minutes = int(max(0, (now - ci_dt).total_seconds() // 60))
 
-    site = db.get_site(record.get("siteId", ""))
     return {
         "status": "completed" if record.get("checkOut") else "active",
         "liveElapsedMinutes": live_elapsed_minutes,
         "record": record,
-        "site": site
+        "site": site_obj
     }
 
 @router.get("/history")
@@ -137,10 +151,10 @@ async def get_attendance_history(
     
     # Compute KPI summaries for this month
     total_days = len(records)
-    present_count = sum(1 for r in records if r.get("status") == "present")
+    present_count = sum(1 for r in records if r.get("status") in ["present", "P"])
     late_count = sum(1 for r in records if r.get("status") == "late")
     half_day_count = sum(1 for r in records if r.get("status") == "half_day")
-    absent_count = sum(1 for r in records if r.get("status") == "absent")
+    absent_count = sum(1 for r in records if r.get("status") in ["absent", "A"])
     total_minutes = sum(r.get("workingMinutes", 0) for r in records)
     total_hours = round(total_minutes / 60.0, 1)
 
@@ -299,7 +313,7 @@ async def get_all_attendance_logs(
             co_lat = float(co_dict["latitude"]) if (co_dict and co_dict.get("latitude")) else None
             co_lon = float(co_dict["longitude"]) if (co_dict and co_dict.get("longitude")) else None
 
-            # Real distance traveled between check-in and check-out sites (NOT substation geofence radius)
+            # Real distance traveled between check-in and check-out sites
             dist_formatted = r.get("distanceTraveledFormatted")
             dist_val = r.get("distanceTraveledKm")
             dist_str = "0 m"
@@ -373,45 +387,173 @@ async def get_all_attendance_logs(
         logger.error(f"Error in get_all_attendance_logs: {e}", exc_info=True)
         return {"logs": [], "total": 0, "error": str(e)}
 
-@router.post("/admin/adjust")
-async def adjust_attendance_status(
-    payload: AdjustAttendanceRequest,
-    token_data: dict = Depends(get_current_user_token)
+def _process_admin_attendance_update(
+    employee_id: str,
+    date_str: str,
+    status_input: str,
+    admin_remarks: Optional[str] = None,
+    site_name: Optional[str] = None,
+    record_id: Optional[str] = None,
+    actor_name: str = "Operations Admin"
 ):
-    rec_id = payload.recordId
-    target_rec = None
-    if rec_id and rec_id in db.attendance:
-        target_rec = db.attendance[rec_id]
+    # 1. Verify date format
+    try:
+        dt_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD")
+
+    # 2. Check if this date is a Public Holiday in centralized holidays table
+    holidays = db.get_all_holidays() if hasattr(db, "get_all_holidays") else list(db.holidays.values())
+    for h in holidays:
+        if h.get("date") == date_str and h.get("status") != "deleted":
+            h_name = h.get("name", "Public Holiday")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot mark Present or Absent on {date_str}. It is a gazetted Public Holiday ({h_name})."
+            )
+
+    # 3. Resolve target employee
+    emp = db.get_employee(employee_id) or db.find_employee_by_identifier(employee_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    emp_primary_id = emp["_id"]
+    emp_code = emp.get("employeeId", "")
+    emp_name = emp.get("name", "Field Technician")
+
+    # 4. Canonical status mapping strictly to P (present) or A (absent)
+    st_clean = str(status_input).strip().lower()
+    if st_clean in ["p", "present"]:
+        canonical_status = "present"
+    elif st_clean in ["a", "absent"]:
+        canonical_status = "absent"
+    elif st_clean in ["wo", "weekly_off"]:
+        canonical_status = "weekly_off"
+    elif st_clean in ["ph", "public_holiday"]:
+        canonical_status = "public_holiday"
     else:
-        for r in db.attendance.values():
-            if r.get("employeeId") == payload.employeeId and r.get("date") == payload.date:
-                target_rec = r
-                break
+        raise HTTPException(status_code=400, detail=f"Invalid attendance status '{status_input}'. Only P, A, WO, PH are permitted.")
+
+    # 5. Resolve site details
+    assigned_site_id = emp.get("assignedSiteId") or (emp.get("assignedSiteIds", [None])[0] if emp.get("assignedSiteIds") else None) or "site_surat_01"
+    raw_site = db.get_site(assigned_site_id) if assigned_site_id else None
+    resolved_site_name = (raw_site.get("name") if raw_site else None) or site_name or "Assigned Substation"
+    site_lat = raw_site.get("latitude", 21.1926) if raw_site else 21.1926
+    site_lon = raw_site.get("longitude", 72.7997) if raw_site else 72.7997
+
+    # 6. Locate existing attendance record
+    target_rec = None
+    if record_id and record_id in db.attendance:
+        target_rec = db.attendance[record_id]
+    else:
+        for r in list(db.attendance.values()):
+            if r.get("date") == date_str:
+                r_eid = str(r.get("employeeId", "")).strip().lower()
+                r_code = str(r.get("technicianCode", "")).strip().lower()
+                if r_eid in [emp_primary_id.lower(), emp_code.lower()] or (emp_code and r_code == emp_code.lower()):
+                    target_rec = r
+                    break
+
+    now_iso = datetime.utcnow().isoformat()
+
+    # 7. Build punch details
+    if canonical_status == "present":
+        working_minutes = 540
+        check_in = {
+            "time": f"{date_str}T09:00:00Z",
+            "timeIST": "09:00 AM",
+            "latitude": site_lat,
+            "longitude": site_lon,
+            "accuracy": 10.0,
+            "siteName": resolved_site_name,
+            "remarks": admin_remarks or f"Marked Present by {actor_name}"
+        }
+        check_out = {
+            "time": f"{date_str}T18:00:00Z",
+            "timeIST": "06:00 PM",
+            "latitude": site_lat,
+            "longitude": site_lon,
+            "accuracy": 10.0,
+            "siteName": resolved_site_name,
+            "remarks": "Shift Concluded"
+        }
+    else:
+        working_minutes = 0
+        check_in = None
+        check_out = None
 
     if not target_rec:
-        import uuid
         new_id = f"att_{uuid.uuid4().hex[:8]}"
         target_rec = {
             "_id": new_id,
-            "employeeId": payload.employeeId,
-            "date": payload.date,
-            "siteId": "site_st_joseph",
-            "status": payload.status,
-            "workingMinutes": 466 if payload.status == "late" else (240 if payload.status == "half_day" else 480),
-            "adminRemarks": payload.adminRemarks or "Adjusted by Admin",
-            "createdAt": datetime.utcnow().isoformat()
+            "employeeId": emp_primary_id,
+            "technicianCode": emp_code,
+            "technicianName": emp_name,
+            "date": date_str,
+            "siteId": assigned_site_id,
+            "siteName": resolved_site_name,
+            "status": canonical_status,
+            "workingMinutes": working_minutes,
+            "checkIn": check_in,
+            "checkOut": check_out,
+            "adminRemarks": admin_remarks or f"Marked {canonical_status.title()} by {actor_name}",
+            "createdAt": now_iso
         }
         db.attendance[new_id] = target_rec
+        db.set_firestore_document("attendance", new_id, target_rec)
     else:
-        target_rec["status"] = payload.status
-        if payload.adminRemarks:
-            target_rec["adminRemarks"] = payload.adminRemarks
-        if payload.siteName:
-            target_rec["siteName"] = payload.siteName
+        target_rec["status"] = canonical_status
+        target_rec["workingMinutes"] = working_minutes
+        target_rec["checkIn"] = check_in
+        target_rec["checkOut"] = check_out
+        target_rec["siteId"] = assigned_site_id
+        target_rec["siteName"] = resolved_site_name
+        target_rec["technicianName"] = target_rec.get("technicianName") or emp_name
+        target_rec["technicianCode"] = target_rec.get("technicianCode") or emp_code
+        target_rec["adminRemarks"] = admin_remarks or target_rec.get("adminRemarks") or f"Marked {canonical_status.title()} by {actor_name}"
+        target_rec["updatedAt"] = now_iso
+        target_rec["updatedBy"] = actor_name
+        db.attendance[target_rec["_id"]] = target_rec
+        db.set_firestore_document("attendance", target_rec["_id"], target_rec)
 
+    return target_rec
+
+@router.post("/admin/adjust")
+async def adjust_attendance_status(
+    payload: AdjustAttendanceRequest,
+    token_data: dict = Depends(require_roles(["admin"]))
+):
+    target_rec = _process_admin_attendance_update(
+        employee_id=payload.employeeId,
+        date_str=payload.date,
+        status_input=payload.status,
+        admin_remarks=payload.adminRemarks,
+        site_name=payload.siteName,
+        record_id=payload.recordId,
+        actor_name=token_data.get("name", "Operations Admin")
+    )
     return {
         "success": True,
-        "message": f"Attendance status adjusted to {payload.status.replace('_', ' ').title()}",
+        "message": f"Attendance status adjusted to {target_rec.get('status', 'P').replace('_', ' ').title()}",
+        "record": target_rec
+    }
+
+@router.post("/admin/mark-attendance")
+async def mark_admin_attendance(
+    payload: MarkAttendanceRequest,
+    token_data: dict = Depends(require_roles(["admin"]))
+):
+    target_rec = _process_admin_attendance_update(
+        employee_id=payload.employeeId,
+        date_str=payload.date,
+        status_input=payload.status,
+        admin_remarks=payload.adminRemarks,
+        actor_name=token_data.get("name", "Operations Admin")
+    )
+    display_code = "P" if target_rec.get("status") == "present" else "A"
+    return {
+        "success": True,
+        "message": f"Successfully marked attendance as {display_code} for {target_rec.get('technicianName')} on {payload.date}.",
         "record": target_rec
     }
 

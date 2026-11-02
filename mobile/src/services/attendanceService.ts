@@ -98,4 +98,14 @@ export const attendanceService = {
     const response = await apiClient.post<{ success: boolean; message: string; record: any }>('/attendance/admin/adjust', payload);
     return response.data;
   },
+
+  async markAttendance(payload: {
+    employeeId: string;
+    date: string;
+    status: 'P' | 'A' | 'present' | 'absent';
+    adminRemarks?: string;
+  }): Promise<{ success: boolean; message: string; record: any }> {
+    const response = await apiClient.post<{ success: boolean; message: string; record: any }>('/attendance/admin/mark-attendance', payload);
+    return response.data;
+  },
 };

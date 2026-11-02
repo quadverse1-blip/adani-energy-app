@@ -92,7 +92,8 @@ async def create_employee(
         raise HTTPException(status_code=400, detail="Employee ID already exists")
 
     new_id = f"emp_{uuid.uuid4().hex[:8]}"
-    assigned_primary = emp_in.assignedSiteIds[0] if emp_in.assignedSiteIds else None
+    assigned_ids = emp_in.assignedSiteIds or []
+    assigned_primary = assigned_ids[0] if assigned_ids else None
     
     new_emp = {
         "_id": new_id,
@@ -102,7 +103,7 @@ async def create_employee(
         "password": emp_in.password,
         "role": emp_in.role,
         "designation": emp_in.designation,
-        "assignedSiteIds": emp_in.assignedSiteIds,
+        "assignedSiteIds": assigned_ids,
         "assignedSiteId": assigned_primary,
         "status": emp_in.status or "active",
         "email": emp_in.email or f"{emp_in.employeeId.lower().replace('/', '.')}@adani.com",
@@ -116,6 +117,7 @@ async def create_employee(
         "shiftStatus": emp_in.shiftStatus or "present"
     }
     db.employees[new_id] = new_emp
+    db.set_firestore_document("employees", new_id, new_emp)
     return EmployeeResponse(id=new_id, **new_emp)
 
 @router.put("/{employeeId}", response_model=EmployeeResponse)
@@ -129,13 +131,46 @@ async def update_employee(
         raise HTTPException(status_code=404, detail="Employee not found")
 
     update_dict = emp_in.dict(exclude_unset=True)
-    if "assignedSiteId" in update_dict and update_dict["assignedSiteId"]:
-        emp["assignedSiteId"] = update_dict["assignedSiteId"]
-    elif "assignedSiteIds" in update_dict and update_dict["assignedSiteIds"]:
-        emp["assignedSiteId"] = update_dict["assignedSiteIds"][0]
-        
+    
+    # Handle assigned sites synchronization
+    if "assignedSiteIds" in update_dict:
+        site_ids = update_dict["assignedSiteIds"] or []
+        emp["assignedSiteIds"] = site_ids
+        emp["assignedSiteId"] = site_ids[0] if site_ids else None
+    elif "assignedSiteId" in update_dict:
+        primary_site = update_dict["assignedSiteId"]
+        emp["assignedSiteId"] = primary_site
+        if primary_site:
+            if primary_site not in emp.get("assignedSiteIds", []):
+                emp["assignedSiteIds"] = [primary_site]
+        else:
+            emp["assignedSiteIds"] = []
+
+    # Update site details if primary assigned
+    if emp.get("assignedSiteId"):
+        s = db.get_site(emp["assignedSiteId"])
+        if s:
+            emp["assignedSiteName"] = s.get("name")
+            if not update_dict.get("latitude") and s.get("latitude"):
+                emp["latitude"] = s["latitude"]
+            if not update_dict.get("longitude") and s.get("longitude"):
+                emp["longitude"] = s["longitude"]
+            if not update_dict.get("locationName") and (s.get("address") or s.get("name")):
+                emp["locationName"] = s.get("address") or s.get("name")
+    elif not emp.get("assignedSiteIds"):
+        emp["assignedSiteName"] = None
+
     emp.update(update_dict)
+
+    if "assignedSiteIds" in update_dict:
+        site_ids = update_dict["assignedSiteIds"] or []
+        emp["assignedSiteIds"] = site_ids
+        emp["assignedSiteId"] = site_ids[0] if site_ids else None
+    elif "assignedSiteId" in update_dict:
+        emp["assignedSiteId"] = update_dict["assignedSiteId"]
+
     db.employees[emp["_id"]] = emp
+    db.set_firestore_document("employees", emp["_id"], emp)
 
     return EmployeeResponse(id=emp["_id"], **emp)
 
