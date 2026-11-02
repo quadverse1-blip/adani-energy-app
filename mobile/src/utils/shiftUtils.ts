@@ -26,6 +26,9 @@ export interface ShiftInfo {
   windowMessage: string;
 }
 
+// Set to true to temporarily remove the shift check-in time limit for manual testing
+export const MANUAL_TESTING_BYPASS_SHIFT_LIMIT = true;
+
 export const getShiftInfo = (): ShiftInfo => {
   const now = new Date();
   // Robust IST calculation: UTC minutes + 330 minutes (+05:30)
@@ -37,6 +40,33 @@ export const getShiftInfo = (): ShiftInfo => {
   const ampm = istHours >= 12 ? 'PM' : 'AM';
   const displayHours = istHours % 12 || 12;
   const formattedTimeIST = `${displayHours}:${istMinutes < 10 ? '0' : ''}${istMinutes} ${ampm}`;
+
+  // TEMPORARY MANUAL TESTING OVERRIDE:
+  // Allows employees and supervisors to check in 24/7 for manual testing
+  if (MANUAL_TESTING_BYPASS_SHIFT_LIMIT) {
+    let punctuality: 'On-Time' | 'Late Checked-In' | 'Half-Day' = 'On-Time';
+    let statusKey: 'present' | 'late' | 'half-day' = 'present';
+    if (istTotalMinutes > 10 * 60 + 30 && istTotalMinutes <= 18 * 60) {
+      punctuality = 'Half-Day';
+      statusKey = 'half-day';
+    } else if (istTotalMinutes > 9 * 60 + 30 && istTotalMinutes <= 10 * 60 + 30) {
+      punctuality = 'Late Checked-In';
+      statusKey = 'late';
+    }
+
+    return {
+      isCheckInAllowed: true,
+      isPastShiftEnd: false,
+      isBeforeShiftStart: false,
+      isAfterShiftEnd: false,
+      punctualityLabel: punctuality,
+      statusKey,
+      istHours,
+      istMinutes,
+      formattedTimeIST,
+      windowMessage: 'Manual Test Window Active • Check-In Enabled',
+    };
+  }
 
   const startMinutes = 9 * 60;       // 09:00 AM IST = 540 minutes
   const endMinutes = 18 * 60;        // 06:00 PM IST = 1080 minutes
