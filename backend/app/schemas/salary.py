@@ -35,8 +35,10 @@ class SalaryDeductionDetails(BaseModel):
 
 class SalaryConfigCreateUpdate(BaseModel):
     monthlySalary: float
-    absentDeductionRate: float
-    halfDayDeductionRate: float
+    absentDeductionRate: Optional[float] = None
+    absentDeduction: Optional[float] = None
+    halfDayDeductionRate: Optional[float] = None
+    halfDayDeduction: Optional[float] = None
     effectiveDate: Optional[str] = None
     notes: Optional[str] = None
 

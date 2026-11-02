@@ -69,6 +69,8 @@ interface AttendanceLogItem {
   workingMinutes: number;
   distanceTraveled: string;
   status: AttendanceStatusType;
+  isHalfDay?: boolean;
+  attendanceCategory?: string;
   adminRemarks?: string;
   latitude?: number;
   longitude?: number;
@@ -94,6 +96,14 @@ const STATUS_CARDS: {
     icon: CheckCircle2,
     color: '#059669',
     buttonLabel: 'Set as Present (P)',
+  },
+  {
+    key: 'half_day',
+    title: 'Half Day (HD)',
+    sub: 'Partial shift recorded (< 8 hrs), subject to half-day deduction',
+    icon: Clock,
+    color: '#D97706',
+    buttonLabel: 'Set as Half Day (HD)',
   },
   {
     key: 'absent',
@@ -740,17 +750,17 @@ export const AttendanceLogsScreen: React.FC = () => {
                         </View>
                       )}
 
-                      {item.status === 'half_day' && (
+                      {(item.status === 'half_day' || item.isHalfDay) && (
                         <View style={styles.statusHalfDayBadge}>
                           <Clock size={11} color="#EA580C" style={{ marginRight: 4 }} />
-                          <Text style={styles.statusHalfDayText}>Half Day</Text>
+                          <Text style={styles.statusHalfDayText}>Half Day (HD)</Text>
                         </View>
                       )}
 
-                      {item.status === 'present' && (
+                      {item.status === 'present' && !item.isHalfDay && (
                         <View style={styles.statusPresentBadge}>
                           <CheckCircle2 size={11} color="#059669" style={{ marginRight: 4 }} />
-                          <Text style={styles.statusPresentText}>Present</Text>
+                          <Text style={styles.statusPresentText}>Present (P)</Text>
                         </View>
                       )}
 

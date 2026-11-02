@@ -26,6 +26,7 @@ export interface MusterRecord {
   dayHolidayNames?: Record<number, string>;
   summary: {
     P: number;
+    HD?: number;
     A: number;
     WO: number;
     PH: number;

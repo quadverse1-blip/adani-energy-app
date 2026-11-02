@@ -69,6 +69,8 @@ export interface AttendanceRecord {
   checkIn?: PunchRecord;
   checkOut?: PunchRecord;
   status: AttendanceStatus;
+  isHalfDay?: boolean;
+  attendanceCategory?: string;
   workingMinutes: number;
   workingHoursFormatted?: string;
   adminRemarks?: string;

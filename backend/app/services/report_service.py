@@ -101,6 +101,7 @@ class ReportService:
             day_holiday_names: Dict[int, str] = {}
 
             p_count = 0
+            hd_count = 0
             a_count = 0
             wo_count = 0
             ph_count = 0
@@ -117,14 +118,27 @@ class ReportService:
                 else:
                     att_rec = emp_att_map.get(d_str)
                     has_checkin = False
+                    is_half = False
                     if att_rec and isinstance(att_rec, dict):
                         ci = att_rec.get("checkIn")
                         st = str(att_rec.get("status") or "").lower()
-                        if ci or st in ["p", "present", "late", "half_day", "on_time", "completed", "active"]:
+                        shift_st = str(att_rec.get("shiftStatus") or "").lower()
+                        is_hd = bool(att_rec.get("isHalfDay"))
+                        cat = str(att_rec.get("attendanceCategory") or "").upper()
+                        wm = att_rec.get("workingMinutes") or 0
+
+                        if is_hd or cat == "HALF_DAY" or st in ("half_day", "halfday", "hd") or shift_st in ("half_day", "halfday") or (ci and 0 < wm < 480):
+                            is_half = True
+                            has_checkin = True
+                        elif ci or st in ["p", "present", "late", "on_time", "completed", "active"]:
                             has_checkin = True
 
-                    # Condition 2: Active or Admin-marked duty shift (Present)
-                    if has_checkin:
+                    # Condition 2: Active or Admin-marked duty shift (Present / Half Day)
+                    if is_half:
+                        status_code = "HD"
+                        p_count += 1
+                        hd_count += 1
+                    elif has_checkin:
                         status_code = "P"
                         p_count += 1
                     # Condition 3: Scheduled Sunday Weekly Off
@@ -155,6 +169,7 @@ class ReportService:
                 "dayHolidayNames": day_holiday_names,
                 "summary": {
                     "P": p_count,
+                    "HD": hd_count,
                     "A": a_count,
                     "WO": wo_count,
                     "PH": ph_count,
@@ -252,6 +267,10 @@ class ReportService:
                 "font": Font(name="Calibri", size=9, bold=True, color="166534"),
                 "fill": PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
             },
+            "HD": {
+                "font": Font(name="Calibri", size=9, bold=True, color="C2410C"),
+                "fill": PatternFill(start_color="FFEDD5", end_color="FFEDD5", fill_type="solid")
+            },
             "A": {
                 "font": Font(name="Calibri", size=9, bold=True, color="991B1B"),
                 "fill": PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
@@ -287,7 +306,7 @@ class ReportService:
         align_left = Alignment(horizontal="left", vertical="center")
 
         # Total columns count: 6 metadata + days_in_month + 5 summaries (P, A, WO, PH, Total)
-        total_cols = 6 + days_in_month + 5
+        total_cols = 6 + days_in_month + 6
         last_col_letter = get_column_letter(total_cols)
 
         # 1. Official Banner (Rows 1-3)
@@ -316,7 +335,7 @@ class ReportService:
         headers = ["SR.", "Employee Code", "Employee Name", "Designation", "CIRCLE", "Division"]
         for dm in days_meta:
             headers.append(dm["label"])
-        headers.extend(["P", "A", "WO", "PH", "Total"])
+        headers.extend(["P", "HD", "A", "WO", "PH", "Total"])
 
         ws.row_dimensions[5].height = 26
         for col_idx, h_text in enumerate(headers, 1):
@@ -371,9 +390,9 @@ class ReportService:
                     hol_name = h_names.get(d_num) or dm.get("holidayName") or "Public Holiday"
                     cell.comment = Comment(f"Public Holiday: {hol_name}", "Admin")
 
-            # Summary Totals Columns: P, A, WO, PH, Total
+            # Summary Totals Columns: P, HD, A, WO, PH, Total
             sum_dict = record.get("summary", {})
-            sum_keys = ["P", "A", "WO", "PH", "Total"]
+            sum_keys = ["P", "HD", "A", "WO", "PH", "Total"]
             start_sum_col = 6 + days_in_month + 1
 
             for s_idx, k in enumerate(sum_keys):
@@ -392,7 +411,7 @@ class ReportService:
         ws.row_dimensions[row_idx].height = 20
         legend_cols = min(18, total_cols)
         ws.merge_cells(f"A{row_idx}:{get_column_letter(legend_cols)}{row_idx}")
-        ws[f"A{row_idx}"] = "Legend: P = Present (Green)   A = Absent (Red)   WO = Weekly Off (Blue)   PH = Public Holiday (Purple)"
+        ws[f"A{row_idx}"] = "Legend: P = Present (Green)   HD = Half Day (Orange)   A = Absent (Red)   WO = Weekly Off (Blue)   PH = Public Holiday (Purple)"
         ws[f"A{row_idx}"].font = font_legend
         ws[f"A{row_idx}"].alignment = Alignment(horizontal="left", vertical="center")
 

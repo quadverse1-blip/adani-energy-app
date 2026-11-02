@@ -29,13 +29,27 @@ def _verify_employee_access(requested_emp_id: str, token_data: dict) -> None:
     req_clean = str(requested_emp_id or "").strip().lower()
     t_id = str(token_data.get("id") or "").strip().lower()
     t_emp_id = str(token_data.get("employeeId") or "").strip().lower()
+    t_sub = str(token_data.get("sub") or "").strip().lower()
+
+    # Look up caller employee details if available
+    caller_emp = db.get_employee(t_id) or db.find_employee_by_identifier(t_id) or db.find_employee_by_identifier(t_sub)
+    caller_valid_ids = {t_id, t_emp_id, t_sub}
+    if caller_emp:
+        if caller_emp.get("_id"):
+            caller_valid_ids.add(str(caller_emp["_id"]).strip().lower())
+        if caller_emp.get("employeeId"):
+            caller_valid_ids.add(str(caller_emp["employeeId"]).strip().lower())
 
     # Look up canonical target employee
     target_emp = db.get_employee(requested_emp_id) or db.find_employee_by_identifier(requested_emp_id)
-    target_id = str(target_emp.get("_id") or "").strip().lower() if target_emp else req_clean
-    target_emp_id = str(target_emp.get("employeeId") or "").strip().lower() if target_emp else req_clean
+    target_valid_ids = {req_clean}
+    if target_emp:
+        if target_emp.get("_id"):
+            target_valid_ids.add(str(target_emp["_id"]).strip().lower())
+        if target_emp.get("employeeId"):
+            target_valid_ids.add(str(target_emp["employeeId"]).strip().lower())
 
-    if req_clean in (t_id, t_emp_id) or target_id in (t_id, t_emp_id) or target_emp_id in (t_id, t_emp_id):
+    if caller_valid_ids.intersection(target_valid_ids):
         return
 
     raise HTTPException(
@@ -97,6 +111,7 @@ async def get_salary_config(
     )
 
 @router.put("/config/{employeeId:path}", response_model=SalaryConfigResponse)
+@router.post("/config/{employeeId:path}", response_model=SalaryConfigResponse)
 async def update_salary_config(
     employeeId: str,
     payload: SalaryConfigCreateUpdate,
@@ -106,11 +121,13 @@ async def update_salary_config(
     Admin endpoint to configure an individual employee's monthly salary,
     absent deduction rate, half-day deduction rate, and effective date.
     """
+    absent_rate = payload.absentDeductionRate if payload.absentDeductionRate is not None else (payload.absentDeduction if payload.absentDeduction is not None else 500.0)
+    half_rate = payload.halfDayDeductionRate if payload.halfDayDeductionRate is not None else (payload.halfDayDeduction if payload.halfDayDeduction is not None else 250.0)
     updated_cfg = salary_service.update_salary_config(
         employee_id=employeeId,
         monthly_salary=payload.monthlySalary,
-        absent_deduction_rate=payload.absentDeductionRate,
-        half_day_deduction_rate=payload.halfDayDeductionRate,
+        absent_deduction_rate=absent_rate,
+        half_day_deduction_rate=half_rate,
         effective_date=payload.effectiveDate,
         notes=payload.notes,
         updated_by=token_data.get("name") or "Operations Administrator"
@@ -188,6 +205,8 @@ async def download_payslip_pdf(
     - Technicians can only download their own payslip.
     - Admins can download any employee's payslip.
     """
+    if employeeId.endswith("/pdf"):
+        employeeId = employeeId[:-4]
     token_str = credentials.credentials if credentials else token
     token_data = decode_access_token(token_str) if token_str else None
     if token_data:

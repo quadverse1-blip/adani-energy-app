@@ -49,6 +49,14 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({ record, onPress 
   const isCurrentlyActive = !!record.checkIn && !record.checkOut;
   const checkOutTime = isCurrentlyActive ? 'In Progress' : formatTime(record.checkOut?.time);
 
+  const isHalfDay = Boolean(
+    record.isHalfDay ||
+    record.attendanceCategory === 'HALF_DAY' ||
+    record.status === 'half_day' ||
+    (record as any).shiftStatus === 'half_day'
+  );
+  const effectiveStatus = isHalfDay ? 'half_day' : record.status;
+
   const durationStr =
     record.workingMinutes > 0
       ? `${Math.floor(record.workingMinutes / 60)}h ${record.workingMinutes % 60}m`
@@ -70,7 +78,7 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({ record, onPress 
           {/* Details Column */}
           <View style={styles.detailsCol}>
             <View style={styles.topDetailsRow}>
-              <StatusBadge status={record.status} size="sm" />
+              <StatusBadge status={effectiveStatus} size="sm" />
               <View style={styles.durationRow}>
                 <Clock size={12} color={isCurrentlyActive ? '#10B981' : COLORS.textSecondary} />
                 <Text style={[styles.durationText, isCurrentlyActive && { color: '#059669', fontWeight: '800' }]}>

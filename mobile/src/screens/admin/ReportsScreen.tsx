@@ -123,7 +123,7 @@ export const ReportsScreen: React.FC = () => {
   const [markEmpId, setMarkEmpId] = useState<string>('');
   const [markEmpName, setMarkEmpName] = useState<string>('');
   const [markDate, setMarkDate] = useState<string>('');
-  const [markStatus, setMarkStatus] = useState<'P' | 'A'>('P');
+  const [markStatus, setMarkStatus] = useState<'P' | 'A' | 'HD'>('P');
   const [markRemarks, setMarkRemarks] = useState<string>('Marked Present by Operations Admin');
   const [savingMark, setSavingMark] = useState<boolean>(false);
 
@@ -226,7 +226,7 @@ export const ReportsScreen: React.FC = () => {
       const res = await attendanceService.markAttendance({
         employeeId: markEmpId,
         date: markDate,
-        status: markStatus,
+        status: markStatus === 'HD' ? 'half_day' : markStatus,
         adminRemarks: markRemarks,
       });
 
@@ -421,6 +421,10 @@ Synchronized across all dashboards and muster reports.`,
       textColor = '#166534'; // Green Present
       bgColor = '#DCFCE7';
       borderColor = '#BBF7D0';
+    } else if (val === 'HD') {
+      textColor = '#C2410C'; // Amber/Orange Half Day
+      bgColor = '#FFEDD5';
+      borderColor = '#FED7AA';
     } else if (val === 'A') {
       textColor = '#991B1B'; // Red Absent
       bgColor = '#FEE2E2';
@@ -856,6 +860,10 @@ Synchronized across all dashboards and muster reports.`,
                     <Text style={[styles.summaryColHeaderText, { color: '#059669' }]}>P</Text>
                     <Text style={styles.summaryColHeaderSub}>Present</Text>
                   </View>
+                  <View style={[styles.summaryColHeader, { width: 44, backgroundColor: '#FFEDD5' }]}>
+                    <Text style={[styles.summaryColHeaderText, { color: '#C2410C' }]}>HD</Text>
+                    <Text style={styles.summaryColHeaderSub}>Half</Text>
+                  </View>
                   <View style={[styles.summaryColHeader, { width: 44, backgroundColor: '#FEF2F2' }]}>
                     <Text style={[styles.summaryColHeaderText, { color: '#DC2626' }]}>A</Text>
                     <Text style={styles.summaryColHeaderSub}>Absent</Text>
@@ -913,6 +921,11 @@ Synchronized across all dashboards and muster reports.`,
                           {row.summary.P}
                         </Text>
                       </View>
+                      <View style={[styles.summaryDataCell, { width: 44, backgroundColor: '#FFF7ED' }]}>
+                        <Text style={[styles.summaryValText, { color: '#C2410C' }]}>
+                          {row.summary.HD || 0}
+                        </Text>
+                      </View>
                       <View style={[styles.summaryDataCell, { width: 44, backgroundColor: '#FEF2F2' }]}>
                         <Text style={[styles.summaryValText, { color: '#DC2626' }]}>
                           {row.summary.A}
@@ -955,6 +968,16 @@ Synchronized across all dashboards and muster reports.`,
                 <View style={{ marginLeft: 8 }}>
                   <Text style={styles.legendLabel}>Present</Text>
                   <Text style={styles.legendDesc}>Verified shift completed</Text>
+                </View>
+              </View>
+
+              <View style={styles.legendItem}>
+                <View style={[styles.legendBox, { backgroundColor: '#FFEDD5', borderColor: '#FED7AA' }]}>
+                  <Text style={[styles.legendCode, { color: '#C2410C' }]}>HD</Text>
+                </View>
+                <View style={{ marginLeft: 8 }}>
+                  <Text style={styles.legendLabel}>Half Day</Text>
+                  <Text style={styles.legendDesc}>Partial shift (deduction applies)</Text>
                 </View>
               </View>
 
@@ -1302,6 +1325,17 @@ Synchronized across all dashboards and muster reports.`,
                   <View style={[styles.statusCircle, { backgroundColor: '#059669' }]} />
                   <Text style={[styles.statusOptionText, markStatus === 'P' && { color: '#059669', fontWeight: '800' }]}>
                     P • Present (On Duty)
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity delayPressIn={0}
+                  style={[styles.statusOptionBtn, markStatus === 'HD' && styles.statusOptionBtnHDActive]}
+                  onPress={() => setMarkStatus('HD')}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.statusCircle, { backgroundColor: '#EA580C' }]} />
+                  <Text style={[styles.statusOptionText, markStatus === 'HD' && { color: '#EA580C', fontWeight: '800' }]}>
+                    HD • Half Day (Partial Shift)
                   </Text>
                 </TouchableOpacity>
 
@@ -2105,6 +2139,10 @@ const styles = StyleSheet.create({
   statusOptionBtnPActive: {
     borderColor: '#059669',
     backgroundColor: '#F0FDF4',
+  },
+  statusOptionBtnHDActive: {
+    borderColor: '#EA580C',
+    backgroundColor: '#FFEDD5',
   },
   statusOptionBtnAActive: {
     borderColor: '#DC2626',

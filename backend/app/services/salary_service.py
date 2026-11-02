@@ -21,15 +21,37 @@ class SalaryService:
         notes: Optional[str] = None,
         updated_by: Optional[str] = "Operations Administrator"
     ) -> dict:
-        """Updates individual employee salary and deduction amounts with effective date."""
+        """
+        Updates individual employee salary and deduction amounts with effective date.
+        Maintains historical snapshots so prior unfinalized payroll periods retain
+        the settings that were in effect for their month, preserving historical salary integrity.
+        """
+        effective_dt_str = effective_date or datetime.utcnow().strftime("%Y-%m-%d")
+        existing_cfg = db.get_salary_config(employee_id)
+        
+        # Preserve previous configuration in historical audit list
+        history = list(existing_cfg.get("history") or [])
+        if existing_cfg.get("monthlySalary"):
+            history.append({
+                "monthlySalary": float(existing_cfg.get("monthlySalary", 20000.0)),
+                "absentDeductionRate": float(existing_cfg.get("absentDeductionRate", 500.0)),
+                "halfDayDeductionRate": float(existing_cfg.get("halfDayDeductionRate", 250.0)),
+                "effectiveDate": str(existing_cfg.get("effectiveDate", "2026-01-01")),
+                "endedAt": effective_dt_str,
+                "notes": existing_cfg.get("notes", "Historical scale"),
+                "updatedBy": existing_cfg.get("updatedBy", "System"),
+                "updatedAt": existing_cfg.get("updatedAt")
+            })
+
         config_data = {
             "monthlySalary": float(monthly_salary),
             "absentDeductionRate": float(absent_deduction_rate),
             "halfDayDeductionRate": float(half_day_deduction_rate),
-            "effectiveDate": effective_date or datetime.utcnow().strftime("%Y-%m-%d"),
+            "effectiveDate": effective_dt_str,
             "notes": notes or "Configured by Admin",
             "updatedBy": updated_by or "Operations Administrator",
-            "updatedAt": datetime.utcnow().isoformat() + "Z"
+            "updatedAt": datetime.utcnow().isoformat() + "Z",
+            "history": history
         }
         return db.set_salary_config(employee_id, config_data)
 
@@ -154,11 +176,27 @@ class SalaryService:
         uploaded_slip = UPLOADED_SLIPS.get(key1) or UPLOADED_SLIPS.get(key2)
         has_uploaded = uploaded_slip is not None
 
-        # 3. Retrieve employee salary configuration
+        # 3. Retrieve employee salary configuration (with Historical Salary Protection)
         cfg = db.get_salary_config(canonical_id)
-        monthly_salary = float(cfg.get("monthlySalary", 20000.0))
-        absent_rate = float(cfg.get("absentDeductionRate", 500.0))
-        half_day_rate = float(cfg.get("halfDayDeductionRate", 250.0))
+        
+        # Check if requested payroll month is prior to the config's effective date
+        target_period_start = date(year, month, 1)
+        active_cfg = cfg
+        try:
+            eff_date_str = str(cfg.get("effectiveDate") or "2026-01-01")
+            eff_dt = datetime.strptime(eff_date_str[:10], "%Y-%m-%d").date()
+            if target_period_start < eff_dt and cfg.get("history"):
+                for hist in reversed(cfg.get("history", [])):
+                    h_start = datetime.strptime(str(hist.get("effectiveDate", "2026-01-01"))[:10], "%Y-%m-%d").date()
+                    if h_start <= target_period_start:
+                        active_cfg = hist
+                        break
+        except Exception:
+            active_cfg = cfg
+
+        monthly_salary = float(active_cfg.get("monthlySalary", 20000.0))
+        absent_rate = float(active_cfg.get("absentDeductionRate", 500.0))
+        half_day_rate = float(active_cfg.get("halfDayDeductionRate", 250.0))
 
         # 4. Calculate actual attendance counts
         att = SalaryService.calculate_attendance_summary(employee_id, month, year)

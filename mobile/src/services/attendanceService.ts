@@ -103,7 +103,9 @@ export const attendanceService = {
   async markAttendance(payload: {
     employeeId: string;
     date: string;
-    status: 'P' | 'A' | 'present' | 'absent';
+    status: 'P' | 'A' | 'HD' | 'present' | 'absent' | 'half_day';
+    isHalfDay?: boolean;
+    attendanceCategory?: string;
     adminRemarks?: string;
   }): Promise<{ success: boolean; message: string; record: any }> {
     const response = await apiClient.post<{ success: boolean; message: string; record: any }>('/attendance/admin/mark-attendance', payload);

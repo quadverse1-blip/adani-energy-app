@@ -163,7 +163,7 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
         const mapped: SupervisorLogItem[] = sourceList.map((item: any) => {
           let st: AttendanceStatusType = 'present';
           const s = (item.status || '').toLowerCase();
-          if (s === 'half_day' || s === 'half-day') st = 'half_day';
+          if (s === 'half_day' || s === 'half-day' || item.isHalfDay || item.attendanceCategory === 'HALF_DAY') st = 'half_day';
           else if (s === 'late') st = 'late';
           else if (s === 'absent') st = 'absent';
 

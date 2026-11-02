@@ -175,7 +175,7 @@ export const HistoryScreen: React.FC = () => {
   const dynamicSummary: AttendanceSummary = useMemo(() => {
     const presentCount = filteredRecords.filter((r) => r.status === 'present').length;
     const lateCount = filteredRecords.filter((r) => r.status === 'late').length;
-    const halfDayCount = filteredRecords.filter((r) => r.status === 'half_day' || r.status === 'half-day').length;
+    const halfDayCount = filteredRecords.filter((r) => r.status === 'half_day' || r.status === 'half-day' || r.isHalfDay || (r as any).attendanceCategory === 'HALF_DAY').length;
     const absentCount = filteredRecords.filter((r) => r.status === 'absent').length;
     const totalMin = filteredRecords.reduce((acc, r) => acc + (r.workingMinutes || 0), 0);
     const totalHours = Math.round((totalMin / 60) * 10) / 10;
@@ -409,7 +409,7 @@ export const HistoryScreen: React.FC = () => {
                   Substation: {selectedRecord.siteName || 'Assigned Substation'}
                 </Text>
               </View>
-              <StatusBadge status={selectedRecord.status} size="md" />
+              <StatusBadge status={(selectedRecord.isHalfDay || (selectedRecord as any).attendanceCategory === 'HALF_DAY' || selectedRecord.status === 'half_day') ? 'half_day' : selectedRecord.status} size="md" />
             </View>
 
             {/* Verification Selfie if exists */}
