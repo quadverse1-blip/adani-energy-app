@@ -198,12 +198,22 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
       attributionControl: true
     });
 
-    // High quality CartoDB Voyager tiles (OpenStreetMap data)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    // OpenStreetMap high-speed distributed tile mirror with Esri auto-fallback
+    var osmTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      subdomains: 'abcd',
+      subdomains: ['a', 'b', 'c'],
       attribution: '<a href="https://leafletjs.com" target="_blank">Leaflet</a> | &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors | MapmyIndia (Mappls) GIS'
     }).addTo(map);
+
+    osmTile.on('tileerror', function(error, tile) {
+      if (tile && !tile.dataset.fallback) {
+        tile.dataset.fallback = 'true';
+        var z = error.coords.z;
+        var x = error.coords.x;
+        var y = error.coords.y;
+        tile.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/' + z + '/' + y + '/' + x;
+      }
+    });
 
     var substations = ${substationsData};
     var technicians = ${techniciansData};

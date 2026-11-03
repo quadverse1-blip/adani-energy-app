@@ -334,7 +334,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
   
   <div class="geofence-tag">
     <div class="radar-dot"></div>
-    <span>500m Geofence Perimeter Active</span>
+    <span>\${radius}m Geofence Perimeter Active</span>
   </div>
 
   <script>
@@ -358,11 +358,28 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
 
       map.zoomControl.setPosition('bottomright');
 
-      // Fast, beautiful CartoDB Voyager tiles with zero rate limits
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        subdomains: 'abcd',
-        maxZoom: 19
+      // High-resolution OpenStreetMap tiles with zero API keys and zero watermarks
+      var osmTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        subdomains: ['a', 'b', 'c'],
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
+
+      // Automatic fallback to Esri World Street Map if an OSM tile fails
+      osmTile.on('tileerror', function(error, tile) {
+        if (tile && !tile.dataset.fallback) {
+          tile.dataset.fallback = 'true';
+          var z = error.coords.z;
+          var x = error.coords.x;
+          var y = error.coords.y;
+          tile.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/' + z + '/' + y + '/' + x;
+        }
+      });
+
+      // Force layout invalidation so all tiles render smoothly without gray spots
+      setTimeout(function() {
+        map.invalidateSize();
+      }, 250);
 
       // 500m Geofence Perimeter Circle
       var circle = L.circle([siteLat, siteLon], {
@@ -717,7 +734,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
             ) : WebView ? (
               <WebView
                 originWhitelist={['*']}
-                source={{ html: radarMapHtml, baseUrl: 'https://unpkg.com' }}
+                source={{ html: radarMapHtml, baseUrl: 'https://tile.openstreetmap.org' }}
                 style={{ width: '100%', height: 220, backgroundColor: '#0F172A' }}
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
