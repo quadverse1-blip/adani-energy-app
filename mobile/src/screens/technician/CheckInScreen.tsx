@@ -93,12 +93,13 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     return sites;
   }, [sites]);
 
-  // GPS State (Defaults to St. Joseph's University device coordinates: 12.962506, 77.593736)
+  // GPS State (Live Device Location)
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [latitude, setLatitude] = useState<number>(0);
   const [longitude, setLongitude] = useState<number>(0);
   const [accuracy, setAccuracy] = useState<number>(8.5);
+  const [currentAddress, setCurrentAddress] = useState<string | null>(null);
 
   // Camera & Photo Verification State
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -145,14 +146,8 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     }
   }, [route?.params?.targetSiteId, user]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadSubstations();
-    }, [loadSubstations])
-  );
-
-  // 2. Fetch Live GPS Telemetry
-  const obtainGps = async () => {
+  // 2. Fetch Live GPS Telemetry with fast cached fix, precision fallback & reverse geocode
+  const obtainGps = useCallback(async () => {
     setGpsLoading(true);
     setGpsError(null);
     try {
@@ -163,30 +158,82 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      // 2a. Fast cached last known position for instant responsiveness (<10ms)
+      try {
+        const lastKnown = await Location.getLastKnownPositionAsync({});
+        if (lastKnown?.coords && lastKnown.coords.latitude !== 0 && lastKnown.coords.longitude !== 0) {
+          setLatitude(lastKnown.coords.latitude);
+          setLongitude(lastKnown.coords.longitude);
+          setAccuracy(lastKnown.coords.accuracy || 10);
+        }
+      } catch (_) {}
 
-      if (location?.coords) {
-        setLatitude(location.coords.latitude);
-        setLongitude(location.coords.longitude);
-        setAccuracy(location.coords.accuracy || 10);
+      // 2b. High accuracy live GPS polling
+      let freshLocation: Location.LocationObject | null = null;
+      try {
+        freshLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+      } catch (highErr) {
+        // Fallback to balanced accuracy if high accuracy times out (e.g., indoor satellite obstruction)
+        try {
+          freshLocation = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+        } catch (balErr) {
+          console.warn('GPS balanced fallback error:', balErr);
+        }
       }
-      triggerHaptic('success');
+
+      if (freshLocation?.coords && freshLocation.coords.latitude !== 0) {
+        const lat = freshLocation.coords.latitude;
+        const lon = freshLocation.coords.longitude;
+        setLatitude(lat);
+        setLongitude(lon);
+        setAccuracy(freshLocation.coords.accuracy || 8);
+
+        // 2c. Reverse geocoding to human-readable street/area address
+        try {
+          const rev = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
+          if (rev && rev.length > 0) {
+            const r = rev[0];
+            const parts = [
+              r.name,
+              r.street,
+              r.district || r.subregion,
+              r.city,
+              r.region,
+            ].filter(Boolean);
+            setCurrentAddress(parts.join(', ') || `${r.city || ''}, ${r.region || ''}`);
+          }
+        } catch (revErr) {
+          console.warn('Reverse geocode error:', revErr);
+        }
+
+        triggerHaptic('success');
+      }
     } catch (err: any) {
-      console.warn('GPS location error, keeping verified telemetry:', err);
+      console.warn('GPS location error:', err);
+      setGpsError(err.message || 'Unable to acquire GPS signal. Please ensure device location is enabled.');
     } finally {
       setGpsLoading(false);
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSubstations();
+      obtainGps();
+    }, [loadSubstations, obtainGps])
+  );
 
   useEffect(() => {
     obtainGps();
-  }, []);
+  }, [obtainGps]);
 
-  // Compute Distance between User GPS and Selected Substation
+  // Compute Distance between User GPS and Selected Substation (Guarded against 0,0)
   const distanceToSiteMeters = useMemo(() => {
-    if (!selectedSite) return 0;
+    if (!selectedSite || latitude === 0 || longitude === 0) return 0;
     return calculateHaversineDistance(
       latitude,
       longitude,
@@ -197,6 +244,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
 
   // Format distance (e.g., '1047.2 km' or '335 m')
   const formatDistance = (meters: number): string => {
+    if (latitude === 0 || longitude === 0) return 'Acquiring GPS...';
     if (meters >= 1000) {
       return `${(meters / 1000).toFixed(1)} km`;
     }
@@ -207,10 +255,10 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
 
   // Check if User is strictly within the Substation's Geofence (<= 500m)
   const isInside = useMemo(() => {
-    if (!selectedSite) return false;
+    if (!selectedSite || latitude === 0 || longitude === 0) return false;
     const allowedRadius = selectedSite.radiusMeters || 500;
     return distanceToSiteMeters <= allowedRadius;
-  }, [distanceToSiteMeters, selectedSite]);
+  }, [distanceToSiteMeters, selectedSite, latitude, longitude]);
 
   // Shift Timing Check
   const shiftInfo = useMemo(() => getShiftInfo(), []);
@@ -218,20 +266,32 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
   // Update Map Region when Substation or User location changes
   useEffect(() => {
     if (mapRef.current && selectedSite) {
-      const midLat = (latitude + selectedSite.latitude) / 2;
-      const midLon = (longitude + selectedSite.longitude) / 2;
-      const latDelta = Math.max(Math.abs(latitude - selectedSite.latitude) * 1.5, 0.02);
-      const lonDelta = Math.max(Math.abs(longitude - selectedSite.longitude) * 1.5, 0.02);
+      if (latitude !== 0 && longitude !== 0) {
+        const midLat = (latitude + selectedSite.latitude) / 2;
+        const midLon = (longitude + selectedSite.longitude) / 2;
+        const latDelta = Math.max(Math.abs(latitude - selectedSite.latitude) * 1.5, 0.02);
+        const lonDelta = Math.max(Math.abs(longitude - selectedSite.longitude) * 1.5, 0.02);
 
-      mapRef.current.animateToRegion(
-        {
-          latitude: midLat,
-          longitude: midLon,
-          latitudeDelta: latDelta,
-          longitudeDelta: lonDelta,
-        },
-        600
-      );
+        mapRef.current.animateToRegion(
+          {
+            latitude: midLat,
+            longitude: midLon,
+            latitudeDelta: latDelta,
+            longitudeDelta: lonDelta,
+          },
+          600
+        );
+      } else {
+        mapRef.current.animateToRegion(
+          {
+            latitude: selectedSite.latitude,
+            longitude: selectedSite.longitude,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+          },
+          600
+        );
+      }
     }
   }, [selectedSite, latitude, longitude]);
 
@@ -239,12 +299,12 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
   const handleZoom = (zoomIn: boolean) => {
     if (mapRef.current && selectedSite) {
       const factor = zoomIn ? 0.5 : 2.0;
-      const midLat = (latitude + selectedSite.latitude) / 2;
-      const midLon = (longitude + selectedSite.longitude) / 2;
+      const targetLat = latitude !== 0 ? (latitude + selectedSite.latitude) / 2 : selectedSite.latitude;
+      const targetLon = longitude !== 0 ? (longitude + selectedSite.longitude) / 2 : selectedSite.longitude;
       mapRef.current.animateToRegion(
         {
-          latitude: midLat,
-          longitude: midLon,
+          latitude: targetLat,
+          longitude: targetLon,
           latitudeDelta: 0.02 * factor,
           longitudeDelta: 0.02 * factor,
         },
@@ -337,6 +397,15 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
         'Already Checked In',
         'You have already recorded check-in for today. Re-check in is not allowed.'
       );
+      return;
+    }
+
+    if (latitude === 0 || longitude === 0) {
+      Alert.alert(
+        'GPS Signal Required',
+        'Acquiring your device GPS position... Please ensure Location services are ON and tap "Fetch Live Location".'
+      );
+      obtainGps();
       return;
     }
 
@@ -539,7 +608,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
           <View style={[styles.radarCard, isTablet && styles.radarCardTablet]}>
             {/* Header */}
             <View style={styles.radarHeaderRow}>
-              <View>
+              <View style={{ flex: 1, marginRight: 8 }}>
                 <Text style={styles.radarTitle}>Live Location Radar</Text>
                 <Text style={styles.radarSubtitle}>
                   Assignment: <Text style={{ fontWeight: '800' }}>{selectedSite?.name || 'No Site Assigned'}</Text>
@@ -547,12 +616,8 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
               </View>
 
               <View style={styles.radarHeaderButtons}>
-                <View style={styles.realDeviceBadge}>
-                  <MapPin size={11} color="#DC2626" style={{ marginRight: 4 }} />
-                  <Text style={styles.realDeviceBadgeText}>Real Device GPS</Text>
-                </View>
-
-                <TouchableOpacity delayPressIn={0}
+                <TouchableOpacity
+                  delayPressIn={0}
                   style={styles.refreshGpsBtn}
                   onPress={obtainGps}
                   disabled={gpsLoading}
@@ -562,13 +627,30 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                     <ActivityIndicator size="small" color="#1E63F0" />
                   ) : (
                     <>
-                      <Radio size={12} color="#1E63F0" style={{ marginRight: 4 }} />
-                      <Text style={styles.refreshGpsBtnText}>Refresh</Text>
+                      <RefreshCw size={12} color="#1E63F0" style={{ marginRight: 5 }} />
+                      <Text style={styles.refreshGpsBtnText}>Fetch Live Location</Text>
                     </>
                   )}
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Resolved Human-Readable Address Bar */}
+            {currentAddress ? (
+              <View style={styles.addressBar}>
+                <MapPin size={13} color="#1E63F0" style={{ marginTop: 2, marginRight: 6 }} />
+                <Text style={styles.addressBarText} numberOfLines={2}>
+                  {currentAddress}
+                </Text>
+              </View>
+            ) : gpsLoading ? (
+              <View style={[styles.addressBar, { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' }]}>
+                <ActivityIndicator size="small" color="#0284C7" style={{ marginRight: 6 }} />
+                <Text style={[styles.addressBarText, { color: '#0369A1' }]}>
+                  Acquiring live device GPS position...
+                </Text>
+              </View>
+            ) : null}
 
             {/* Radar Map Container */}
             <View style={styles.mapContainer}>
@@ -578,16 +660,16 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                   style={StyleSheet.absoluteFill}
                   provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
                   initialRegion={{
-                    latitude: (latitude + selectedSite.latitude) / 2,
-                    longitude: (longitude + selectedSite.longitude) / 2,
-                    latitudeDelta: 0.1,
-                    longitudeDelta: 0.1,
+                    latitude: latitude !== 0 ? (latitude + selectedSite.latitude) / 2 : selectedSite.latitude,
+                    longitude: longitude !== 0 ? (longitude + selectedSite.longitude) / 2 : selectedSite.longitude,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
                   }}
                   mapType="standard"
                   showsCompass={true}
+                  showsUserLocation={false}
                 >
-
-                  {/* 500m Geofence Circle around Substation */}
+                  {/* 500m Geofence Circle around Site */}
                   <Circle
                     center={{
                       latitude: selectedSite.latitude,
@@ -607,7 +689,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                       longitude: selectedSite.longitude,
                     }}
                     title={selectedSite.name}
-                    description={`Geofence: 500m • ${selectedSite.code}`}
+                    description={`Geofence: ${selectedSite.radiusMeters || 500}m • ${selectedSite.code}`}
                     zIndex={10}
                   >
                     <View style={styles.substationMapPill}>
@@ -616,82 +698,96 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                     </View>
                   </Marker>
 
-                  {/* User Device GPS Marker */}
-                  <Marker
-                    coordinate={{ latitude, longitude }}
-                    title="Your Device GPS"
-                    description={`Accuracy: ±${accuracy.toFixed(1)}m`}
-                    zIndex={15}
-                  >
-                    <View style={styles.userDeviceMapPill}>
-                      <View style={styles.userDotCircle} />
-                      <Text style={styles.userDeviceMapPillText}>Your Device GPS</Text>
-                    </View>
-                  </Marker>
+                  {/* User Device GPS Marker (Rendered only when valid GPS is acquired) */}
+                  {latitude !== 0 && longitude !== 0 && (
+                    <Marker
+                      coordinate={{ latitude, longitude }}
+                      title="Your Device GPS"
+                      description={currentAddress || `Accuracy: ±${accuracy.toFixed(1)}m`}
+                      zIndex={15}
+                    >
+                      <View style={styles.userDeviceMapPill}>
+                        <View style={styles.userDotCircle} />
+                        <Text style={styles.userDeviceMapPillText}>Your Device GPS</Text>
+                      </View>
+                    </Marker>
+                  )}
 
-                  {/* Connecting Line between Device GPS & Substation */}
-                  <Polyline
-                    coordinates={[
-                      { latitude, longitude },
-                      { latitude: selectedSite.latitude, longitude: selectedSite.longitude },
-                    ]}
-                    strokeColor="#2563EB"
-                    strokeWidth={2}
-                    lineDashPattern={[6, 4]}
-                    zIndex={3}
-                  />
+                  {/* Connecting Line between Device GPS & Site */}
+                  {latitude !== 0 && longitude !== 0 && (
+                    <Polyline
+                      coordinates={[
+                        { latitude, longitude },
+                        { latitude: selectedSite.latitude, longitude: selectedSite.longitude },
+                      ]}
+                      strokeColor="#2563EB"
+                      strokeWidth={2}
+                      lineDashPattern={[6, 4]}
+                      zIndex={3}
+                    />
+                  )}
                 </MapView>
               )}
 
               {/* Floating Distance Badge on Map */}
               <View style={styles.floatingDistanceBadge}>
                 <View style={styles.floatingDot} />
-                <Text style={styles.floatingDistanceText}>
-                  {distanceFormatted} to {selectedSite?.name || 'Substation'}
-                </Text>
-                <View
-                  style={[
-                    styles.floatingGeofenceTag,
-                    { backgroundColor: isInside ? '#059669' : '#D97706' },
-                  ]}
-                >
-                  <Text style={styles.floatingGeofenceTagText}>
-                    {isInside ? 'Inside Geofence' : 'Outside Geofence'}
-                  </Text>
-                </View>
+                {latitude === 0 || longitude === 0 ? (
+                  <Text style={styles.floatingDistanceText}>Acquiring live GPS...</Text>
+                ) : (
+                  <>
+                    <Text style={styles.floatingDistanceText}>
+                      {distanceFormatted} to {selectedSite?.name || 'Site'}
+                    </Text>
+                    <View
+                      style={[
+                        styles.floatingGeofenceTag,
+                        { backgroundColor: isInside ? '#059669' : '#D97706' },
+                      ]}
+                    >
+                      <Text style={styles.floatingGeofenceTagText}>
+                        {isInside ? 'Inside Geofence' : 'Outside Geofence'}
+                      </Text>
+                    </View>
+                  </>
+                )}
               </View>
 
               {/* Zoom Controls */}
               <View style={styles.mapZoomControls}>
-                <TouchableOpacity delayPressIn={0}
+                <TouchableOpacity
+                  delayPressIn={0}
                   style={styles.zoomBtn}
                   onPress={() => handleZoom(true)}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.zoomBtnText}>+</Text>
                 </TouchableOpacity>
-                <TouchableOpacity delayPressIn={0}
+                <TouchableOpacity
+                  delayPressIn={0}
                   style={styles.zoomBtn}
                   onPress={() => handleZoom(false)}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.zoomBtnText}>−</Text>
+                  <Text style={styles.zoomBtnText}>-</Text>
                 </TouchableOpacity>
               </View>
-
-
             </View>
 
             {/* 3 Telemetry Metrics below Map */}
             <View style={styles.telemetryGrid}>
               <View style={styles.telemetryBox}>
                 <Text style={styles.telemetryBoxLabel}>GPS LATITUDE</Text>
-                <Text style={styles.telemetryBoxValue}>{latitude.toFixed(6)}</Text>
+                <Text style={styles.telemetryBoxValue}>
+                  {latitude !== 0 ? latitude.toFixed(6) : 'Acquiring...'}
+                </Text>
               </View>
 
               <View style={styles.telemetryBox}>
                 <Text style={styles.telemetryBoxLabel}>GPS LONGITUDE</Text>
-                <Text style={styles.telemetryBoxValue}>{longitude.toFixed(6)}</Text>
+                <Text style={styles.telemetryBoxValue}>
+                  {longitude !== 0 ? longitude.toFixed(6) : 'Acquiring...'}
+                </Text>
               </View>
 
               <View style={[styles.telemetryBox, isInside ? styles.telemetryBoxInside : styles.telemetryBoxOutside]}>
@@ -709,7 +805,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                     { color: isInside ? '#059669' : '#DC2626' },
                   ]}
                 >
-                  {distanceFormatted}
+                  {latitude !== 0 && longitude !== 0 ? distanceFormatted : '---'}
                 </Text>
               </View>
             </View>
@@ -1465,6 +1561,24 @@ const styles = StyleSheet.create({
   },
   radarCardTablet: {
     flex: 1.25,
+  },
+  addressBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  addressBarText: {
+    fontSize: 11,
+    color: '#1E40AF',
+    fontWeight: '600',
+    flex: 1,
+    lineHeight: 15,
   },
   radarHeaderRow: {
     flexDirection: 'row',

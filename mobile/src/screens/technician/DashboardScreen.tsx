@@ -13,6 +13,7 @@ import {
   Image,
   Linking,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -156,10 +157,35 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
   const [isSubmittingPhoto, setIsSubmittingPhoto] = useState(false);
   const cameraRef = useRef<any>(null);
 
-  // Live GPS Coords based on assigned substation
+  // Live GPS Coords from real device location
+  const [liveCoords, setLiveCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          try {
+            const cached = await Location.getLastKnownPositionAsync({});
+            if (cached?.coords && cached.coords.latitude !== 0) {
+              setLiveCoords({ latitude: cached.coords.latitude, longitude: cached.coords.longitude });
+            }
+          } catch (_) {}
+
+          try {
+            const curr = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            if (curr?.coords && curr.coords.latitude !== 0) {
+              setLiveCoords({ latitude: curr.coords.latitude, longitude: curr.coords.longitude });
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    })();
+  }, []);
+
   const deviceCoords = {
-    latitude: substation?.latitude || 0,
-    longitude: substation?.longitude || 0,
+    latitude: liveCoords?.latitude || substation?.latitude || 0,
+    longitude: liveCoords?.longitude || substation?.longitude || 0,
   };
 
   // Derive user initials

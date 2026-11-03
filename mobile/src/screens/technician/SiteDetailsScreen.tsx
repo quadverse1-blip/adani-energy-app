@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,6 @@ import {
   Navigation,
   ShieldCheck,
   Menu,
-  ArrowLeft,
   Building,
   CheckCircle,
   UserCheck,
@@ -36,17 +35,7 @@ import { AppCard } from '../../components/common/AppCard';
 import { AppButton } from '../../components/common/AppButton';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { AppBackButton } from '../../components/common/AppBackButton';
-
-// Safely import react-native-webview for native devices
-let WebView: any = null;
-if (Platform.OS !== 'web') {
-  try {
-    const RNW = require('react-native-webview');
-    WebView = RNW.default || RNW.WebView || RNW;
-  } catch (e) {
-    console.warn('react-native-webview not loaded:', e);
-  }
-}
+import MapView, { Marker, Circle, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from '../../components/common/AppMapView';
 
 interface SiteDetailsScreenProps {
   route: any;
@@ -57,13 +46,14 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
   const insets = useSafeAreaInsets();
   const { openDrawer } = useTechnicianDrawerStore();
   const { user } = useAuthStore();
+  const mapRef = useRef<any>(null);
 
   const [allSites, setAllSites] = useState<Substation[]>([]);
   const [activeSiteId, setActiveSiteId] = useState<string>(route.params?.siteId || '');
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load all substations and set initial active site
+  // Load all sites and set initial active site
   useEffect(() => {
     let isMounted = true;
     (async () => {
@@ -81,21 +71,40 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
               ? [user.assignedSiteId]
               : [];
 
-          const targetId = route.params?.siteId || user?.assignedSiteId || (userSiteIds.length > 0 ? userSiteIds[0] : allSites[0]?.id || '');
+          const targetId =
+            route.params?.siteId ||
+            user?.assignedSiteId ||
+            (userSiteIds.length > 0 ? userSiteIds[0] : sites?.[0]?.id || '');
           setActiveSiteId(targetId);
         }
 
-        // Fetch user location for proximity radar
+        // Fetch user location for proximity radar (instant cached first, then fresh)
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted' && isMounted) {
-          const loc = await Location.getCurrentPositionAsync({});
-          setUserCoords({
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-          });
+          try {
+            const cached = await Location.getLastKnownPositionAsync({});
+            if (cached?.coords && isMounted) {
+              setUserCoords({
+                latitude: cached.coords.latitude,
+                longitude: cached.coords.longitude,
+              });
+            }
+          } catch (_) {}
+
+          try {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            });
+            if (loc?.coords && isMounted) {
+              setUserCoords({
+                latitude: loc.coords.latitude,
+                longitude: loc.coords.longitude,
+              });
+            }
+          } catch (_) {}
         }
       } catch (err: any) {
-        Alert.alert('Error', err.message || 'Failed to load substation specifications');
+        Alert.alert('Error', err.message || 'Failed to load site specifications');
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -127,7 +136,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
     );
   }, [allSites, user]);
 
-  // Active selected substation (Strictly null if employee has no assigned site)
+  // Active selected site
   const site: Substation | null = useMemo(() => {
     if (assignedSites.length === 0) return null;
     return (
@@ -137,45 +146,76 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
     );
   }, [activeSiteId, assignedSites]);
 
+  // Fit native map to site and user coordinates
+  useEffect(() => {
+    if (mapRef.current && site) {
+      if (userCoords && userCoords.latitude !== 0 && userCoords.longitude !== 0) {
+        mapRef.current.fitToCoordinates(
+          [
+            { latitude: site.latitude, longitude: site.longitude },
+            { latitude: userCoords.latitude, longitude: userCoords.longitude },
+          ],
+          {
+            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+            animated: true,
+          }
+        );
+      } else {
+        mapRef.current.animateToRegion(
+          {
+            latitude: site.latitude,
+            longitude: site.longitude,
+            latitudeDelta: 0.015,
+            longitudeDelta: 0.015,
+          },
+          500
+        );
+      }
+    }
+  }, [site, userCoords]);
+
   const handleCall = () => {
     if (site?.manager?.phone) {
-      Linking.openURL(`tel:${site.manager.phone.replace(/\s+/g, '')}`);
+      Linking.openURL(`tel:${site.manager.phone}`);
+    } else {
+      Alert.alert('Notice', 'No manager phone number registered for this site.');
     }
   };
 
   const handleEmail = () => {
     if (site?.manager?.email) {
       Linking.openURL(`mailto:${site.manager.email}`);
+    } else {
+      Alert.alert('Notice', 'No manager email registered for this site.');
     }
   };
 
   const handleDirections = () => {
     if (!site) return;
-    const lat = site.latitude;
-    const lon = site.longitude;
-    const label = encodeURIComponent(site.name);
-    const url = Platform.select({
-      ios: `maps:0,0?q=${label}@${lat},${lon}`,
-      android: `geo:0,0?q=${lat},${lon}(${label})`,
-      default: `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
+    const scheme = Platform.select({
+      ios: `maps://0,0?q=${site.latitude},${site.longitude}(${encodeURIComponent(site.name)})`,
+      android: `geo:0,0?q=${site.latitude},${site.longitude}(${encodeURIComponent(site.name)})`,
     });
-    Linking.openURL(url);
+    const webUrl = `https://www.google.com/maps/search/?api=1&query=${site.latitude},${site.longitude}`;
+
+    Linking.canOpenURL(scheme || webUrl)
+      .then((supported) => {
+        if (supported && scheme) {
+          return Linking.openURL(scheme);
+        }
+        return Linking.openURL(webUrl);
+      })
+      .catch(() => Linking.openURL(webUrl));
   };
 
   const [heroImgFailed, setHeroImgFailed] = useState(false);
   const [mgrImgFailed, setMgrImgFailed] = useState(false);
 
-  // Reset image errors when switching sites
-  useEffect(() => {
-    setHeroImgFailed(false);
-    setMgrImgFailed(false);
-  }, [activeSiteId]);
-
-  // Authentic high-voltage substation imagery (No graduation photos!)
+  // Fallback high-res real power infrastructure photography
   const heroImageUrl = useMemo(() => {
     if (!site) return 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=1000&q=85';
     if (heroImgFailed) {
-      return 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=1000&q=85';
+      return 'https://images.unsplash.com/photo-1544724569-5f546fd6f2b5?auto=format&fit=crop&w=1000&q=85';
     }
     if (site.photoUrl) return site.photoUrl;
     return 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=1000&q=85';
@@ -191,244 +231,8 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
     return 'https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&w=600&q=85';
   }, [site, mgrImgFailed]);
 
-  // Robust Interactive Geofence Radar Map HTML (Works on all mobile devices and web without API key issues)
-  const radarMapHtml = useMemo(() => {
-    if (!site) return '';
-
-    const siteLat = site.latitude;
-    const siteLon = site.longitude;
-    const radius = site.radiusMeters || 500;
-    const siteName = site.name.replace(/"/g, '\\"');
-    const siteCode = site.code.replace(/"/g, '\\"');
-    const userLat = userCoords?.latitude ?? 'null';
-    const userLon = userCoords?.longitude ?? 'null';
-
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background: #0B1120;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      overflow: hidden;
-    }
-    #map {
-      width: 100%;
-      height: 100%;
-      background: #0F172A;
-    }
-    /* Radar background scan effect while tiles load */
-    .radar-bg {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 200px;
-      height: 200px;
-      margin: -100px 0 0 -100px;
-      border-radius: 50%;
-      border: 1px dashed rgba(67, 56, 202, 0.4);
-      pointer-events: none;
-      z-index: 1;
-    }
-    .radar-sweep {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      background: conic-gradient(from 0deg, rgba(67, 56, 202, 0.35) 0deg, transparent 60deg, transparent 360deg);
-      animation: spin 3s linear infinite;
-    }
-    @keyframes spin {
-      100% { transform: rotate(360deg); }
-    }
-    .substation-pill {
-      background: #4338CA;
-      color: #FFFFFF;
-      font-size: 11px;
-      font-weight: 800;
-      padding: 4px 10px;
-      border-radius: 6px;
-      border: 1.5px solid #FFFFFF;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.45);
-      white-space: nowrap;
-      transform: translate(-50%, -100%);
-      margin-top: -8px;
-    }
-    .substation-pin {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: #4338CA;
-      border: 3px solid #FFFFFF;
-      box-shadow: 0 0 10px rgba(67, 56, 202, 0.8);
-      position: absolute;
-      top: -7px;
-      left: -7px;
-    }
-    .user-pin-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      transform: translate(-50%, -50%);
-    }
-    .user-pin {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: #10B981;
-      border: 3px solid #FFFFFF;
-      box-shadow: 0 0 10px #10B981;
-    }
-    .user-label {
-      background: #0F172A;
-      color: #34D399;
-      font-size: 10px;
-      font-weight: 800;
-      padding: 2px 6px;
-      border-radius: 4px;
-      margin-top: 3px;
-      white-space: nowrap;
-      border: 1px solid #10B981;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.4);
-    }
-    .geofence-tag {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
-      background: rgba(15, 23, 42, 0.9);
-      color: #F8FAFC;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 5px 10px;
-      border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.18);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    }
-    .radar-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 3.5px;
-      background: #38BDF8;
-      box-shadow: 0 0 6px #38BDF8;
-    }
-  </style>
-</head>
-<body>
-  <div class="radar-bg"><div class="radar-sweep"></div></div>
-  <div id="map"></div>
-  
-  <div class="geofence-tag">
-    <div class="radar-dot"></div>
-    <span>\${radius}m Geofence Perimeter Active</span>
-  </div>
-
-  <script>
-    function startMap() {
-      if (typeof L === 'undefined') {
-        setTimeout(startMap, 80);
-        return;
-      }
-      var siteLat = ${siteLat};
-      var siteLon = ${siteLon};
-      var radius = ${radius};
-      var siteName = "${siteName}";
-      var siteCode = "${siteCode}";
-      var userLat = ${userLat};
-      var userLon = ${userLon};
-
-      var map = L.map('map', {
-        zoomControl: true,
-        attributionControl: false
-      }).setView([siteLat, siteLon], 15);
-
-      map.zoomControl.setPosition('bottomright');
-
-      // High-resolution OpenStreetMap tiles with zero API keys and zero watermarks
-      var osmTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        subdomains: ['a', 'b', 'c'],
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
-
-      // Automatic fallback to Esri World Street Map if an OSM tile fails
-      osmTile.on('tileerror', function(error, tile) {
-        if (tile && !tile.dataset.fallback) {
-          tile.dataset.fallback = 'true';
-          var z = error.coords.z;
-          var x = error.coords.x;
-          var y = error.coords.y;
-          tile.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/' + z + '/' + y + '/' + x;
-        }
-      });
-
-      // Force layout invalidation so all tiles render smoothly without gray spots
-      setTimeout(function() {
-        map.invalidateSize();
-      }, 250);
-
-      // 500m Geofence Perimeter Circle
-      var circle = L.circle([siteLat, siteLon], {
-        radius: radius,
-        color: '#4338CA',
-        fillColor: '#4338CA',
-        fillOpacity: 0.2,
-        weight: 2.5
-      }).addTo(map);
-
-      // Substation Center Pin with high-visibility pill
-      var subIcon = L.divIcon({
-        className: '',
-        html: '<div style="position:relative;"><div class="substation-pin"></div><div class="substation-pill">⚡ ' + siteName + ' (' + siteCode + ')</div></div>',
-        iconSize: [0, 0],
-        iconAnchor: [0, 0]
-      });
-      L.marker([siteLat, siteLon], { icon: subIcon, zIndexOffset: 1000 }).addTo(map);
-
-      // User Location Pin
-      if (userLat !== null && userLon !== null) {
-        var userIcon = L.divIcon({
-          className: '',
-          html: '<div class="user-pin-wrap"><div class="user-pin"></div><div class="user-label">📍 You Are Here</div></div>',
-          iconSize: [0, 0],
-          iconAnchor: [0, 0]
-        });
-        L.marker([userLat, userLon], { icon: userIcon, zIndexOffset: 2000 }).addTo(map);
-
-        var group = L.featureGroup([
-          circle,
-          L.marker([userLat, userLon])
-        ]);
-        map.fitBounds(group.getBounds(), { padding: [40, 40] });
-      }
-    }
-
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-      startMap();
-    } else {
-      window.addEventListener('DOMContentLoaded', startMap);
-    }
-  </script>
-</body>
-</html>`;
-  }, [site, userCoords]);
-
   if (loading) {
-    return <LoadingSpinner message="Loading substation specifications..." />;
+    return <LoadingSpinner message="Loading site specifications..." />;
   }
 
   if (!site) {
@@ -437,7 +241,8 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
         <View style={styles.topNavHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <AppBackButton />
-            <TouchableOpacity delayPressIn={0}
+            <TouchableOpacity
+              delayPressIn={0}
               style={styles.navHeaderBtn}
               onPress={() => openDrawer('SiteDetails')}
               activeOpacity={0.7}
@@ -445,19 +250,45 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
               <Menu size={20} color="#0F172A" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.navHeaderTitle}>Assigned Substation</Text>
+          <Text style={styles.navHeaderTitle}>Assigned Site</Text>
           <View style={{ width: 38 }} />
         </View>
 
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+          <View
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 32,
+              backgroundColor: '#EFF6FF',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 16,
+            }}
+          >
             <Building size={32} color="#1E63F0" />
           </View>
-          <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 8, textAlign: 'center' }}>
-            No Substation Assigned
+          <Text
+            style={{
+              fontSize: 18,
+              fontWeight: '800',
+              color: '#0F172A',
+              marginBottom: 8,
+              textAlign: 'center',
+            }}
+          >
+            No Site Assigned
           </Text>
-          <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20, maxWidth: 320 }}>
-            You do not have an active work site assigned yet. Please contact your Supervisor or Operations Admin to allocate your designated substation.
+          <Text
+            style={{
+              fontSize: 13,
+              color: '#64748B',
+              textAlign: 'center',
+              lineHeight: 20,
+              maxWidth: 320,
+            }}
+          >
+            You do not have an active work site assigned yet. Please contact your Supervisor or Operations Admin to allocate your designated site.
           </Text>
         </View>
       </View>
@@ -470,7 +301,8 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
       <View style={styles.topNavHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <AppBackButton />
-          <TouchableOpacity delayPressIn={0}
+          <TouchableOpacity
+            delayPressIn={0}
             style={styles.navHeaderBtn}
             onPress={() => openDrawer('SiteDetails')}
             activeOpacity={0.7}
@@ -478,7 +310,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
             <Menu size={20} color="#0F172A" />
           </TouchableOpacity>
         </View>
-        <Text style={styles.navHeaderTitle}>Substation Specifications</Text>
+        <Text style={styles.navHeaderTitle}>Site Specifications</Text>
         <View style={{ width: 38 }} />
       </View>
 
@@ -486,7 +318,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
       {assignedSites.length > 1 && (
         <View style={styles.siteSwitcherSection}>
           <Text style={styles.siteSwitcherHeader}>
-            YOUR ASSIGNED SUBSTATIONS ({assignedSites.length})
+            YOUR ASSIGNED SITES ({assignedSites.length})
           </Text>
           <ScrollView
             horizontal
@@ -498,7 +330,8 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
               const isSelected = site.id === sId || (site as any)._id === sId;
 
               return (
-                <TouchableOpacity delayPressIn={0}
+                <TouchableOpacity
+                  delayPressIn={0}
                   key={sId}
                   style={[styles.siteTabCard, isSelected && styles.siteTabCardActive]}
                   onPress={() => setActiveSiteId(sId)}
@@ -527,7 +360,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
       )}
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-        {/* Substation Hero Image with Real Power Equipment Photography */}
+        {/* Site Hero Image */}
         <View style={styles.imageWrapper}>
           <Image
             source={{ uri: heroImageUrl }}
@@ -535,21 +368,23 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
             resizeMode="cover"
             onError={() => setHeroImgFailed(true)}
           />
-          <View style={styles.voltageOverlay}>
-            <Zap size={14} color="#FFFFFF" />
-            <Text style={styles.voltageText}>{site.voltageClass || 'Substation Grid'}</Text>
-          </View>
+          {(site.voltageClass || (site as any).voltageLevel) && (
+            <View style={styles.voltageOverlay}>
+              <Zap size={14} color="#FBBF24" />
+              <Text style={styles.voltageText}>{site.voltageClass || (site as any).voltageLevel}</Text>
+            </View>
+          )}
         </View>
 
-        {/* Main Substation Specification Card */}
+        {/* Core Site Information */}
         <AppCard style={styles.card}>
           <View style={styles.codeRow}>
             <View style={styles.codeBadge}>
               <Text style={styles.codeText}>{site.code}</Text>
             </View>
             <View style={styles.activePill}>
-              <CheckCircle size={11} color="#15803D" />
-              <Text style={styles.activeText}>OPERATIONAL GRID</Text>
+              <CheckCircle size={12} color="#16A34A" />
+              <Text style={styles.activeText}>Active Facility</Text>
             </View>
           </View>
 
@@ -559,94 +394,51 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
           <View style={styles.specsRow}>
             <View style={styles.specBox}>
               <Text style={styles.specLabel}>GEOFENCE RADIUS</Text>
-              <Text style={styles.specValue}>{site.radiusMeters}m Allowed</Text>
+              <Text style={styles.specValue}>{site.radiusMeters || 500}m</Text>
             </View>
             <View style={styles.specBox}>
-              <Text style={styles.specLabel}>COORDINATES</Text>
-              <Text style={styles.specValue}>
-                {site.latitude.toFixed(4)}, {site.longitude.toFixed(4)}
-              </Text>
+              <Text style={styles.specLabel}>GPS LATITUDE</Text>
+              <Text style={styles.specValue}>{site.latitude.toFixed(4)}° N</Text>
             </View>
             <View style={styles.specBox}>
-              <Text style={styles.specLabel}>ACTIVE CREW</Text>
-              <Text style={styles.specValue}>
-                {site.activeEngineersCount || 10} Engineers
-              </Text>
+              <Text style={styles.specLabel}>GPS LONGITUDE</Text>
+              <Text style={styles.specValue}>{site.longitude.toFixed(4)}° E</Text>
             </View>
           </View>
         </AppCard>
 
-        {/* Assignment Details & Assigner Authority Card */}
-        {(site.assignedBy || (user as any)?.assignedBy || site.manager?.name) && (
-          <AppCard style={styles.card}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <UserCheck size={16} color="#2563EB" />
-                <Text style={styles.sectionTitle}>ASSIGNMENT AUTHORITY</Text>
-              </View>
-              <View style={{
-                backgroundColor: ((site.assignedByRole || (user as any)?.assignedByRole || '').toLowerCase().includes('admin')) ? '#EFF6FF' : '#F5F3FF',
-                borderColor: ((site.assignedByRole || (user as any)?.assignedByRole || '').toLowerCase().includes('admin')) ? '#BFDBFE' : '#DDD6FE',
-                borderWidth: 1,
-                paddingHorizontal: 8,
-                paddingVertical: 2,
-                borderRadius: 6,
-              }}>
-                <Text style={{
-                  fontSize: 9,
-                  fontWeight: '800',
-                  color: ((site.assignedByRole || (user as any)?.assignedByRole || '').toLowerCase().includes('admin')) ? '#1D4ED8' : '#6D28D9',
-                }}>
-                  {((site.assignedByRole || (user as any)?.assignedByRole || 'Supervisor')).toUpperCase()}
-                </Text>
-              </View>
-            </View>
-
+        {/* Assigner Info Banner */}
+        {site.assignedBy && (
+          <AppCard style={styles.assignerCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>Assigned By</Text>
-                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 1 }}>
-                  {site.assignedBy || (user as any)?.assignedBy || site.manager?.name || 'Operations Lead'}
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', letterSpacing: 0.5, marginBottom: 2 }}>
+                  Assigned By
                 </Text>
-                {(site.assignedByPhone || (user as any)?.assignedByPhone || site.manager?.phone) ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                    <Phone size={12} color="#059669" style={{ marginRight: 5 }} />
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginRight: 4 }}>Contact:</Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        const p = (site.assignedByPhone || (user as any)?.assignedByPhone || site.manager?.phone || '').replace(/[^0-9+]/g, '');
-                        if (p) Linking.openURL(`tel:${p}`);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#0284C7', textDecorationLine: 'underline' }}>
-                        {site.assignedByPhone || (user as any)?.assignedByPhone || site.manager?.phone}
-                      </Text>
-                    </TouchableOpacity>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                  {typeof site.assignedBy === 'object' ? (site.assignedBy as any)?.name : site.assignedBy}
+                </Text>
+                {(site.assignedByPhone || (typeof site.assignedBy === 'object' ? (site.assignedBy as any)?.phone : null)) ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 }}>
+                    <Phone size={12} color="#1E63F0" />
+                    <Text style={{ fontSize: 11, color: '#1E63F0', fontWeight: '700' }}>
+                      Contact: {site.assignedByPhone || (typeof site.assignedBy === 'object' ? (site.assignedBy as any)?.phone : null)}
+                    </Text>
                   </View>
                 ) : null}
               </View>
-
-              {(site.assignedByPhone || (user as any)?.assignedByPhone || site.manager?.phone) ? (
-                <TouchableOpacity
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: '#16A34A',
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 8,
-                    marginLeft: 10,
-                  }}
+              {(site.assignedByPhone || (typeof site.assignedBy === 'object' ? (site.assignedBy as any)?.phone : null)) ? (
+                <AppButton
+                  title="Call Assigner"
                   onPress={() => {
-                    const p = (site.assignedByPhone || (user as any)?.assignedByPhone || site.manager?.phone || '').replace(/[^0-9+]/g, '');
-                    if (p) Linking.openURL(`tel:${p}`);
+                    const phoneNum = site.assignedByPhone || (typeof site.assignedBy === 'object' ? (site.assignedBy as any)?.phone : null);
+                    if (phoneNum) Linking.openURL(`tel:${phoneNum}`);
                   }}
-                  activeOpacity={0.8}
-                >
-                  <PhoneCall size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>Call Assigner</Text>
-                </TouchableOpacity>
+                  variant="primary"
+                  size="sm"
+                  icon={<PhoneCall size={14} color="#FFFFFF" />}
+                  style={{ backgroundColor: '#10B981', borderColor: '#10B981' }}
+                />
               ) : null}
             </View>
           </AppCard>
@@ -656,7 +448,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
         {site.manager && (site.manager.name || site.manager.phone) ? (
           <AppCard style={styles.card}>
             <Text style={styles.sectionTitle}>SITE MANAGER & IN-CHARGE</Text>
-            
+
             <View style={styles.managerProfileRow}>
               <View style={styles.managerPhotoContainer}>
                 <Image
@@ -675,7 +467,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
                 <Text style={styles.managerDesig}>
                   {site.manager.designation || 'Site Operations Lead'}
                 </Text>
-                
+
                 {site.manager.phone ? (
                   <View style={styles.managerContactLine}>
                     <Phone size={11} color="#64748B" />
@@ -683,7 +475,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
                   </View>
                 ) : null}
 
-                {site.manager.email ? (
+                {site.manager.email && !site.manager.email.includes('manager@adani.com') ? (
                   <View style={styles.managerContactLine}>
                     <Mail size={11} color="#64748B" />
                     <Text style={styles.managerContactText}>{site.manager.email}</Text>
@@ -703,7 +495,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
                   style={styles.contactBtn}
                 />
               ) : null}
-              {site.manager.email ? (
+              {site.manager.email && !site.manager.email.includes('manager@adani.com') ? (
                 <AppButton
                   title="Email Manager"
                   onPress={handleEmail}
@@ -717,49 +509,88 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
           </AppCard>
         ) : null}
 
-        {/* Interactive Geofence Radar Map */}
+        {/* Interactive Geofence Radar Map via Native react-native-maps */}
         <AppCard style={styles.card}>
           <Text style={styles.sectionTitle}>GEOFENCE RADAR & RADIAL BOUNDARY</Text>
           <View style={styles.mapContainer}>
-            {Platform.OS === 'web' ? (
-              <iframe
-                title="Geofence Radar Map"
-                srcDoc={radarMapHtml}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  border: 'none',
+            <MapView
+              ref={mapRef}
+              style={StyleSheet.absoluteFill}
+              provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
+              initialRegion={{
+                latitude: site.latitude,
+                longitude: site.longitude,
+                latitudeDelta: 0.015,
+                longitudeDelta: 0.015,
+              }}
+              mapType="standard"
+              showsCompass={true}
+              showsUserLocation={false}
+            >
+              {/* Geofence Perimeter Circle */}
+              <Circle
+                center={{
+                  latitude: site.latitude,
+                  longitude: site.longitude,
                 }}
+                radius={site.radiusMeters || 500}
+                fillColor="rgba(67, 56, 202, 0.16)"
+                strokeColor="#4338CA"
+                strokeWidth={2}
+                zIndex={2}
               />
-            ) : WebView ? (
-              <WebView
-                originWhitelist={['*']}
-                source={{ html: radarMapHtml, baseUrl: 'https://tile.openstreetmap.org' }}
-                style={{ width: '100%', height: 220, backgroundColor: '#0F172A' }}
-                javaScriptEnabled={true}
-                domStorageEnabled={true}
-                scalesPageToFit={false}
-                scrollEnabled={false}
-                nestedScrollEnabled={false}
-                mixedContentMode="always"
-                allowFileAccess={true}
-                allowUniversalAccessFromFileURLs={true}
-              />
-            ) : (
-              <View style={styles.mapFallbackNotice}>
-                <MapPin size={24} color="#4338CA" />
-                <Text style={styles.mapFallbackText}>
-                  {site.name} • 500m Geofence Perimeter
-                </Text>
-              </View>
-            )}
+
+              {/* Site Marker */}
+              <Marker
+                coordinate={{
+                  latitude: site.latitude,
+                  longitude: site.longitude,
+                }}
+                title={site.name}
+                description={`${site.radiusMeters || 500}m Geofence Perimeter • ${site.code}`}
+                zIndex={10}
+              >
+                <View style={styles.siteMarkerWrap}>
+                  <View style={styles.siteMarkerPill}>
+                    <Zap size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={styles.siteMarkerPillText}>{site.name}</Text>
+                  </View>
+                  <View style={styles.siteMarkerPin} />
+                </View>
+              </Marker>
+
+              {/* User Live Location Marker */}
+              {userCoords && userCoords.latitude !== 0 && userCoords.longitude !== 0 && (
+                <Marker
+                  coordinate={userCoords}
+                  title="Your Current Location"
+                  description="Real Device Live GPS"
+                  zIndex={15}
+                >
+                  <View style={styles.userMarkerWrap}>
+                    <View style={styles.userMarkerDot} />
+                    <View style={styles.userMarkerPill}>
+                      <Text style={styles.userMarkerPillText}>Your Location</Text>
+                    </View>
+                  </View>
+                </Marker>
+              )}
+            </MapView>
+
+            {/* Floating Geofence Perimeter Active Badge */}
+            <View style={styles.geofenceOverlayBadge}>
+              <View style={styles.pulseDot} />
+              <Text style={styles.geofenceOverlayText}>
+                {site.radiusMeters || 500}m Geofence Perimeter Active
+              </Text>
+            </View>
           </View>
         </AppCard>
 
         {/* Turn-by-Turn Navigation Action */}
         <View style={{ marginTop: 6, marginBottom: 24 }}>
           <AppButton
-            title="Navigate to Substation"
+            title="Navigate to Site"
             onPress={handleDirections}
             variant="primary"
             size="lg"
@@ -789,20 +620,20 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   navHeaderTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0F172A',
   },
   navHeaderBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
   },
 
-  // Substation Switcher Bar
+  // Site Switcher Bar
   siteSwitcherSection: {
     backgroundColor: '#FFFFFF',
     paddingVertical: 10,
@@ -897,6 +728,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '800',
+  },
+  assignerCard: {
+    marginBottom: 14,
+    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   card: {
     marginBottom: 14,
@@ -1046,8 +884,10 @@ const styles = StyleSheet.create({
   contactBtn: {
     flex: 1,
   },
+
+  // Map Container & Native Map Elements
   mapContainer: {
-    height: 220,
+    height: 240,
     borderRadius: RADII.card,
     overflow: 'hidden',
     backgroundColor: '#0F172A',
@@ -1055,15 +895,92 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     position: 'relative',
   },
-  mapFallbackNotice: {
-    flex: 1,
-    justifyContent: 'center',
+  geofenceOverlayBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    zIndex: 20,
   },
-  mapFallbackText: {
-    fontSize: 12,
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#38BDF8',
+    marginRight: 6,
+  },
+  geofenceOverlayText: {
     color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+
+  // Map Markers
+  siteMarkerWrap: {
+    alignItems: 'center',
+  },
+  siteMarkerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4338CA',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  siteMarkerPillText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  siteMarkerPin: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#4338CA',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    marginTop: -2,
+  },
+
+  userMarkerWrap: {
+    alignItems: 'center',
+  },
+  userMarkerDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#2563EB',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  userMarkerPill: {
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 2,
+  },
+  userMarkerPillText: {
+    color: '#FFFFFF',
+    fontSize: 9,
     fontWeight: '700',
   },
 });
