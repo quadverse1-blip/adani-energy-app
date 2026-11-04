@@ -24,6 +24,9 @@ export interface BulkUploadResponse {
     name: string;
     phone: string;
     role: string;
+    designation?: string;
+    circle?: string;
+    division?: string;
     status: string;
   }>;
 }

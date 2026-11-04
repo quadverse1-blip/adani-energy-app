@@ -33,6 +33,9 @@ import {
   KeyRound,
   FileText,
   Trash2,
+  UserCheck,
+  Briefcase,
+  Compass,
 } from 'lucide-react-native';
 import { Platform, ActivityIndicator } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -459,7 +462,7 @@ export const EmployeesScreen: React.FC = () => {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.bulkBannerHeading}>Bulk Add Employees</Text>
-            <Text style={styles.bulkBannerSubtext}>Upload Excel (.xlsx) with ID, Mobile & Password</Text>
+            <Text style={styles.bulkBannerSubtext}>Upload Excel (.xlsx) with Name, ID, Mobile, Password, Designation, Circle & Division</Text>
           </View>
         </View>
         <TouchableOpacity
@@ -985,7 +988,7 @@ export const EmployeesScreen: React.FC = () => {
                 </View>
                 <Text style={styles.bulkModalTitle}>Import Employees from Excel</Text>
                 <Text style={styles.bulkModalSub}>
-                  Upload .xlsx spreadsheet with ID, Mobile & Password
+                  Upload .xlsx spreadsheet with ID, Name, Mobile, Password, Designation, Circle & Division
                 </Text>
               </View>
               <TouchableOpacity
@@ -1056,7 +1059,13 @@ export const EmployeesScreen: React.FC = () => {
                             <Text style={styles.processedEmpName}>{emp.name}</Text>
                             <Text style={styles.processedEmpDetails}>
                               ID: {emp.employeeId} • Mobile: {emp.phone}
+                              {emp.designation ? ` • ${emp.designation}` : ''}
                             </Text>
+                            {(emp.circle || emp.division) && (
+                              <Text style={[styles.processedEmpDetails, { color: '#0369A1', marginTop: 2 }]}>
+                                {[emp.circle ? `Circle: ${emp.circle}` : null, emp.division ? `Div: ${emp.division}` : null].filter(Boolean).join(' • ')}
+                              </Text>
+                            )}
                           </View>
                           <View
                             style={[
@@ -1109,15 +1118,19 @@ export const EmployeesScreen: React.FC = () => {
                 <View>
                   {/* Format Information Card */}
                   <View style={styles.formatCard}>
-                    <Text style={styles.formatCardTitle}>Required Excel Columns</Text>
+                    <Text style={styles.formatCardTitle}>Excel Columns Specification</Text>
                     <Text style={styles.formatCardSub}>
-                      Your spreadsheet must include the following 3 mandatory columns in the first row:
+                      Your spreadsheet can include the following standard columns in the first header row:
                     </Text>
 
                     <View style={styles.columnsGrid}>
                       <View style={styles.columnPill}>
                         <Smartphone size={13} color="#0369A1" style={{ marginRight: 4 }} />
                         <Text style={styles.columnPillText}>Employee ID</Text>
+                      </View>
+                      <View style={styles.columnPill}>
+                        <UserCheck size={13} color="#0369A1" style={{ marginRight: 4 }} />
+                        <Text style={styles.columnPillText}>Employee Name</Text>
                       </View>
                       <View style={styles.columnPill}>
                         <Smartphone size={13} color="#0369A1" style={{ marginRight: 4 }} />
@@ -1127,10 +1140,22 @@ export const EmployeesScreen: React.FC = () => {
                         <KeyRound size={13} color="#0369A1" style={{ marginRight: 4 }} />
                         <Text style={styles.columnPillText}>Password</Text>
                       </View>
+                      <View style={styles.columnPill}>
+                        <Briefcase size={13} color="#0369A1" style={{ marginRight: 4 }} />
+                        <Text style={styles.columnPillText}>Designation</Text>
+                      </View>
+                      <View style={styles.columnPill}>
+                        <Compass size={13} color="#0369A1" style={{ marginRight: 4 }} />
+                        <Text style={styles.columnPillText}>Circle</Text>
+                      </View>
+                      <View style={styles.columnPill}>
+                        <Building2 size={13} color="#0369A1" style={{ marginRight: 4 }} />
+                        <Text style={styles.columnPillText}>Division</Text>
+                      </View>
                     </View>
 
                     <Text style={styles.optionalNote}>
-                      Optional columns: Name, Role, Designation, Assigned Sites
+                      Mandatory: Employee ID, Mobile Number, Password • Enriched: Name, Designation, Circle, Division
                     </Text>
 
                     <View style={styles.loginExplanationRow}>
