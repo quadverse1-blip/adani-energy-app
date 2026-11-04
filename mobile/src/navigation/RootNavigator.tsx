@@ -7,7 +7,7 @@ import { TechnicianNavigator } from './TechnicianNavigator';
 import { AdminNavigator } from './AdminNavigator';
 import { SupervisorNavigator } from './SupervisorNavigator';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
-import { requestRequiredAppPermissions } from '../utils/permissionUtils';
+import { checkRequiredAppPermissions } from '../utils/permissionUtils';
 
 export const RootNavigator: React.FC = () => {
   const { user, isInitialized, initialize } = useAuthStore();
@@ -19,7 +19,7 @@ export const RootNavigator: React.FC = () => {
   // Ensure required permissions (Location & Camera) are granted after login
   useEffect(() => {
     if (user) {
-      requestRequiredAppPermissions(false).catch((err) => {
+      checkRequiredAppPermissions().catch((err) => {
         console.warn('[RootNavigator] Permission check error:', err);
       });
     }

@@ -96,16 +96,16 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
   // Prompt and verify GPS location permissions & device location services
   const requestGpsAndLocation = useCallback(async () => {
     try {
-      // 1. Check and request location permission
+      // Step 1: Prompt Location Permission FIRST ("While using the app" / "Only this time")
       let perm = await Location.getForegroundPermissionsAsync();
-      if (perm.status !== 'granted') {
+      if (!perm.granted && perm.status !== 'granted') {
         perm = await Location.requestForegroundPermissionsAsync();
       }
 
-      if (perm.status !== 'granted') {
+      if (!perm.granted && perm.status !== 'granted') {
         Alert.alert(
           'Location Permission Required',
-          'Adani Workforce requires location permission to show your current location and calculate distance to this site.',
+          'Adani Workforce requires location permission ("While using the app" or "Only this time") to show your current location and calculate distance to this site.',
           [
             { text: 'Open Settings', onPress: () => Linking.openSettings() },
             { text: 'Cancel', style: 'cancel' },
@@ -114,7 +114,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
         return;
       }
 
-      // 2. Check if device Location (GPS) toggle is turned ON
+      // Step 2: Location permission is GRANTED! Now check if device GPS is ON
       try {
         const hasServices = await Location.hasServicesEnabledAsync();
         if (!hasServices) {

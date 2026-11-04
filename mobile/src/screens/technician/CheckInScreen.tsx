@@ -182,7 +182,29 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     setGpsError(null);
 
     try {
-      // 2a. Check if Location Services (GPS) are toggled ON in device settings
+      // Step 1: Prompt Location Permission FIRST
+      // Pops up the Android system dialog: "While using the app" / "Only this time" / "Don't allow"
+      let perm = await Location.getForegroundPermissionsAsync();
+      if (!perm.granted && perm.status !== 'granted') {
+        perm = await Location.requestForegroundPermissionsAsync();
+      }
+
+      if (!perm.granted && perm.status !== 'granted') {
+        const msg = 'Location permission is denied. Tap to open Settings and allow access.';
+        setGpsError(msg);
+        setGpsLoading(false);
+        Alert.alert(
+          'Location Permission Required',
+          'Please allow Location access ("While using the app" or "Only this time") so we can show your location on the map.',
+          [
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+
+      // Step 2: Location permission is GRANTED! Now check if device GPS / Location services are ON
       try {
         const servicesEnabled = await Location.hasServicesEnabledAsync();
         if (!servicesEnabled) {
@@ -210,7 +232,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
             setGpsLoading(false);
             Alert.alert(
               'Location (GPS) is Turned Off',
-              'Please turn ON Location in device settings to detect your device position.',
+              'Please turn ON Location in device settings to detect your position.',
               [
                 { text: 'Open Settings', onPress: () => Linking.openSettings() },
                 { text: 'OK', style: 'cancel' },
@@ -221,29 +243,6 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
         }
       } catch (svcErr) {
         console.warn('hasServicesEnabledAsync check failed:', svcErr);
-      }
-
-      // 2b. Check & Request Location Permissions
-      let perm = await Location.getForegroundPermissionsAsync();
-      if (perm.status !== 'granted') {
-        perm = await Location.requestForegroundPermissionsAsync();
-      }
-
-      if (perm.status !== 'granted') {
-        const msg = 'Location permission is denied. Tap to open Settings and allow access.';
-        setGpsError(msg);
-        setGpsLoading(false);
-        if (isManualPress) {
-          Alert.alert(
-            'Location Permission Required',
-            'Adani Workforce requires Location access to show your device location and calculate distance to the site.',
-            [
-              { text: 'Open Settings', onPress: () => Linking.openSettings() },
-              { text: 'Cancel', style: 'cancel' },
-            ]
-          );
-        }
-        return;
       }
 
       // Timeout wrapper to prevent hanging on GPS satellite search indoors
