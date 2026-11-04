@@ -186,20 +186,38 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
       try {
         const servicesEnabled = await Location.hasServicesEnabledAsync();
         if (!servicesEnabled) {
-          const msg = 'Device GPS / Location is turned OFF in phone settings.';
-          setGpsError(msg);
-          setGpsLoading(false);
-          if (isManualPress) {
+          if (Platform.OS === 'android') {
+            try {
+              // Prompts native Google Play Services dialog: "To continue, turn on device location..."
+              await Location.enableNetworkProviderAsync();
+            } catch (_) {
+              const msg = 'Device GPS / Location is turned OFF in phone settings.';
+              setGpsError(msg);
+              setGpsLoading(false);
+              Alert.alert(
+                'Location (GPS) is Turned Off',
+                'Please turn ON Location in your phone quick settings or settings to detect your device position.',
+                [
+                  { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                  { text: 'OK', style: 'cancel' },
+                ]
+              );
+              return;
+            }
+          } else {
+            const msg = 'Device GPS / Location is turned OFF in phone settings.';
+            setGpsError(msg);
+            setGpsLoading(false);
             Alert.alert(
               'Location (GPS) is Turned Off',
-              'Please turn ON Location in your phone quick settings (swipe down from top of screen) to detect your device position.',
+              'Please turn ON Location in device settings to detect your device position.',
               [
                 { text: 'Open Settings', onPress: () => Linking.openSettings() },
                 { text: 'OK', style: 'cancel' },
               ]
             );
+            return;
           }
-          return;
         }
       } catch (svcErr) {
         console.warn('hasServicesEnabledAsync check failed:', svcErr);

@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -78,31 +79,8 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
           setActiveSiteId(targetId);
         }
 
-        // Fetch user location for proximity radar (instant cached first, then fresh)
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted' && isMounted) {
-          try {
-            const cached = await Location.getLastKnownPositionAsync({});
-            if (cached?.coords && isMounted) {
-              setUserCoords({
-                latitude: cached.coords.latitude,
-                longitude: cached.coords.longitude,
-              });
-            }
-          } catch (_) {}
-
-          try {
-            const loc = await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Balanced,
-            });
-            if (loc?.coords && isMounted) {
-              setUserCoords({
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude,
-              });
-            }
-          } catch (_) {}
-        }
+        // Trigger GPS permission & location checks
+        requestGpsAndLocation();
       } catch (err: any) {
         Alert.alert('Error', err.message || 'Failed to load site specifications');
       } finally {
@@ -114,6 +92,95 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
       isMounted = false;
     };
   }, [user]);
+
+  // Prompt and verify GPS location permissions & device location services
+  const requestGpsAndLocation = useCallback(async () => {
+    try {
+      // 1. Check and request location permission
+      let perm = await Location.getForegroundPermissionsAsync();
+      if (perm.status !== 'granted') {
+        perm = await Location.requestForegroundPermissionsAsync();
+      }
+
+      if (perm.status !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'Adani Workforce requires location permission to show your current location and calculate distance to this site.',
+          [
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+
+      // 2. Check if device Location (GPS) toggle is turned ON
+      try {
+        const hasServices = await Location.hasServicesEnabledAsync();
+        if (!hasServices) {
+          if (Platform.OS === 'android') {
+            try {
+              // Prompts native Google Play Services dialog: "To continue, turn on device location..."
+              await Location.enableNetworkProviderAsync();
+            } catch (_) {
+              Alert.alert(
+                'Turn ON Device Location',
+                'Please enable Location (GPS) in your phone settings or quick settings to view your position relative to the site.',
+                [
+                  { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                  { text: 'Cancel', style: 'cancel' },
+                ]
+              );
+              return;
+            }
+          } else {
+            Alert.alert(
+              'Turn ON Device Location',
+              'Please enable Location in device settings to view your position relative to the site.',
+              [
+                { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                { text: 'Cancel', style: 'cancel' },
+              ]
+            );
+            return;
+          }
+        }
+      } catch (svcErr) {
+        console.warn('hasServicesEnabledAsync check failed:', svcErr);
+      }
+
+      // 3. Acquire location: instant cached first (<500ms), then fresh
+      try {
+        const cached = await Location.getLastKnownPositionAsync({ maxAge: 86400000 });
+        if (cached?.coords && cached.coords.latitude !== 0 && cached.coords.longitude !== 0) {
+          setUserCoords({
+            latitude: cached.coords.latitude,
+            longitude: cached.coords.longitude,
+          });
+        }
+      } catch (_) {}
+
+      try {
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        if (loc?.coords && loc.coords.latitude !== 0 && loc.coords.longitude !== 0) {
+          setUserCoords({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+        }
+      } catch (_) {}
+    } catch (err: any) {
+      console.warn('GPS location request error:', err);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      requestGpsAndLocation();
+    }, [requestGpsAndLocation])
+  );
 
   // Compute all assigned sites strictly for the logged-in employee
   const assignedSites = useMemo(() => {
