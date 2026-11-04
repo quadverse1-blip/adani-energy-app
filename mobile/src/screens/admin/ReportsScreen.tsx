@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -34,7 +34,7 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { siteService } from '../../services/siteService';
 import { attendanceService } from '../../services/attendanceService';
 import { reportService, MusterRecord, MusterDay } from '../../services/reportService';
@@ -297,6 +297,12 @@ Synchronized across all dashboards and muster reports.`,
   useEffect(() => {
     fetchMusterData();
   }, [selectedMonth, selectedYear, selectedSiteFilter]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchMusterData();
+    }, [selectedMonth, selectedYear, selectedSiteFilter])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);

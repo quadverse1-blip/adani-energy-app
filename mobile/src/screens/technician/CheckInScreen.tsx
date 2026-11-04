@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import { fetchLiveDeviceLocation } from '../../utils/geolocationUtils';
+import { fetchRealDeviceLocation, DeviceCoordinates } from '../../utils/geolocationUtils';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import {
   ArrowLeft,
@@ -97,10 +97,12 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
   // GPS State (Live Device Location)
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [isGpsOff, setIsGpsOff] = useState(false);
   const [latitude, setLatitude] = useState<number>(0);
   const [longitude, setLongitude] = useState<number>(0);
   const [accuracy, setAccuracy] = useState<number>(8.5);
   const [currentAddress, setCurrentAddress] = useState<string | null>(null);
+  const webWatchIdRef = useRef<number | null>(null);
 
   // Camera & Photo Verification State
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -117,6 +119,10 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
       if (watchSubRef.current) {
         watchSubRef.current.remove();
         watchSubRef.current = null;
+      }
+      if (typeof navigator !== 'undefined' && navigator.geolocation && webWatchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(webWatchIdRef.current);
+        webWatchIdRef.current = null;
       }
     };
   }, []);
@@ -177,50 +183,88 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     } catch (_) {}
   }, []);
 
-  // 2. Fetch Live GPS Telemetry with multi-tier checks, timeouts & real-time watcher
+  // 2. Fetch Live GPS Telemetry with pure hardware satellite acquisition
   const obtainGps = useCallback(async (isManualPress = false) => {
     setGpsLoading(true);
     setGpsError(null);
+    setIsGpsOff(false);
 
     try {
-      await fetchLiveDeviceLocation(
-        async (coords) => {
-          await applyCoordinates(coords.latitude, coords.longitude, coords.accuracy);
+      await fetchRealDeviceLocation(
+        {
+          onCoordinatesAcquired: async (coords: DeviceCoordinates) => {
+            setIsGpsOff(false);
+            setGpsError(null);
+            setGpsLoading(false);
+            await applyCoordinates(coords.latitude, coords.longitude, coords.accuracy);
+          },
+          onGpsDisabled: (msg) => {
+            setIsGpsOff(true);
+            setLatitude(0);
+            setLongitude(0);
+            setGpsError(msg || 'Device GPS is turned OFF. Please turn ON Location in settings.');
+            setGpsLoading(false);
+          },
+          onPermissionDenied: (msg) => {
+            setIsGpsOff(false);
+            setLatitude(0);
+            setLongitude(0);
+            setGpsError(msg || 'Location permission is denied. Tap to open Settings.');
+            setGpsLoading(false);
+          },
         },
-        () => {
-          setGpsError('Location permission is denied. Tap to allow access.');
-          if (isManualPress) {
-            Alert.alert(
-              'Location Permission Required',
-              'Please allow Location access ("Allow while visiting site" / "While using app") so we can show your location on the map.',
-              [
-                { text: 'Open Settings', onPress: () => Linking.openSettings() },
-                { text: 'Cancel', style: 'cancel' },
-              ]
-            );
-          }
-        }
+        isManualPress
       );
 
-      // 2f. Step 4: Real-time background location watcher
-      try {
-        if (watchSubRef.current) {
-          watchSubRef.current.remove();
+      // Web live real-time location watcher
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.geolocation) {
+        if (webWatchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(webWatchIdRef.current);
+          webWatchIdRef.current = null;
         }
-        watchSubRef.current = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.Balanced,
-            timeInterval: 2000,
-            distanceInterval: 1,
-          },
-          (loc) => {
-            if (loc?.coords && loc.coords.latitude !== 0 && loc.coords.longitude !== 0) {
-              applyCoordinates(loc.coords.latitude, loc.coords.longitude, loc.coords.accuracy || 8);
+        webWatchIdRef.current = navigator.geolocation.watchPosition(
+          (pos) => {
+            if (pos?.coords && pos.coords.latitude && pos.coords.longitude) {
+              setIsGpsOff(false);
+              setGpsError(null);
+              setGpsLoading(false);
+              applyCoordinates(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 8);
             }
-          }
+          },
+          (err) => {
+            if (err.code === 2 || err.code === 3) {
+              setIsGpsOff(true);
+              setGpsError('Device GPS is turned OFF. Please turn ON Location in settings.');
+            }
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
         );
-      } catch (watchErr) {
-        console.warn('watchPositionAsync error:', watchErr);
+      }
+
+      // Native real-time background location watcher
+      if (Platform.OS !== 'web') {
+        try {
+          if (watchSubRef.current) {
+            watchSubRef.current.remove();
+          }
+          watchSubRef.current = await Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.High,
+              timeInterval: 2000,
+              distanceInterval: 1,
+            },
+            (loc) => {
+              if (loc?.coords && loc.coords.latitude !== 0 && loc.coords.longitude !== 0) {
+                setIsGpsOff(false);
+                setGpsError(null);
+                setGpsLoading(false);
+                applyCoordinates(loc.coords.latitude, loc.coords.longitude, loc.coords.accuracy || 8);
+              }
+            }
+          );
+        } catch (watchErr) {
+          console.warn('watchPositionAsync error:', watchErr);
+        }
       }
 
     } catch (err: any) {
@@ -232,7 +276,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     } finally {
       setGpsLoading(false);
     }
-  }, [applyCoordinates, latitude]);
+  }, [applyCoordinates]);
 
   useFocusEffect(
     useCallback(() => {
@@ -258,6 +302,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
 
   // Format distance (e.g., '1047.2 km' or '335 m')
   const formatDistance = (meters: number): string => {
+    if (isGpsOff) return 'GPS is OFF';
     if (latitude === 0 || longitude === 0) return 'Acquiring GPS...';
     if (meters >= 1000) {
       return `${(meters / 1000).toFixed(1)} km`;
@@ -375,7 +420,20 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
       return;
     }
 
-    // 1. Geofence Lock Check:
+    // 1. GPS Service Check:
+    if (isGpsOff) {
+      Alert.alert(
+        'Phone GPS is Turned OFF',
+        'Your phone GPS is currently turned OFF. Please turn ON Location (GPS) in your phone settings to detect your real location and check in.',
+        [
+          { text: 'Turn ON GPS', onPress: () => obtainGps(true) },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
+    // 1b. Geofence Lock Check:
     if (!isInside) {
       Alert.alert(
         'Check-In Locked: Outside Geofence Area',
@@ -535,6 +593,8 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
           >
             {isInside
               ? `Geofence Status: In Range (${distanceFormatted} away • Max: 500m)`
+              : isGpsOff
+              ? `Geofence Status: Phone GPS is OFF (Turn ON to calculate distance)`
               : latitude === 0 || longitude === 0
               ? `Geofence Status: Acquiring GPS... (Tap Fetch Live Location)`
               : `Geofence Status: Out of Range (${distanceFormatted} away • Max: 500m)`}
@@ -679,16 +739,23 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
             </View>
 
             {/* GPS Diagnostic Alert Banner if GPS is disabled or permission missing */}
-            {gpsError && (latitude === 0 || longitude === 0) ? (
+            {(gpsError || isGpsOff) && (latitude === 0 || longitude === 0) ? (
               <TouchableOpacity
-                style={styles.gpsErrorBanner}
+                style={[
+                  styles.gpsErrorBanner,
+                  isGpsOff && { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' },
+                ]}
                 onPress={() => obtainGps(true)}
                 activeOpacity={0.8}
               >
                 <AlertTriangle size={15} color="#DC2626" style={{ marginRight: 6 }} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.gpsErrorBannerText}>{gpsError}</Text>
-                  <Text style={styles.gpsErrorBannerAction}>Tap to Enable / Retry Now</Text>
+                  <Text style={styles.gpsErrorBannerText}>
+                    {gpsError || 'Device GPS is turned OFF. Please turn ON Location in settings.'}
+                  </Text>
+                  <Text style={styles.gpsErrorBannerAction}>
+                    {isGpsOff ? 'Tap to Turn ON GPS / Retry' : 'Tap to Enable / Retry Now'}
+                  </Text>
                 </View>
                 <RefreshCw size={13} color="#DC2626" />
               </TouchableOpacity>
@@ -816,9 +883,11 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
 
               {/* Floating Distance Badge on Map */}
               <View style={styles.floatingDistanceBadge}>
-                <View style={styles.floatingDot} />
+                <View style={[styles.floatingDot, isGpsOff && { backgroundColor: '#EF4444' }]} />
                 {latitude === 0 || longitude === 0 ? (
-                  <Text style={styles.floatingDistanceText}>Acquiring live GPS...</Text>
+                  <Text style={styles.floatingDistanceText}>
+                    {isGpsOff ? 'Phone GPS is OFF • Turn ON Location' : 'Acquiring live GPS...'}
+                  </Text>
                 ) : (
                   <>
                     <Text style={styles.floatingDistanceText}>
@@ -898,14 +967,14 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
               <View style={styles.telemetryBox}>
                 <Text style={styles.telemetryBoxLabel}>GPS LATITUDE</Text>
                 <Text style={styles.telemetryBoxValue}>
-                  {latitude !== 0 ? latitude.toFixed(6) : 'Acquiring...'}
+                  {latitude !== 0 ? latitude.toFixed(6) : isGpsOff ? 'GPS OFF' : 'Acquiring...'}
                 </Text>
               </View>
 
               <View style={styles.telemetryBox}>
                 <Text style={styles.telemetryBoxLabel}>GPS LONGITUDE</Text>
                 <Text style={styles.telemetryBoxValue}>
-                  {longitude !== 0 ? longitude.toFixed(6) : 'Acquiring...'}
+                  {longitude !== 0 ? longitude.toFixed(6) : isGpsOff ? 'GPS OFF' : 'Acquiring...'}
                 </Text>
               </View>
 
@@ -924,7 +993,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                     { color: isInside ? '#059669' : '#DC2626' },
                   ]}
                 >
-                  {latitude !== 0 && longitude !== 0 ? distanceFormatted : '---'}
+                  {latitude !== 0 && longitude !== 0 ? distanceFormatted : isGpsOff ? 'GPS OFF' : '---'}
                 </Text>
               </View>
             </View>

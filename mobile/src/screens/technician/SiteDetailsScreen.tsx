@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import * as Location from 'expo-location';
-import { fetchLiveDeviceLocation } from '../../utils/geolocationUtils';
+import { fetchRealDeviceLocation } from '../../utils/geolocationUtils';
 import {
   MapPin,
   Phone,
@@ -97,29 +97,23 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
   // Prompt and verify GPS location permissions & device location services
   const requestGpsAndLocation = useCallback(async () => {
     try {
-      await fetchLiveDeviceLocation(
-        (coords) => {
-          setUserCoords({
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-          });
+      await fetchRealDeviceLocation(
+        {
+          onCoordinatesAcquired: (coords) => {
+            setUserCoords({
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+            });
+          },
+          onGpsDisabled: () => {},
+          onPermissionDenied: () => {},
         },
-        () => {
-          Alert.alert(
-            'Location Permission Required',
-            'Please allow Location access ("Allow while visiting site" / "While using app") so we can show your position relative to this site.',
-            [
-              { text: 'Open Settings', onPress: () => Linking.openSettings() },
-              { text: 'Cancel', style: 'cancel' },
-            ]
-          );
-        }
+        false
       );
     } catch (err: any) {
       console.warn('GPS location request error:', err);
     }
   }, []);
-
   useFocusEffect(
     useCallback(() => {
       requestGpsAndLocation();
@@ -455,19 +449,27 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
           </AppCard>
         )}
 
-        {/* Site Manager Profile Card */}
+        {/* Site Manager Profile Card - Strictly real assigned manager data (No dummy email/photo) */}
         {site.manager && (site.manager.name || site.manager.phone) ? (
           <AppCard style={styles.card}>
             <Text style={styles.sectionTitle}>SITE MANAGER & IN-CHARGE</Text>
 
             <View style={styles.managerProfileRow}>
               <View style={styles.managerPhotoContainer}>
-                <Image
-                  source={{ uri: managerPhotoUrl }}
-                  style={styles.managerPhoto}
-                  resizeMode="cover"
-                  onError={() => setMgrImgFailed(true)}
-                />
+                {site.manager.photoUrl && !mgrImgFailed ? (
+                  <Image
+                    source={{ uri: site.manager.photoUrl }}
+                    style={styles.managerPhoto}
+                    resizeMode="cover"
+                    onError={() => setMgrImgFailed(true)}
+                  />
+                ) : (
+                  <View style={[styles.managerPhoto, { backgroundColor: '#4338CA', alignItems: 'center', justifyContent: 'center' }]}>
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 18 }}>
+                      {(site.manager.name || 'M').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.managerVerifiedDot}>
                   <ShieldCheck size={12} color="#FFFFFF" />
                 </View>
@@ -485,18 +487,11 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
                     <Text style={styles.managerContactText}>{site.manager.phone}</Text>
                   </View>
                 ) : null}
-
-                {site.manager.email && !site.manager.email.includes('manager@adani.com') ? (
-                  <View style={styles.managerContactLine}>
-                    <Mail size={11} color="#64748B" />
-                    <Text style={styles.managerContactText}>{site.manager.email}</Text>
-                  </View>
-                ) : null}
               </View>
             </View>
 
-            <View style={styles.contactActionsRow}>
-              {site.manager.phone ? (
+            {site.manager.phone ? (
+              <View style={styles.contactActionsRow}>
                 <AppButton
                   title="Call Manager"
                   onPress={handleCall}
@@ -505,18 +500,8 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
                   icon={<Phone size={14} color={COLORS.primary} />}
                   style={styles.contactBtn}
                 />
-              ) : null}
-              {site.manager.email && !site.manager.email.includes('manager@adani.com') ? (
-                <AppButton
-                  title="Email Manager"
-                  onPress={handleEmail}
-                  variant="secondary"
-                  size="sm"
-                  icon={<Mail size={14} color={COLORS.primary} />}
-                  style={styles.contactBtn}
-                />
-              ) : null}
-            </View>
+              </View>
+            ) : null}
           </AppCard>
         ) : null}
 
