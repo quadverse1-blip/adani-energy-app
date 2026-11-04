@@ -198,61 +198,41 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
 
   // 2. Fetch Live GPS Telemetry with pure hardware satellite acquisition
   const obtainGps = useCallback(async (isManualPress = false) => {
-    setGpsLoading(true);
-    setGpsErrorMessage(null);
-
     // Step A: Pre-check browser permission state upfront if supported
     const permState = await checkBrowserPermissionState();
+
     if (permState === 'denied') {
       setPermissionDenied(true);
       setIsGpsOff(false);
       setIsGpsTimeout(false);
       setGpsLoading(false);
-      setGpsErrorMessage('Location permission is denied in browser settings.');
+      setGpsErrorMessage('Location permission was previously blocked in browser.');
       if (isManualPress) {
         Alert.alert(
-          'Location Permission Required',
-          'Please click the lock / info icon in your browser address bar and select "Allow" for Location to detect your position.',
+          'Reset Location Permission',
+          `Location permission was previously blocked in your browser.\n\nTo enable it:\n1. Tap the 🔒 lock or tune icon in Chrome's address bar.\n2. Tap "Permissions" or "Site settings".\n3. Tap "Location" and choose "Allow" (or tap "Reset permissions").\n4. Return here and tap "Fetch Live Location".`,
           [{ text: 'OK' }]
         );
       }
       return;
     }
 
-    // Step B: Ensure continuous real-time watcher is active
-    if (!watcherCleanupRef.current) {
-      watcherCleanupRef.current = subscribeRealDeviceLocationWatcher(
-        (coords) => {
-          setPermissionDenied(false);
-          setIsGpsOff(false);
-          setIsGpsTimeout(false);
-          setGpsErrorMessage(null);
-          setGpsLoading(false);
-          applyCoordinates(coords.latitude, coords.longitude, coords.accuracy);
-        },
-        (err: GeolocationErrorDetail) => {
-          if (err.isPermissionDenied) {
-            setPermissionDenied(true);
-            setIsGpsOff(false);
-            setIsGpsTimeout(false);
-            setGpsLoading(false);
-            setGpsErrorMessage(err.message);
-          } else if (err.isGpsDisabled) {
-            setIsGpsOff(true);
-            setPermissionDenied(false);
-            setIsGpsTimeout(false);
-            setGpsLoading(false);
-            setGpsErrorMessage(err.message);
-          } else if (err.isTimeout) {
-            setIsGpsTimeout(true);
-            setGpsLoading(false);
-            setGpsErrorMessage(err.message);
-          }
-        }
-      );
+    // On automated page load (isManualPress = false):
+    // Only attempt silent fetch if permission is already 'granted' or on native mobile.
+    // If permState is 'prompt', do NOT trigger unprompted background calls that Chrome auto-rejects!
+    if (!isManualPress && Platform.OS === 'web' && permState === 'prompt') {
+      setGpsLoading(false);
+      setPermissionDenied(false);
+      setIsGpsOff(false);
+      setIsGpsTimeout(false);
+      setGpsErrorMessage(null);
+      return;
     }
 
-    // Step C: Trigger immediate getCurrentPosition for fastest satellite fix
+    setGpsLoading(true);
+    setGpsErrorMessage(null);
+
+    // Call fetchRealDeviceLocation directly (synchronously triggered on user tap)
     try {
       await fetchRealDeviceLocation(
         {
@@ -263,6 +243,31 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
             setGpsErrorMessage(null);
             setGpsLoading(false);
             await applyCoordinates(coords.latitude, coords.longitude, coords.accuracy);
+
+            // Once permission is granted, start continuous real-time watcher
+            if (!watcherCleanupRef.current) {
+              watcherCleanupRef.current = subscribeRealDeviceLocationWatcher(
+                (liveCoords) => {
+                  setPermissionDenied(false);
+                  setIsGpsOff(false);
+                  setIsGpsTimeout(false);
+                  setGpsErrorMessage(null);
+                  setGpsLoading(false);
+                  applyCoordinates(liveCoords.latitude, liveCoords.longitude, liveCoords.accuracy);
+                },
+                (err: GeolocationErrorDetail) => {
+                  if (err.isPermissionDenied) {
+                    setPermissionDenied(true);
+                    setIsGpsOff(false);
+                    setGpsErrorMessage(err.message);
+                  } else if (err.isGpsDisabled) {
+                    setIsGpsOff(true);
+                    setPermissionDenied(false);
+                    setGpsErrorMessage(err.message);
+                  }
+                }
+              );
+            }
           },
           onError: (err: GeolocationErrorDetail) => {
             setGpsLoading(false);
@@ -293,6 +298,22 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     }
   }, [applyCoordinates]);
 
+  // Listen to browser permission state change (e.g. user toggles permissions in Chrome address bar)
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.permissions?.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+        status.onchange = () => {
+          if (status.state === 'granted') {
+            setPermissionDenied(false);
+            obtainGps(true);
+          } else if (status.state === 'denied') {
+            setPermissionDenied(true);
+          }
+        };
+      }).catch(() => {});
+    }
+  }, [obtainGps]);
+
   useFocusEffect(
     useCallback(() => {
       loadSubstations();
@@ -319,10 +340,10 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
 
   // Format distance (e.g., '1047.2 km' or '335 m')
   const formatDistance = (meters: number): string => {
-    if (permissionDenied) return 'Permission Denied';
+    if (permissionDenied) return 'Permission Blocked';
     if (isGpsOff) return 'GPS is OFF';
-    if (isGpsTimeout) return 'Acquiring GPS...';
-    if (latitude === 0 || longitude === 0) return 'Acquiring GPS...';
+    if (isGpsTimeout) return 'Searching GPS...';
+    if (latitude === 0 || longitude === 0) return 'Tap Fetch Live';
     if (meters >= 1000) {
       return `${(meters / 1000).toFixed(1)} km`;
     }
@@ -622,13 +643,13 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
             {isInside
               ? `Geofence Status: In Range (${distanceFormatted} away • Max: 500m)`
               : permissionDenied
-              ? `Geofence Status: Location Permission Denied`
+              ? `Geofence Status: Location Permission Blocked (Tap to Reset)`
               : isGpsOff
               ? `Geofence Status: Phone GPS is OFF (Turn ON to calculate distance)`
               : isGpsTimeout
               ? `Geofence Status: Searching for GPS satellites...`
               : latitude === 0 || longitude === 0
-              ? `Geofence Status: Acquiring GPS... (Tap Fetch Live Location)`
+              ? `Geofence Status: Tap 'Fetch Live Location' to connect GPS`
               : `Geofence Status: Out of Range (${distanceFormatted} away • Max: 500m)`}
           </Text>
         </View>
@@ -781,7 +802,17 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                     ? { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }
                     : { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' },
                 ]}
-                onPress={() => obtainGps(true)}
+                onPress={() => {
+                  if (permissionDenied) {
+                    Alert.alert(
+                      'Reset Location Permission',
+                      'Location permission was previously blocked in your browser.\n\nTo enable it:\n1. Tap the 🔒 lock or tune icon in Chrome\'s address bar.\n2. Tap "Permissions" or "Site settings".\n3. Tap "Location" and choose "Allow" (or tap "Reset permissions").\n4. Return here and tap "Fetch Live Location".',
+                      [{ text: 'OK' }]
+                    );
+                  } else {
+                    obtainGps(true);
+                  }
+                }}
                 activeOpacity={0.8}
               >
                 <AlertTriangle
@@ -797,7 +828,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                     ]}
                   >
                     {permissionDenied
-                      ? 'Location permission is denied. Tap to allow in browser settings.'
+                      ? 'Location permission is blocked in Chrome. Tap for instructions to reset.'
                       : isGpsOff
                       ? 'Phone GPS is turned OFF. Please turn ON Location in settings.'
                       : isGpsTimeout
@@ -811,7 +842,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                     ]}
                   >
                     {permissionDenied
-                      ? 'Tap to Learn How to Enable'
+                      ? 'Tap to Learn How to Reset in Chrome'
                       : isGpsOff
                       ? 'Tap to Turn ON GPS / Retry'
                       : 'Tap to Retry GPS Lock'}
@@ -956,12 +987,12 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                 {latitude === 0 || longitude === 0 ? (
                   <Text style={styles.floatingDistanceText}>
                     {permissionDenied
-                      ? 'Location permission denied'
+                      ? 'Location permission blocked'
                       : isGpsOff
                       ? 'Phone GPS is OFF • Turn ON Location'
                       : isGpsTimeout
                       ? 'Searching for GPS satellites...'
-                      : 'Acquiring live GPS...'}
+                      : 'Tap "Fetch Live Location" to enable GPS'}
                   </Text>
                 ) : (
                   <>
@@ -1045,12 +1076,12 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                   {latitude !== 0
                     ? latitude.toFixed(6)
                     : permissionDenied
-                    ? 'Denied'
+                    ? 'Blocked'
                     : isGpsOff
                     ? 'GPS OFF'
                     : isGpsTimeout
                     ? 'Timeout'
-                    : 'Acquiring...'}
+                    : 'Tap Fetch'}
                 </Text>
               </View>
 
@@ -1060,12 +1091,12 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                   {longitude !== 0
                     ? longitude.toFixed(6)
                     : permissionDenied
-                    ? 'Denied'
+                    ? 'Blocked'
                     : isGpsOff
                     ? 'GPS OFF'
                     : isGpsTimeout
                     ? 'Timeout'
-                    : 'Acquiring...'}
+                    : 'Tap Fetch'}
                 </Text>
               </View>
 
@@ -1087,7 +1118,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                   {latitude !== 0 && longitude !== 0
                     ? distanceFormatted
                     : permissionDenied
-                    ? 'Denied'
+                    ? 'Blocked'
                     : isGpsOff
                     ? 'GPS OFF'
                     : isGpsTimeout
