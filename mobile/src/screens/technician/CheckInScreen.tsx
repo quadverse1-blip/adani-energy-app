@@ -16,7 +16,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import { fetchRealDeviceLocation, DeviceCoordinates } from '../../utils/geolocationUtils';
+import {
+  fetchRealDeviceLocation,
+  subscribeRealDeviceLocationWatcher,
+  checkBrowserPermissionState,
+  DeviceCoordinates,
+  GeolocationErrorDetail,
+} from '../../utils/geolocationUtils';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import {
   ArrowLeft,
@@ -94,15 +100,17 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     return sites;
   }, [sites]);
 
-  // GPS State (Live Device Location)
+  // GPS & Real Device Location State
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const [isGpsOff, setIsGpsOff] = useState(false);
+  const [isGpsTimeout, setIsGpsTimeout] = useState(false);
+  const [gpsErrorMessage, setGpsErrorMessage] = useState<string | null>(null);
   const [latitude, setLatitude] = useState<number>(0);
   const [longitude, setLongitude] = useState<number>(0);
   const [accuracy, setAccuracy] = useState<number>(8.5);
   const [currentAddress, setCurrentAddress] = useState<string | null>(null);
-  const webWatchIdRef = useRef<number | null>(null);
+  const watcherCleanupRef = useRef<(() => void) | null>(null);
 
   // Camera & Photo Verification State
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -120,9 +128,9 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
         watchSubRef.current.remove();
         watchSubRef.current = null;
       }
-      if (typeof navigator !== 'undefined' && navigator.geolocation && webWatchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(webWatchIdRef.current);
-        webWatchIdRef.current = null;
+      if (watcherCleanupRef.current) {
+        watcherCleanupRef.current();
+        watcherCleanupRef.current = null;
       }
     };
   }, []);
@@ -169,16 +177,21 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     setLatitude(lat);
     setLongitude(lon);
     setAccuracy(acc);
-    setGpsError(null);
+    setPermissionDenied(false);
+    setIsGpsOff(false);
+    setIsGpsTimeout(false);
+    setGpsErrorMessage(null);
     setGpsLoading(false);
     triggerHaptic('success');
 
     try {
-      const rev = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
-      if (rev && rev.length > 0) {
-        const r = rev[0];
-        const parts = [r.name, r.street, r.district || r.subregion, r.city, r.region].filter(Boolean);
-        setCurrentAddress(parts.join(', ') || `${r.city || ''}, ${r.region || ''}`);
+      if (Platform.OS !== 'web') {
+        const rev = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
+        if (rev && rev.length > 0) {
+          const r = rev[0];
+          const parts = [r.name, r.street, r.district || r.subregion, r.city, r.region].filter(Boolean);
+          setCurrentAddress(parts.join(', ') || `${r.city || ''}, ${r.region || ''}`);
+        }
       }
     } catch (_) {}
   }, []);
@@ -186,95 +199,97 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
   // 2. Fetch Live GPS Telemetry with pure hardware satellite acquisition
   const obtainGps = useCallback(async (isManualPress = false) => {
     setGpsLoading(true);
-    setGpsError(null);
-    setIsGpsOff(false);
+    setGpsErrorMessage(null);
 
+    // Step A: Pre-check browser permission state upfront if supported
+    const permState = await checkBrowserPermissionState();
+    if (permState === 'denied') {
+      setPermissionDenied(true);
+      setIsGpsOff(false);
+      setIsGpsTimeout(false);
+      setGpsLoading(false);
+      setGpsErrorMessage('Location permission is denied in browser settings.');
+      if (isManualPress) {
+        Alert.alert(
+          'Location Permission Required',
+          'Please click the lock / info icon in your browser address bar and select "Allow" for Location to detect your position.',
+          [{ text: 'OK' }]
+        );
+      }
+      return;
+    }
+
+    // Step B: Ensure continuous real-time watcher is active
+    if (!watcherCleanupRef.current) {
+      watcherCleanupRef.current = subscribeRealDeviceLocationWatcher(
+        (coords) => {
+          setPermissionDenied(false);
+          setIsGpsOff(false);
+          setIsGpsTimeout(false);
+          setGpsErrorMessage(null);
+          setGpsLoading(false);
+          applyCoordinates(coords.latitude, coords.longitude, coords.accuracy);
+        },
+        (err: GeolocationErrorDetail) => {
+          if (err.isPermissionDenied) {
+            setPermissionDenied(true);
+            setIsGpsOff(false);
+            setIsGpsTimeout(false);
+            setGpsLoading(false);
+            setGpsErrorMessage(err.message);
+          } else if (err.isGpsDisabled) {
+            setIsGpsOff(true);
+            setPermissionDenied(false);
+            setIsGpsTimeout(false);
+            setGpsLoading(false);
+            setGpsErrorMessage(err.message);
+          } else if (err.isTimeout) {
+            setIsGpsTimeout(true);
+            setGpsLoading(false);
+            setGpsErrorMessage(err.message);
+          }
+        }
+      );
+    }
+
+    // Step C: Trigger immediate getCurrentPosition for fastest satellite fix
     try {
       await fetchRealDeviceLocation(
         {
           onCoordinatesAcquired: async (coords: DeviceCoordinates) => {
+            setPermissionDenied(false);
             setIsGpsOff(false);
-            setGpsError(null);
+            setIsGpsTimeout(false);
+            setGpsErrorMessage(null);
             setGpsLoading(false);
             await applyCoordinates(coords.latitude, coords.longitude, coords.accuracy);
           },
-          onGpsDisabled: (msg) => {
-            setIsGpsOff(true);
-            setLatitude(0);
-            setLongitude(0);
-            setGpsError(msg || 'Device GPS is turned OFF. Please turn ON Location in settings.');
+          onError: (err: GeolocationErrorDetail) => {
             setGpsLoading(false);
-          },
-          onPermissionDenied: (msg) => {
-            setIsGpsOff(false);
-            setLatitude(0);
-            setLongitude(0);
-            setGpsError(msg || 'Location permission is denied. Tap to open Settings.');
-            setGpsLoading(false);
+            if (err.isPermissionDenied) {
+              setPermissionDenied(true);
+              setIsGpsOff(false);
+              setIsGpsTimeout(false);
+              setGpsErrorMessage(err.message);
+            } else if (err.isGpsDisabled) {
+              setIsGpsOff(true);
+              setPermissionDenied(false);
+              setIsGpsTimeout(false);
+              setGpsErrorMessage(err.message);
+            } else if (err.isTimeout) {
+              setIsGpsTimeout(true);
+              setGpsErrorMessage(err.message);
+            } else {
+              setGpsErrorMessage(err.message);
+            }
           },
         },
         isManualPress
       );
-
-      // Web live real-time location watcher
-      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.geolocation) {
-        if (webWatchIdRef.current !== null) {
-          navigator.geolocation.clearWatch(webWatchIdRef.current);
-          webWatchIdRef.current = null;
-        }
-        webWatchIdRef.current = navigator.geolocation.watchPosition(
-          (pos) => {
-            if (pos?.coords && pos.coords.latitude && pos.coords.longitude) {
-              setIsGpsOff(false);
-              setGpsError(null);
-              setGpsLoading(false);
-              applyCoordinates(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 8);
-            }
-          },
-          (err) => {
-            if (err.code === 2 || err.code === 3) {
-              setIsGpsOff(true);
-              setGpsError('Device GPS is turned OFF. Please turn ON Location in settings.');
-            }
-          },
-          { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
-        );
-      }
-
-      // Native real-time background location watcher
-      if (Platform.OS !== 'web') {
-        try {
-          if (watchSubRef.current) {
-            watchSubRef.current.remove();
-          }
-          watchSubRef.current = await Location.watchPositionAsync(
-            {
-              accuracy: Location.Accuracy.High,
-              timeInterval: 2000,
-              distanceInterval: 1,
-            },
-            (loc) => {
-              if (loc?.coords && loc.coords.latitude !== 0 && loc.coords.longitude !== 0) {
-                setIsGpsOff(false);
-                setGpsError(null);
-                setGpsLoading(false);
-                applyCoordinates(loc.coords.latitude, loc.coords.longitude, loc.coords.accuracy || 8);
-              }
-            }
-          );
-        } catch (watchErr) {
-          console.warn('watchPositionAsync error:', watchErr);
-        }
-      }
-
     } catch (err: any) {
       console.warn('GPS location error:', err);
-      setGpsError(err.message || 'Unable to acquire GPS signal. Please ensure device location is enabled.');
-      if (isManualPress) {
-        Alert.alert('GPS Error', err.message || 'Unable to detect location. Please check device settings.');
-      }
-    } finally {
       setGpsLoading(false);
+      setGpsErrorMessage(err.message || 'Unable to acquire GPS signal.');
     }
   }, [applyCoordinates]);
 
@@ -282,12 +297,14 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     useCallback(() => {
       loadSubstations();
       obtainGps(false);
+      return () => {
+        if (watcherCleanupRef.current) {
+          watcherCleanupRef.current();
+          watcherCleanupRef.current = null;
+        }
+      };
     }, [loadSubstations, obtainGps])
   );
-
-  useEffect(() => {
-    obtainGps(false);
-  }, [obtainGps]);
 
   // Compute Distance between User GPS and Selected Substation (Guarded against 0,0)
   const distanceToSiteMeters = useMemo(() => {
@@ -302,7 +319,9 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
 
   // Format distance (e.g., '1047.2 km' or '335 m')
   const formatDistance = (meters: number): string => {
+    if (permissionDenied) return 'Permission Denied';
     if (isGpsOff) return 'GPS is OFF';
+    if (isGpsTimeout) return 'Acquiring GPS...';
     if (latitude === 0 || longitude === 0) return 'Acquiring GPS...';
     if (meters >= 1000) {
       return `${(meters / 1000).toFixed(1)} km`;
@@ -420,7 +439,16 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
       return;
     }
 
-    // 1. GPS Service Check:
+    // 0. Permission & Service Checks:
+    if (permissionDenied) {
+      Alert.alert(
+        'Location Permission Required',
+        'Location permission is denied in browser. Please tap the lock / info icon in your address bar, select "Allow" for Location, and retry.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     if (isGpsOff) {
       Alert.alert(
         'Phone GPS is Turned OFF',
@@ -593,8 +621,12 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
           >
             {isInside
               ? `Geofence Status: In Range (${distanceFormatted} away • Max: 500m)`
+              : permissionDenied
+              ? `Geofence Status: Location Permission Denied`
               : isGpsOff
               ? `Geofence Status: Phone GPS is OFF (Turn ON to calculate distance)`
+              : isGpsTimeout
+              ? `Geofence Status: Searching for GPS satellites...`
               : latitude === 0 || longitude === 0
               ? `Geofence Status: Acquiring GPS... (Tap Fetch Live Location)`
               : `Geofence Status: Out of Range (${distanceFormatted} away • Max: 500m)`}
@@ -739,25 +771,56 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
             </View>
 
             {/* GPS Diagnostic Alert Banner if GPS is disabled or permission missing */}
-            {(gpsError || isGpsOff) && (latitude === 0 || longitude === 0) ? (
+            {(permissionDenied || isGpsOff || isGpsTimeout || (gpsErrorMessage && (latitude === 0 || longitude === 0))) ? (
               <TouchableOpacity
                 style={[
                   styles.gpsErrorBanner,
-                  isGpsOff && { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' },
+                  permissionDenied
+                    ? { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }
+                    : isGpsOff
+                    ? { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }
+                    : { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' },
                 ]}
                 onPress={() => obtainGps(true)}
                 activeOpacity={0.8}
               >
-                <AlertTriangle size={15} color="#DC2626" style={{ marginRight: 6 }} />
+                <AlertTriangle
+                  size={15}
+                  color={permissionDenied ? '#DC2626' : isGpsOff ? '#D97706' : '#0284C7'}
+                  style={{ marginRight: 6 }}
+                />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.gpsErrorBannerText}>
-                    {gpsError || 'Device GPS is turned OFF. Please turn ON Location in settings.'}
+                  <Text
+                    style={[
+                      styles.gpsErrorBannerText,
+                      { color: permissionDenied ? '#991B1B' : isGpsOff ? '#92400E' : '#0369A1' },
+                    ]}
+                  >
+                    {permissionDenied
+                      ? 'Location permission is denied. Tap to allow in browser settings.'
+                      : isGpsOff
+                      ? 'Phone GPS is turned OFF. Please turn ON Location in settings.'
+                      : isGpsTimeout
+                      ? 'Searching for GPS satellite signal. Tap to retry.'
+                      : gpsErrorMessage || 'Unable to acquire GPS signal.'}
                   </Text>
-                  <Text style={styles.gpsErrorBannerAction}>
-                    {isGpsOff ? 'Tap to Turn ON GPS / Retry' : 'Tap to Enable / Retry Now'}
+                  <Text
+                    style={[
+                      styles.gpsErrorBannerAction,
+                      { color: permissionDenied ? '#DC2626' : isGpsOff ? '#B45309' : '#0284C7' },
+                    ]}
+                  >
+                    {permissionDenied
+                      ? 'Tap to Learn How to Enable'
+                      : isGpsOff
+                      ? 'Tap to Turn ON GPS / Retry'
+                      : 'Tap to Retry GPS Lock'}
                   </Text>
                 </View>
-                <RefreshCw size={13} color="#DC2626" />
+                <RefreshCw
+                  size={13}
+                  color={permissionDenied ? '#DC2626' : isGpsOff ? '#D97706' : '#0284C7'}
+                />
               </TouchableOpacity>
             ) : null}
 
@@ -883,10 +946,22 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
 
               {/* Floating Distance Badge on Map */}
               <View style={styles.floatingDistanceBadge}>
-                <View style={[styles.floatingDot, isGpsOff && { backgroundColor: '#EF4444' }]} />
+                <View
+                  style={[
+                    styles.floatingDot,
+                    (permissionDenied || isGpsOff) && { backgroundColor: '#EF4444' },
+                    isGpsTimeout && { backgroundColor: '#F59E0B' },
+                  ]}
+                />
                 {latitude === 0 || longitude === 0 ? (
                   <Text style={styles.floatingDistanceText}>
-                    {isGpsOff ? 'Phone GPS is OFF • Turn ON Location' : 'Acquiring live GPS...'}
+                    {permissionDenied
+                      ? 'Location permission denied'
+                      : isGpsOff
+                      ? 'Phone GPS is OFF • Turn ON Location'
+                      : isGpsTimeout
+                      ? 'Searching for GPS satellites...'
+                      : 'Acquiring live GPS...'}
                   </Text>
                 ) : (
                   <>
@@ -967,14 +1042,30 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
               <View style={styles.telemetryBox}>
                 <Text style={styles.telemetryBoxLabel}>GPS LATITUDE</Text>
                 <Text style={styles.telemetryBoxValue}>
-                  {latitude !== 0 ? latitude.toFixed(6) : isGpsOff ? 'GPS OFF' : 'Acquiring...'}
+                  {latitude !== 0
+                    ? latitude.toFixed(6)
+                    : permissionDenied
+                    ? 'Denied'
+                    : isGpsOff
+                    ? 'GPS OFF'
+                    : isGpsTimeout
+                    ? 'Timeout'
+                    : 'Acquiring...'}
                 </Text>
               </View>
 
               <View style={styles.telemetryBox}>
                 <Text style={styles.telemetryBoxLabel}>GPS LONGITUDE</Text>
                 <Text style={styles.telemetryBoxValue}>
-                  {longitude !== 0 ? longitude.toFixed(6) : isGpsOff ? 'GPS OFF' : 'Acquiring...'}
+                  {longitude !== 0
+                    ? longitude.toFixed(6)
+                    : permissionDenied
+                    ? 'Denied'
+                    : isGpsOff
+                    ? 'GPS OFF'
+                    : isGpsTimeout
+                    ? 'Timeout'
+                    : 'Acquiring...'}
                 </Text>
               </View>
 
@@ -993,7 +1084,15 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                     { color: isInside ? '#059669' : '#DC2626' },
                   ]}
                 >
-                  {latitude !== 0 && longitude !== 0 ? distanceFormatted : isGpsOff ? 'GPS OFF' : '---'}
+                  {latitude !== 0 && longitude !== 0
+                    ? distanceFormatted
+                    : permissionDenied
+                    ? 'Denied'
+                    : isGpsOff
+                    ? 'GPS OFF'
+                    : isGpsTimeout
+                    ? 'Searching'
+                    : '---'}
                 </Text>
               </View>
             </View>
