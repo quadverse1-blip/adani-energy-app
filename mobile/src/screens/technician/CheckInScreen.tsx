@@ -198,34 +198,17 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
 
   // 2. Fetch Live GPS Telemetry with pure hardware satellite acquisition
   const obtainGps = useCallback(async (isManualPress = false) => {
-    // Step A: Pre-check browser permission state upfront if supported
+    // Pre-check browser permission state if supported
     const permState = await checkBrowserPermissionState();
 
-    if (permState === 'denied') {
+    // If browser explicitly reports denied on passive page load (not manual tap),
+    // mark state so banner can display instructions without an intrusive alert.
+    if (permState === 'denied' && !isManualPress && Platform.OS === 'web') {
       setPermissionDenied(true);
       setIsGpsOff(false);
       setIsGpsTimeout(false);
       setGpsLoading(false);
       setGpsErrorMessage('Location permission was previously blocked in browser.');
-      if (isManualPress) {
-        Alert.alert(
-          'Reset Location Permission',
-          `Location permission was previously blocked in your browser.\n\nTo enable it:\n1. Tap the 🔒 lock or tune icon in Chrome's address bar.\n2. Tap "Permissions" or "Site settings".\n3. Tap "Location" and choose "Allow" (or tap "Reset permissions").\n4. Return here and tap "Fetch Live Location".`,
-          [{ text: 'OK' }]
-        );
-      }
-      return;
-    }
-
-    // On automated page load (isManualPress = false):
-    // Only attempt silent fetch if permission is already 'granted' or on native mobile.
-    // If permState is 'prompt', do NOT trigger unprompted background calls that Chrome auto-rejects!
-    if (!isManualPress && Platform.OS === 'web' && permState === 'prompt') {
-      setGpsLoading(false);
-      setPermissionDenied(false);
-      setIsGpsOff(false);
-      setIsGpsTimeout(false);
-      setGpsErrorMessage(null);
       return;
     }
 
@@ -256,14 +239,17 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                   applyCoordinates(liveCoords.latitude, liveCoords.longitude, liveCoords.accuracy);
                 },
                 (err: GeolocationErrorDetail) => {
-                  if (err.isPermissionDenied) {
-                    setPermissionDenied(true);
-                    setIsGpsOff(false);
-                    setGpsErrorMessage(err.message);
-                  } else if (err.isGpsDisabled) {
-                    setIsGpsOff(true);
-                    setPermissionDenied(false);
-                    setGpsErrorMessage(err.message);
+                  // Only report error if we don't have valid coordinates yet
+                  if (latitude === 0 && longitude === 0) {
+                    if (err.isPermissionDenied) {
+                      setPermissionDenied(true);
+                      setIsGpsOff(false);
+                      setGpsErrorMessage(err.message);
+                    } else if (err.isGpsDisabled) {
+                      setIsGpsOff(true);
+                      setPermissionDenied(false);
+                      setGpsErrorMessage(err.message);
+                    }
                   }
                 }
               );
@@ -276,6 +262,24 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
               setIsGpsOff(false);
               setIsGpsTimeout(false);
               setGpsErrorMessage(err.message);
+              if (isManualPress) {
+                if (Platform.OS === 'web') {
+                  Alert.alert(
+                    'Reset Location Permission',
+                    `Location permission is blocked in your browser.\n\nTo enable it:\n1. Tap the 🔒 lock or tune icon in Chrome's address bar.\n2. Tap "Permissions" or "Site settings".\n3. Tap "Location" and choose "Allow" (or tap "Reset permissions").\n4. Return here and tap "Fetch Live Location".`,
+                    [{ text: 'OK' }]
+                  );
+                } else {
+                  Alert.alert(
+                    'Location Permission Required',
+                    'Please enable location permission in app settings to verify your attendance.',
+                    [
+                      { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]
+                  );
+                }
+              }
             } else if (err.isGpsDisabled) {
               setIsGpsOff(true);
               setPermissionDenied(false);
@@ -296,7 +300,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
       setGpsLoading(false);
       setGpsErrorMessage(err.message || 'Unable to acquire GPS signal.');
     }
-  }, [applyCoordinates]);
+  }, [applyCoordinates, latitude, longitude]);
 
   // Listen to browser permission state change (e.g. user toggles permissions in Chrome address bar)
   useEffect(() => {
@@ -804,11 +808,22 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                 ]}
                 onPress={() => {
                   if (permissionDenied) {
-                    Alert.alert(
-                      'Reset Location Permission',
-                      'Location permission was previously blocked in your browser.\n\nTo enable it:\n1. Tap the 🔒 lock or tune icon in Chrome\'s address bar.\n2. Tap "Permissions" or "Site settings".\n3. Tap "Location" and choose "Allow" (or tap "Reset permissions").\n4. Return here and tap "Fetch Live Location".',
-                      [{ text: 'OK' }]
-                    );
+                    if (Platform.OS === 'web') {
+                      Alert.alert(
+                        'Reset Location Permission',
+                        'Location permission was previously blocked in your browser.\n\nTo enable it:\n1. Tap the 🔒 lock or tune icon in Chrome\'s address bar.\n2. Tap "Permissions" or "Site settings".\n3. Tap "Location" and choose "Allow" (or tap "Reset permissions").\n4. Return here and tap "Fetch Live Location".',
+                        [{ text: 'OK' }]
+                      );
+                    } else {
+                      Alert.alert(
+                        'Location Permission Required',
+                        'Please allow Location access in App settings to detect your real location.',
+                        [
+                          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                          { text: 'Cancel', style: 'cancel' },
+                        ]
+                      );
+                    }
                   } else {
                     obtainGps(true);
                   }

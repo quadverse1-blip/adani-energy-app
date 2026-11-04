@@ -96,8 +96,8 @@ export const fetchRealDeviceLocation = async (
 
     return new Promise((resolve) => {
       // Directly invoke navigator.geolocation.getCurrentPosition()
-      // Calling this directly in response to user interaction ensures Chrome displays
-      // the native permission popup bottom-sheet if permission is in 'prompt' state.
+      // Calling this directly ensures Chrome/Android displays the native
+      // permission popup bottom-sheet ("Allow while visiting the site" / "Allow this time" / "Never allow")
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           if (pos?.coords && pos.coords.latitude && pos.coords.longitude) {
@@ -109,22 +109,15 @@ export const fetchRealDeviceLocation = async (
             onCoordinatesAcquired(realCoords);
             resolve(realCoords);
           } else {
-            const detail: GeolocationErrorDetail = {
-              code: 'POSITION_UNAVAILABLE',
-              message: 'Device GPS is searching for satellite signal.',
-              isPermissionDenied: false,
-              isGpsDisabled: true,
-              isTimeout: false,
-            };
-            dispatchError(detail);
-            resolve(null);
+            // Attempt standard accuracy fallback if coordinates empty
+            tryStandardAccuracyFallback(resolve);
           }
         },
         (err) => {
-          console.warn('[RealGPS] Browser GPS error code:', err.code, err.message);
+          console.warn('[RealGPS] High-accuracy browser GPS error code:', err.code, err.message);
 
           if (err.code === 1) {
-            // PERMISSION_DENIED: User explicitly selected "Never allow" or origin is blocked in settings
+            // PERMISSION_DENIED: User explicitly selected "Never allow" or origin blocked
             const detail: GeolocationErrorDetail = {
               code: 'PERMISSION_DENIED',
               message: 'Location permission was denied. Tap the lock icon in the Chrome address bar to reset permission.',
@@ -133,51 +126,99 @@ export const fetchRealDeviceLocation = async (
               isTimeout: false,
             };
             dispatchError(detail);
-          } else if (err.code === 2) {
-            // POSITION_UNAVAILABLE: Permission is granted, but physical device GPS hardware is OFF
-            const detail: GeolocationErrorDetail = {
-              code: 'POSITION_UNAVAILABLE',
-              message: 'Phone GPS is turned OFF. Please pull down quick settings and turn ON Location.',
-              isPermissionDenied: false,
-              isGpsDisabled: true,
-              isTimeout: false,
-            };
-            dispatchError(detail);
-            if (isManualPress) {
-              Alert.alert(
-                'Turn ON Phone GPS',
-                'Your phone GPS / Location is currently turned OFF. Please pull down your phone notification bar and turn ON Location (GPS).',
-                [{ text: 'OK' }]
-              );
-            }
-          } else if (err.code === 3) {
-            // TIMEOUT: Satellite search took longer than timeout limit
-            const detail: GeolocationErrorDetail = {
-              code: 'TIMEOUT',
-              message: 'GPS satellite search timed out. Tap "Fetch Live Location" to retry.',
-              isPermissionDenied: false,
-              isGpsDisabled: false,
-              isTimeout: true,
-            };
-            dispatchError(detail);
+            resolve(null);
           } else {
-            const detail: GeolocationErrorDetail = {
-              code: 'UNKNOWN',
-              message: 'Unable to acquire real GPS location.',
-              isPermissionDenied: false,
-              isGpsDisabled: true,
-              isTimeout: false,
-            };
-            dispatchError(detail);
+            // POSITION_UNAVAILABLE (code 2) or TIMEOUT (code 3):
+            // Satellite lock might take time indoors or while warm-up occurs.
+            // Immediately attempt standard network/Wi-Fi triangulation fallback!
+            tryStandardAccuracyFallback(resolve);
           }
-          resolve(null);
         },
         {
           enableHighAccuracy: true,
-          timeout: 25000,
-          maximumAge: isManualPress ? 0 : 15000,
+          timeout: 30000,
+          maximumAge: 15000,
         }
       );
+
+      function tryStandardAccuracyFallback(finishResolve: (val: DeviceCoordinates | null) => void) {
+        navigator.geolocation.getCurrentPosition(
+          (posFallback) => {
+            if (posFallback?.coords && posFallback.coords.latitude && posFallback.coords.longitude) {
+              const fallbackCoords: DeviceCoordinates = {
+                latitude: posFallback.coords.latitude,
+                longitude: posFallback.coords.longitude,
+                accuracy: posFallback.coords.accuracy || 20,
+              };
+              onCoordinatesAcquired(fallbackCoords);
+              finishResolve(fallbackCoords);
+            } else {
+              const detail: GeolocationErrorDetail = {
+                code: 'POSITION_UNAVAILABLE',
+                message: 'Phone GPS is turned OFF. Please pull down quick settings and turn ON Location.',
+                isPermissionDenied: false,
+                isGpsDisabled: true,
+                isTimeout: false,
+              };
+              dispatchError(detail);
+              finishResolve(null);
+            }
+          },
+          (errFallback) => {
+            console.warn('[RealGPS] Standard-accuracy browser GPS error code:', errFallback.code, errFallback.message);
+            if (errFallback.code === 1) {
+              const detail: GeolocationErrorDetail = {
+                code: 'PERMISSION_DENIED',
+                message: 'Location permission was denied. Tap the lock icon in Chrome to allow access.',
+                isPermissionDenied: true,
+                isGpsDisabled: false,
+                isTimeout: false,
+              };
+              dispatchError(detail);
+            } else if (errFallback.code === 2) {
+              const detail: GeolocationErrorDetail = {
+                code: 'POSITION_UNAVAILABLE',
+                message: 'Phone GPS is turned OFF. Please pull down quick settings and turn ON Location.',
+                isPermissionDenied: false,
+                isGpsDisabled: true,
+                isTimeout: false,
+              };
+              dispatchError(detail);
+              if (isManualPress) {
+                Alert.alert(
+                  'Turn ON Phone GPS',
+                  'Your phone GPS / Location is currently turned OFF. Please pull down your phone notification bar and turn ON Location (GPS).',
+                  [{ text: 'OK' }]
+                );
+              }
+            } else if (errFallback.code === 3) {
+              const detail: GeolocationErrorDetail = {
+                code: 'TIMEOUT',
+                message: 'GPS search timed out. Tap "Fetch Live Location" to retry.',
+                isPermissionDenied: false,
+                isGpsDisabled: false,
+                isTimeout: true,
+              };
+              dispatchError(detail);
+            } else {
+              const detail: GeolocationErrorDetail = {
+                code: 'UNKNOWN',
+                message: 'Unable to acquire real GPS location.',
+                isPermissionDenied: false,
+                isGpsDisabled: true,
+                isTimeout: false,
+              };
+              dispatchError(detail);
+            }
+            finishResolve(null);
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 15000,
+            maximumAge: 60000,
+          }
+        );
+      }
     });
   }
 
@@ -350,6 +391,8 @@ export const subscribeRealDeviceLocationWatcher = (
           }
         },
         (err) => {
+          // In continuous watching, code 3 (TIMEOUT) is normal when stationary or indoors; do not report as error
+          if (err.code === 3) return;
           if (onError) {
             if (err.code === 1) {
               onError({
@@ -366,14 +409,6 @@ export const subscribeRealDeviceLocationWatcher = (
                 isPermissionDenied: false,
                 isGpsDisabled: true,
                 isTimeout: false,
-              });
-            } else if (err.code === 3) {
-              onError({
-                code: 'TIMEOUT',
-                message: 'GPS signal timeout.',
-                isPermissionDenied: false,
-                isGpsDisabled: false,
-                isTimeout: true,
               });
             }
           }
