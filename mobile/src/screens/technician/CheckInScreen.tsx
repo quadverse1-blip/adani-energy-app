@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import { fetchLiveDeviceLocation } from '../../utils/geolocationUtils';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import {
   ArrowLeft,
@@ -182,110 +183,24 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     setGpsError(null);
 
     try {
-      // Step 1: Prompt Location Permission FIRST
-      // Pops up the Android system dialog: "While using the app" / "Only this time" / "Don't allow"
-      let perm = await Location.getForegroundPermissionsAsync();
-      if (!perm.granted && perm.status !== 'granted') {
-        perm = await Location.requestForegroundPermissionsAsync();
-      }
-
-      if (!perm.granted && perm.status !== 'granted') {
-        const msg = 'Location permission is denied. Tap to open Settings and allow access.';
-        setGpsError(msg);
-        setGpsLoading(false);
-        Alert.alert(
-          'Location Permission Required',
-          'Please allow Location access ("While using the app" or "Only this time") so we can show your location on the map.',
-          [
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-            { text: 'Cancel', style: 'cancel' },
-          ]
-        );
-        return;
-      }
-
-      // Step 2: Location permission is GRANTED! Now check if device GPS / Location services are ON
-      try {
-        const servicesEnabled = await Location.hasServicesEnabledAsync();
-        if (!servicesEnabled) {
-          if (Platform.OS === 'android') {
-            try {
-              // Prompts native Google Play Services dialog: "To continue, turn on device location..."
-              await Location.enableNetworkProviderAsync();
-            } catch (_) {
-              const msg = 'Device GPS / Location is turned OFF in phone settings.';
-              setGpsError(msg);
-              setGpsLoading(false);
-              Alert.alert(
-                'Location (GPS) is Turned Off',
-                'Please turn ON Location in your phone quick settings or settings to detect your device position.',
-                [
-                  { text: 'Open Settings', onPress: () => Linking.openSettings() },
-                  { text: 'OK', style: 'cancel' },
-                ]
-              );
-              return;
-            }
-          } else {
-            const msg = 'Device GPS / Location is turned OFF in phone settings.';
-            setGpsError(msg);
-            setGpsLoading(false);
+      await fetchLiveDeviceLocation(
+        async (coords) => {
+          await applyCoordinates(coords.latitude, coords.longitude, coords.accuracy);
+        },
+        () => {
+          setGpsError('Location permission is denied. Tap to allow access.');
+          if (isManualPress) {
             Alert.alert(
-              'Location (GPS) is Turned Off',
-              'Please turn ON Location in device settings to detect your position.',
+              'Location Permission Required',
+              'Please allow Location access ("Allow while visiting site" / "While using app") so we can show your location on the map.',
               [
                 { text: 'Open Settings', onPress: () => Linking.openSettings() },
-                { text: 'OK', style: 'cancel' },
+                { text: 'Cancel', style: 'cancel' },
               ]
             );
-            return;
           }
         }
-      } catch (svcErr) {
-        console.warn('hasServicesEnabledAsync check failed:', svcErr);
-      }
-
-      // Timeout wrapper to prevent hanging on GPS satellite search indoors
-      const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
-        Promise.race([p, new Promise<null>((res) => setTimeout(() => res(null), ms))]);
-
-      let acquired = false;
-
-      // 2c. Step 1: Immediate cached position (<500ms)
-      try {
-        const lastKnown = await withTimeout(
-          Location.getLastKnownPositionAsync({ maxAge: 86400000 }),
-          1200
-        );
-        if (lastKnown?.coords && lastKnown.coords.latitude !== 0 && lastKnown.coords.longitude !== 0) {
-          await applyCoordinates(lastKnown.coords.latitude, lastKnown.coords.longitude, lastKnown.coords.accuracy || 15);
-          acquired = true;
-        }
-      } catch (_) {}
-
-      // 2d. Step 2: Balanced accuracy (Wi-Fi + Cellular towers, works indoors in ~1-2s)
-      try {
-        const balanced = await withTimeout(
-          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-          3000
-        );
-        if (balanced?.coords && balanced.coords.latitude !== 0 && balanced.coords.longitude !== 0) {
-          await applyCoordinates(balanced.coords.latitude, balanced.coords.longitude, balanced.coords.accuracy || 10);
-          acquired = true;
-        }
-      } catch (_) {}
-
-      // 2e. Step 3: High accuracy refinement (GNSS satellites)
-      try {
-        const high = await withTimeout(
-          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-          3500
-        );
-        if (high?.coords && high.coords.latitude !== 0 && high.coords.longitude !== 0) {
-          await applyCoordinates(high.coords.latitude, high.coords.longitude, high.coords.accuracy || 8);
-          acquired = true;
-        }
-      } catch (_) {}
+      );
 
       // 2f. Step 4: Real-time background location watcher
       try {
@@ -308,37 +223,6 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
         console.warn('watchPositionAsync error:', watchErr);
       }
 
-      // 2g. Fallback if hardware GPS is unresponsive (e.g. testing in emulator, indoor bunker)
-      if (!acquired && latitude === 0) {
-        try {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 3000);
-          const ipRes = await fetch('https://ipapi.co/json/', { signal: controller.signal });
-          clearTimeout(timer);
-          if (ipRes.ok) {
-            const ipData = await ipRes.json();
-            if (ipData && ipData.latitude && ipData.longitude) {
-              await applyCoordinates(Number(ipData.latitude), Number(ipData.longitude), 30);
-              acquired = true;
-            }
-          }
-        } catch (_) {}
-      }
-
-      if (!acquired && latitude === 0) {
-        setGpsError('GPS signal unavailable. Ensure Location is ON and tap Refresh.');
-        if (isManualPress) {
-          Alert.alert(
-            'GPS Signal Weak',
-            'Could not lock device GPS. Please ensure Location is enabled in Android settings and you have internet access.',
-            [
-              { text: 'Retry', onPress: () => obtainGps(true) },
-              { text: 'Open Settings', onPress: () => Linking.openSettings() },
-              { text: 'Cancel', style: 'cancel' },
-            ]
-          );
-        }
-      }
     } catch (err: any) {
       console.warn('GPS location error:', err);
       setGpsError(err.message || 'Unable to acquire GPS signal. Please ensure device location is enabled.');

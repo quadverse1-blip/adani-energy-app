@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import * as Location from 'expo-location';
+import { fetchLiveDeviceLocation } from '../../utils/geolocationUtils';
 import {
   MapPin,
   Phone,
@@ -96,81 +97,24 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
   // Prompt and verify GPS location permissions & device location services
   const requestGpsAndLocation = useCallback(async () => {
     try {
-      // Step 1: Prompt Location Permission FIRST ("While using the app" / "Only this time")
-      let perm = await Location.getForegroundPermissionsAsync();
-      if (!perm.granted && perm.status !== 'granted') {
-        perm = await Location.requestForegroundPermissionsAsync();
-      }
-
-      if (!perm.granted && perm.status !== 'granted') {
-        Alert.alert(
-          'Location Permission Required',
-          'Adani Workforce requires location permission ("While using the app" or "Only this time") to show your current location and calculate distance to this site.',
-          [
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-            { text: 'Cancel', style: 'cancel' },
-          ]
-        );
-        return;
-      }
-
-      // Step 2: Location permission is GRANTED! Now check if device GPS is ON
-      try {
-        const hasServices = await Location.hasServicesEnabledAsync();
-        if (!hasServices) {
-          if (Platform.OS === 'android') {
-            try {
-              // Prompts native Google Play Services dialog: "To continue, turn on device location..."
-              await Location.enableNetworkProviderAsync();
-            } catch (_) {
-              Alert.alert(
-                'Turn ON Device Location',
-                'Please enable Location (GPS) in your phone settings or quick settings to view your position relative to the site.',
-                [
-                  { text: 'Open Settings', onPress: () => Linking.openSettings() },
-                  { text: 'Cancel', style: 'cancel' },
-                ]
-              );
-              return;
-            }
-          } else {
-            Alert.alert(
-              'Turn ON Device Location',
-              'Please enable Location in device settings to view your position relative to the site.',
-              [
-                { text: 'Open Settings', onPress: () => Linking.openSettings() },
-                { text: 'Cancel', style: 'cancel' },
-              ]
-            );
-            return;
-          }
-        }
-      } catch (svcErr) {
-        console.warn('hasServicesEnabledAsync check failed:', svcErr);
-      }
-
-      // 3. Acquire location: instant cached first (<500ms), then fresh
-      try {
-        const cached = await Location.getLastKnownPositionAsync({ maxAge: 86400000 });
-        if (cached?.coords && cached.coords.latitude !== 0 && cached.coords.longitude !== 0) {
+      await fetchLiveDeviceLocation(
+        (coords) => {
           setUserCoords({
-            latitude: cached.coords.latitude,
-            longitude: cached.coords.longitude,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
           });
+        },
+        () => {
+          Alert.alert(
+            'Location Permission Required',
+            'Please allow Location access ("Allow while visiting site" / "While using app") so we can show your position relative to this site.',
+            [
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              { text: 'Cancel', style: 'cancel' },
+            ]
+          );
         }
-      } catch (_) {}
-
-      try {
-        const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        if (loc?.coords && loc.coords.latitude !== 0 && loc.coords.longitude !== 0) {
-          setUserCoords({
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-          });
-        }
-      } catch (_) {}
+      );
     } catch (err: any) {
       console.warn('GPS location request error:', err);
     }
