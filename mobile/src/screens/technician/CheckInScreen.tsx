@@ -263,25 +263,37 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
   // Shift Timing Check
   const shiftInfo = useMemo(() => getShiftInfo(), []);
 
-  // Update Map Region when Substation or User location changes
-  useEffect(() => {
+  // 3. Fit Map Viewport to Show Both My Device Location and the Site Location
+  const fitMapToBoth = useCallback(() => {
     if (mapRef.current && selectedSite) {
       if (latitude !== 0 && longitude !== 0) {
-        const midLat = (latitude + selectedSite.latitude) / 2;
-        const midLon = (longitude + selectedSite.longitude) / 2;
-        const latDelta = Math.max(Math.abs(latitude - selectedSite.latitude) * 1.5, 0.02);
-        const lonDelta = Math.max(Math.abs(longitude - selectedSite.longitude) * 1.5, 0.02);
-
-        mapRef.current.animateToRegion(
-          {
-            latitude: midLat,
-            longitude: midLon,
-            latitudeDelta: latDelta,
-            longitudeDelta: lonDelta,
-          },
-          600
-        );
-      } else {
+        if (typeof mapRef.current.fitToCoordinates === 'function') {
+          mapRef.current.fitToCoordinates(
+            [
+              { latitude, longitude },
+              { latitude: selectedSite.latitude, longitude: selectedSite.longitude },
+            ],
+            {
+              edgePadding: { top: 70, right: 60, bottom: 70, left: 60 },
+              animated: true,
+            }
+          );
+        } else if (typeof mapRef.current.animateToRegion === 'function') {
+          const midLat = (latitude + selectedSite.latitude) / 2;
+          const midLon = (longitude + selectedSite.longitude) / 2;
+          const latDelta = Math.max(Math.abs(latitude - selectedSite.latitude) * 1.8, 0.02);
+          const lonDelta = Math.max(Math.abs(longitude - selectedSite.longitude) * 1.8, 0.02);
+          mapRef.current.animateToRegion(
+            {
+              latitude: midLat,
+              longitude: midLon,
+              latitudeDelta: latDelta,
+              longitudeDelta: lonDelta,
+            },
+            600
+          );
+        }
+      } else if (typeof mapRef.current.animateToRegion === 'function') {
         mapRef.current.animateToRegion(
           {
             latitude: selectedSite.latitude,
@@ -294,6 +306,21 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
       }
     }
   }, [selectedSite, latitude, longitude]);
+
+  useEffect(() => {
+    fitMapToBoth();
+  }, [fitMapToBoth]);
+
+  // Turn-by-Turn Navigation from My Device to Site
+  const handleOpenDirections = () => {
+    if (!selectedSite) return;
+    const originParam = latitude !== 0 && longitude !== 0 ? `&origin=${latitude},${longitude}` : '';
+    const destParam = `destination=${selectedSite.latitude},${selectedSite.longitude}`;
+    const url = `https://www.google.com/maps/dir/?api=1${originParam}&${destParam}&travelmode=driving`;
+    Linking.openURL(url).catch(() => {
+      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${selectedSite.latitude},${selectedSite.longitude}`);
+    });
+  };
 
   // Zoom Map In/Out
   const handleZoom = (zoomIn: boolean) => {
@@ -652,7 +679,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
               </View>
             ) : null}
 
-            {/* Radar Map Container */}
+            {/* Radar Map Container Showing Device Location to Site Location */}
             <View style={styles.mapContainer}>
               {selectedSite && (
                 <MapView
@@ -667,7 +694,8 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                   }}
                   mapType="standard"
                   showsCompass={true}
-                  showsUserLocation={false}
+                  showsUserLocation={Platform.OS !== 'web'}
+                  showsMyLocationButton={false}
                 >
                   {/* 500m Geofence Circle around Site */}
                   <Circle
@@ -682,38 +710,63 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                     zIndex={2}
                   />
 
-                  {/* Substation Marker */}
+                  {/* Site Location Marker */}
                   <Marker
                     coordinate={{
                       latitude: selectedSite.latitude,
                       longitude: selectedSite.longitude,
                     }}
-                    title={selectedSite.name}
+                    title={`Site: ${selectedSite.name}`}
                     description={`Geofence: ${selectedSite.radiusMeters || 500}m • ${selectedSite.code}`}
                     zIndex={10}
+                    anchor={{ x: 0.5, y: 1.0 }}
                   >
-                    <View style={styles.substationMapPill}>
-                      <Building2 size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
-                      <Text style={styles.substationMapPillText}>{selectedSite.name}</Text>
+                    <View style={styles.siteMarkerContainer}>
+                      <View style={styles.substationMapPill}>
+                        <Building2 size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.substationMapPillText}>{selectedSite.name}</Text>
+                      </View>
+                      <View style={styles.siteMarkerStem} />
                     </View>
                   </Marker>
 
-                  {/* User Device GPS Marker (Rendered only when valid GPS is acquired) */}
+                  {/* My Device Location Marker (Real Live GPS) */}
                   {latitude !== 0 && longitude !== 0 && (
                     <Marker
                       coordinate={{ latitude, longitude }}
-                      title="Your Device GPS"
+                      title="My Device Location"
                       description={currentAddress || `Accuracy: ±${accuracy.toFixed(1)}m`}
                       zIndex={15}
+                      anchor={{ x: 0.5, y: 1.0 }}
                     >
-                      <View style={styles.userDeviceMapPill}>
-                        <View style={styles.userDotCircle} />
-                        <Text style={styles.userDeviceMapPillText}>Your Device GPS</Text>
+                      <View style={styles.userMarkerContainer}>
+                        <View style={styles.userDeviceMapPill}>
+                          <View style={styles.userDotCircle} />
+                          <Text style={styles.userDeviceMapPillText}>My Device Location</Text>
+                        </View>
+                        <View style={styles.userMarkerStem} />
                       </View>
                     </Marker>
                   )}
 
-                  {/* Connecting Line between Device GPS & Site */}
+                  {/* Midpoint Distance Marker along Polyline */}
+                  {latitude !== 0 && longitude !== 0 && distanceToSiteMeters > 40 && (
+                    <Marker
+                      coordinate={{
+                        latitude: (latitude + selectedSite.latitude) / 2,
+                        longitude: (longitude + selectedSite.longitude) / 2,
+                      }}
+                      anchor={{ x: 0.5, y: 0.5 }}
+                      zIndex={8}
+                    >
+                      <View style={styles.routeDistancePill}>
+                        <Navigation size={10} color="#1E40AF" style={{ marginRight: 3, transform: [{ rotate: '45deg' }] }} />
+                        <Text style={styles.routeDistancePillText}>{distanceFormatted}</Text>
+                      </View>
+                    </Marker>
+                  )}
+
+                  {/* Connecting Route Line between Device Location & Site Location */}
                   {latitude !== 0 && longitude !== 0 && (
                     <Polyline
                       coordinates={[
@@ -721,8 +774,8 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                         { latitude: selectedSite.latitude, longitude: selectedSite.longitude },
                       ]}
                       strokeColor="#2563EB"
-                      strokeWidth={2}
-                      lineDashPattern={[6, 4]}
+                      strokeWidth={3}
+                      lineDashPattern={[8, 4]}
                       zIndex={3}
                     />
                   )}
@@ -737,23 +790,23 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                 ) : (
                   <>
                     <Text style={styles.floatingDistanceText}>
-                      {distanceFormatted} to {selectedSite?.name || 'Site'}
+                      My Device ➔ {selectedSite?.name || 'Site'}: <Text style={{ fontWeight: '900' }}>{distanceFormatted}</Text>
                     </Text>
                     <View
                       style={[
                         styles.floatingGeofenceTag,
-                        { backgroundColor: isInside ? '#059669' : '#D97706' },
+                        { backgroundColor: isInside ? '#059669' : '#DC2626' },
                       ]}
                     >
                       <Text style={styles.floatingGeofenceTagText}>
-                        {isInside ? 'Inside Geofence' : 'Outside Geofence'}
+                        {isInside ? 'In Range' : 'Outside Geofence'}
                       </Text>
                     </View>
                   </>
                 )}
               </View>
 
-              {/* Zoom Controls */}
+              {/* Zoom & Route Frame Controls */}
               <View style={styles.mapZoomControls}>
                 <TouchableOpacity
                   delayPressIn={0}
@@ -771,7 +824,41 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                 >
                   <Text style={styles.zoomBtnText}>-</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  delayPressIn={0}
+                  style={[styles.zoomBtn, { marginTop: 4, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
+                  onPress={fitMapToBoth}
+                  activeOpacity={0.8}
+                  accessibilityLabel="Fit Device and Site to view"
+                >
+                  <Navigation size={13} color="#1E63F0" />
+                </TouchableOpacity>
               </View>
+            </View>
+
+            {/* Route Legend & Turn-by-Turn Directions Action */}
+            <View style={styles.routeActionBar}>
+              <View style={styles.routeLegend}>
+                <View style={styles.legendNode}>
+                  <View style={[styles.legendDot, { backgroundColor: '#2563EB' }]} />
+                  <Text style={styles.legendLabel}>My Location</Text>
+                </View>
+                <View style={styles.legendConnector} />
+                <View style={styles.legendNode}>
+                  <View style={[styles.legendDot, { backgroundColor: '#DC2626' }]} />
+                  <Text style={styles.legendLabel} numberOfLines={1}>{selectedSite?.name || 'Site'}</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                delayPressIn={0}
+                style={styles.directionsBtn}
+                onPress={handleOpenDirections}
+                activeOpacity={0.8}
+              >
+                <Navigation size={12} color="#1E63F0" style={{ marginRight: 5 }} />
+                <Text style={styles.directionsBtnText}>Directions to Site</Text>
+              </TouchableOpacity>
             </View>
 
             {/* 3 Telemetry Metrics below Map */}
@@ -1643,6 +1730,97 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  siteMarkerContainer: {
+    alignItems: 'center',
+  },
+  siteMarkerStem: {
+    width: 2,
+    height: 6,
+    backgroundColor: '#DC2626',
+  },
+  userMarkerContainer: {
+    alignItems: 'center',
+  },
+  userMarkerStem: {
+    width: 2,
+    height: 6,
+    backgroundColor: '#1E293B',
+  },
+  routeDistancePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#3B82F6',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+  },
+  routeDistancePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1E40AF',
+  },
+  routeActionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  routeLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 160,
+  },
+  legendNode: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  legendConnector: {
+    width: 16,
+    height: 2,
+    backgroundColor: '#CBD5E1',
+    marginHorizontal: 6,
+  },
+  directionsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  directionsBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1E63F0',
   },
   substationMapPill: {
     flexDirection: 'row',
