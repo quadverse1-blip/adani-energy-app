@@ -109,6 +109,16 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const cameraRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
+  const watchSubRef = useRef<Location.LocationSubscription | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (watchSubRef.current) {
+        watchSubRef.current.remove();
+        watchSubRef.current = null;
+      }
+    };
+  }, []);
 
   // 1. Load All Substations assigned to this employee (dynamic refresh on focus)
   const loadSubstations = useCallback(async () => {
@@ -146,89 +156,192 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     }
   }, [route?.params?.targetSiteId, user]);
 
-  // 2. Fetch Live GPS Telemetry with fast cached fix, precision fallback & reverse geocode
-  const obtainGps = useCallback(async () => {
+  // Helper: Apply valid coordinates and reverse geocode
+  const applyCoordinates = useCallback(async (lat: number, lon: number, acc: number = 8) => {
+    if (!lat || !lon || (lat === 0 && lon === 0)) return;
+    setLatitude(lat);
+    setLongitude(lon);
+    setAccuracy(acc);
+    setGpsError(null);
+    setGpsLoading(false);
+    triggerHaptic('success');
+
+    try {
+      const rev = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
+      if (rev && rev.length > 0) {
+        const r = rev[0];
+        const parts = [r.name, r.street, r.district || r.subregion, r.city, r.region].filter(Boolean);
+        setCurrentAddress(parts.join(', ') || `${r.city || ''}, ${r.region || ''}`);
+      }
+    } catch (_) {}
+  }, []);
+
+  // 2. Fetch Live GPS Telemetry with multi-tier checks, timeouts & real-time watcher
+  const obtainGps = useCallback(async (isManualPress = false) => {
     setGpsLoading(true);
     setGpsError(null);
+
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setGpsError('Location permission denied. Real-time GPS is required for geofenced attendance.');
+      // 2a. Check if Location Services (GPS) are toggled ON in device settings
+      try {
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (!servicesEnabled) {
+          const msg = 'Device GPS / Location is turned OFF in phone settings.';
+          setGpsError(msg);
+          setGpsLoading(false);
+          if (isManualPress) {
+            Alert.alert(
+              'Location (GPS) is Turned Off',
+              'Please turn ON Location in your phone quick settings (swipe down from top of screen) to detect your device position.',
+              [
+                { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                { text: 'OK', style: 'cancel' },
+              ]
+            );
+          }
+          return;
+        }
+      } catch (svcErr) {
+        console.warn('hasServicesEnabledAsync check failed:', svcErr);
+      }
+
+      // 2b. Check & Request Location Permissions
+      let perm = await Location.getForegroundPermissionsAsync();
+      if (perm.status !== 'granted') {
+        perm = await Location.requestForegroundPermissionsAsync();
+      }
+
+      if (perm.status !== 'granted') {
+        const msg = 'Location permission is denied. Tap to open Settings and allow access.';
+        setGpsError(msg);
         setGpsLoading(false);
+        if (isManualPress) {
+          Alert.alert(
+            'Location Permission Required',
+            'Adani Workforce requires Location access to show your device location and calculate distance to the site.',
+            [
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              { text: 'Cancel', style: 'cancel' },
+            ]
+          );
+        }
         return;
       }
 
-      // 2a. Fast cached last known position for instant responsiveness (<10ms)
+      // Timeout wrapper to prevent hanging on GPS satellite search indoors
+      const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
+        Promise.race([p, new Promise<null>((res) => setTimeout(() => res(null), ms))]);
+
+      let acquired = false;
+
+      // 2c. Step 1: Immediate cached position (<500ms)
       try {
-        const lastKnown = await Location.getLastKnownPositionAsync({});
+        const lastKnown = await withTimeout(
+          Location.getLastKnownPositionAsync({ maxAge: 86400000 }),
+          1200
+        );
         if (lastKnown?.coords && lastKnown.coords.latitude !== 0 && lastKnown.coords.longitude !== 0) {
-          setLatitude(lastKnown.coords.latitude);
-          setLongitude(lastKnown.coords.longitude);
-          setAccuracy(lastKnown.coords.accuracy || 10);
+          await applyCoordinates(lastKnown.coords.latitude, lastKnown.coords.longitude, lastKnown.coords.accuracy || 15);
+          acquired = true;
         }
       } catch (_) {}
 
-      // 2b. High accuracy live GPS polling
-      let freshLocation: Location.LocationObject | null = null;
+      // 2d. Step 2: Balanced accuracy (Wi-Fi + Cellular towers, works indoors in ~1-2s)
       try {
-        freshLocation = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-      } catch (highErr) {
-        // Fallback to balanced accuracy if high accuracy times out (e.g., indoor satellite obstruction)
-        try {
-          freshLocation = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-        } catch (balErr) {
-          console.warn('GPS balanced fallback error:', balErr);
+        const balanced = await withTimeout(
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          3000
+        );
+        if (balanced?.coords && balanced.coords.latitude !== 0 && balanced.coords.longitude !== 0) {
+          await applyCoordinates(balanced.coords.latitude, balanced.coords.longitude, balanced.coords.accuracy || 10);
+          acquired = true;
         }
+      } catch (_) {}
+
+      // 2e. Step 3: High accuracy refinement (GNSS satellites)
+      try {
+        const high = await withTimeout(
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+          3500
+        );
+        if (high?.coords && high.coords.latitude !== 0 && high.coords.longitude !== 0) {
+          await applyCoordinates(high.coords.latitude, high.coords.longitude, high.coords.accuracy || 8);
+          acquired = true;
+        }
+      } catch (_) {}
+
+      // 2f. Step 4: Real-time background location watcher
+      try {
+        if (watchSubRef.current) {
+          watchSubRef.current.remove();
+        }
+        watchSubRef.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 2000,
+            distanceInterval: 1,
+          },
+          (loc) => {
+            if (loc?.coords && loc.coords.latitude !== 0 && loc.coords.longitude !== 0) {
+              applyCoordinates(loc.coords.latitude, loc.coords.longitude, loc.coords.accuracy || 8);
+            }
+          }
+        );
+      } catch (watchErr) {
+        console.warn('watchPositionAsync error:', watchErr);
       }
 
-      if (freshLocation?.coords && freshLocation.coords.latitude !== 0) {
-        const lat = freshLocation.coords.latitude;
-        const lon = freshLocation.coords.longitude;
-        setLatitude(lat);
-        setLongitude(lon);
-        setAccuracy(freshLocation.coords.accuracy || 8);
-
-        // 2c. Reverse geocoding to human-readable street/area address
+      // 2g. Fallback if hardware GPS is unresponsive (e.g. testing in emulator, indoor bunker)
+      if (!acquired && latitude === 0) {
         try {
-          const rev = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
-          if (rev && rev.length > 0) {
-            const r = rev[0];
-            const parts = [
-              r.name,
-              r.street,
-              r.district || r.subregion,
-              r.city,
-              r.region,
-            ].filter(Boolean);
-            setCurrentAddress(parts.join(', ') || `${r.city || ''}, ${r.region || ''}`);
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 3000);
+          const ipRes = await fetch('https://ipapi.co/json/', { signal: controller.signal });
+          clearTimeout(timer);
+          if (ipRes.ok) {
+            const ipData = await ipRes.json();
+            if (ipData && ipData.latitude && ipData.longitude) {
+              await applyCoordinates(Number(ipData.latitude), Number(ipData.longitude), 30);
+              acquired = true;
+            }
           }
-        } catch (revErr) {
-          console.warn('Reverse geocode error:', revErr);
-        }
+        } catch (_) {}
+      }
 
-        triggerHaptic('success');
+      if (!acquired && latitude === 0) {
+        setGpsError('GPS signal unavailable. Ensure Location is ON and tap Refresh.');
+        if (isManualPress) {
+          Alert.alert(
+            'GPS Signal Weak',
+            'Could not lock device GPS. Please ensure Location is enabled in Android settings and you have internet access.',
+            [
+              { text: 'Retry', onPress: () => obtainGps(true) },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              { text: 'Cancel', style: 'cancel' },
+            ]
+          );
+        }
       }
     } catch (err: any) {
       console.warn('GPS location error:', err);
       setGpsError(err.message || 'Unable to acquire GPS signal. Please ensure device location is enabled.');
+      if (isManualPress) {
+        Alert.alert('GPS Error', err.message || 'Unable to detect location. Please check device settings.');
+      }
     } finally {
       setGpsLoading(false);
     }
-  }, []);
+  }, [applyCoordinates, latitude]);
 
   useFocusEffect(
     useCallback(() => {
       loadSubstations();
-      obtainGps();
+      obtainGps(false);
     }, [loadSubstations, obtainGps])
   );
 
   useEffect(() => {
-    obtainGps();
+    obtainGps(false);
   }, [obtainGps]);
 
   // Compute Distance between User GPS and Selected Substation (Guarded against 0,0)
@@ -521,6 +634,8 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
           >
             {isInside
               ? `Geofence Status: In Range (${distanceFormatted} away • Max: 500m)`
+              : latitude === 0 || longitude === 0
+              ? `Geofence Status: Acquiring GPS... (Tap Fetch Live Location)`
               : `Geofence Status: Out of Range (${distanceFormatted} away • Max: 500m)`}
           </Text>
         </View>
@@ -646,7 +761,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                 <TouchableOpacity
                   delayPressIn={0}
                   style={styles.refreshGpsBtn}
-                  onPress={obtainGps}
+                  onPress={() => obtainGps(true)}
                   disabled={gpsLoading}
                   activeOpacity={0.7}
                 >
@@ -661,6 +776,22 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* GPS Diagnostic Alert Banner if GPS is disabled or permission missing */}
+            {gpsError && (latitude === 0 || longitude === 0) ? (
+              <TouchableOpacity
+                style={styles.gpsErrorBanner}
+                onPress={() => obtainGps(true)}
+                activeOpacity={0.8}
+              >
+                <AlertTriangle size={15} color="#DC2626" style={{ marginRight: 6 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.gpsErrorBannerText}>{gpsError}</Text>
+                  <Text style={styles.gpsErrorBannerAction}>Tap to Enable / Retry Now</Text>
+                </View>
+                <RefreshCw size={13} color="#DC2626" />
+              </TouchableOpacity>
+            ) : null}
 
             {/* Resolved Human-Readable Address Bar */}
             {currentAddress ? (
@@ -1648,6 +1779,31 @@ const styles = StyleSheet.create({
   },
   radarCardTablet: {
     flex: 1.25,
+  },
+  gpsErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 10,
+    gap: 6,
+  },
+  gpsErrorBannerText: {
+    fontSize: 11,
+    color: '#991B1B',
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+  gpsErrorBannerAction: {
+    fontSize: 10.5,
+    color: '#DC2626',
+    fontWeight: '800',
+    marginTop: 2,
+    textDecorationLine: 'underline',
   },
   addressBar: {
     flexDirection: 'row',
