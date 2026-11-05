@@ -166,23 +166,18 @@ export const AttendanceLogsScreen: React.FC = () => {
 
   const handleSelectStatus = (status: AttendanceStatusType) => {
     setSelectedStatus(status);
-    if (status === 'late') {
-      setFormRemarks('Auto-checked out at 06:00 PM (Shift End)');
-      setFormCheckIn('10:14 AM');
-      setFormCheckOut('06:00 PM');
-      setFormDuration('7h 46m');
-    } else if (status === 'half_day') {
-      setFormRemarks('Partial shift recorded (less than 6 hours completed)');
+    if (status === 'half_day') {
+      setFormRemarks('Marked Half Day (4.0 hrs)');
       setFormCheckIn('09:30 AM');
       setFormCheckOut('01:30 PM');
       setFormDuration('4h 00m');
     } else if (status === 'present') {
       setFormRemarks('Regular shift completed on schedule');
-      setFormCheckIn('09:30 AM');
+      setFormCheckIn('09:00 AM');
       setFormCheckOut('06:00 PM');
-      setFormDuration('8h 30m');
+      setFormDuration('9h 00m');
     } else if (status === 'absent') {
-      setFormRemarks('Unexcused or unpaid leave of absence');
+      setFormRemarks('Marked Absent by Admin');
       setFormCheckIn('--:--');
       setFormCheckOut('--:--');
       setFormDuration('--');
@@ -483,7 +478,7 @@ export const AttendanceLogsScreen: React.FC = () => {
             activeOpacity={0.85}
           >
             <Clock size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={styles.markLateBtnText}>+ Mark Late / Half Day</Text>
+            <Text style={styles.markLateBtnText}>+ Mark Attendance / Override</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -635,13 +630,6 @@ export const AttendanceLogsScreen: React.FC = () => {
                     </View>
 
                     <View style={{ width: 190, justifyContent: 'center' }}>
-                      {item.status === 'late' && (
-                        <View style={styles.statusLateBadge}>
-                          <Clock size={11} color="#D97706" style={{ marginRight: 4 }} />
-                          <Text style={styles.statusLateText}>Late</Text>
-                        </View>
-                      )}
-
                       {(item.status === 'half_day' || item.isHalfDay) && (
                         <View style={styles.statusHalfDayBadge}>
                           <Clock size={11} color="#EA580C" style={{ marginRight: 4 }} />
@@ -649,7 +637,7 @@ export const AttendanceLogsScreen: React.FC = () => {
                         </View>
                       )}
 
-                      {item.status === 'present' && !item.isHalfDay && (
+                      {(item.status === 'present' || item.status === 'late') && !item.isHalfDay && (
                         <View style={styles.statusPresentBadge}>
                           <CheckCircle2 size={11} color="#059669" style={{ marginRight: 4 }} />
                           <Text style={styles.statusPresentText}>Present (P)</Text>
@@ -776,7 +764,7 @@ export const AttendanceLogsScreen: React.FC = () => {
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={styles.adjustModalTitle}>Adjust Attendance Status</Text>
                 <Text style={styles.adjustModalSub}>
-                  Mark Late Arrival, Half Day, or Present for field technicians
+                  Admin Override: Mark Present, Half Day, or Absent for employees
                 </Text>
               </View>
               <TouchableOpacity delayPressIn={0} onPress={() => setShowAdjustModal(false)}>

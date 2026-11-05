@@ -149,22 +149,32 @@ class ReportService:
                     att_rec = emp_att_map.get(d_str)
                     has_checkin = False
                     is_half = False
+                    is_absent = False
                     if att_rec and isinstance(att_rec, dict):
                         ci = att_rec.get("checkIn")
-                        st = str(att_rec.get("status") or "").lower()
-                        shift_st = str(att_rec.get("shiftStatus") or "").lower()
-                        is_hd = bool(att_rec.get("isHalfDay"))
+                        st = str(att_rec.get("status") or "").lower().replace("-", "_")
+                        shift_st = str(att_rec.get("shiftStatus") or "").lower().replace("-", "_")
                         cat = str(att_rec.get("attendanceCategory") or "").upper()
+                        is_hd = bool(att_rec.get("isHalfDay")) or cat == "HALF_DAY" or st in ("half_day", "halfday", "hd") or shift_st in ("half_day", "halfday", "hd")
+                        is_admin_override = bool(att_rec.get("isAdminOverride") or att_rec.get("adminOverride"))
                         wm = att_rec.get("workingMinutes") or 0
 
-                        if is_hd or cat == "HALF_DAY" or st in ("half_day", "halfday", "hd") or shift_st in ("half_day", "halfday") or (ci and 0 < wm < 480):
+                        if st in ("absent", "a") or cat == "ABSENT":
+                            is_absent = True
+                        elif is_hd:
                             is_half = True
+                        elif is_admin_override and (st in ("p", "present") or cat == "PRESENT"):
                             has_checkin = True
+                        elif ci and (0 < wm < 480):
+                            is_half = True
                         elif ci or st in ["p", "present", "late", "on_time", "completed", "active"]:
                             has_checkin = True
 
-                    # Condition 2: Active or Admin-marked duty shift (Present / Half Day)
-                    if is_half:
+                    # Condition 2: Active or Admin-marked duty shift (Present / Half Day / Absent)
+                    if is_absent:
+                        status_code = "A"
+                        a_count += 1
+                    elif is_half:
                         status_code = "HD"
                         p_count += 1
                         hd_count += 1
@@ -713,7 +723,18 @@ class ReportService:
                 or str(l.get("status") or "").lower() in ("half_day", "half-day", "hd")
                 or str(l.get("shiftStatus") or "").lower() in ("half_day", "hd")
             )
-            disp_st = "HALF DAY (HD)" if is_hd_log else str(l.get("status", "P")).replace("_", " ").upper()
+            if is_hd_log:
+                disp_st = "HALF DAY (HD)"
+            elif str(l.get("status") or "").lower() in ("late", "completed", "present", "p", "active"):
+                disp_st = "PRESENT (P)"
+            elif str(l.get("status") or "").lower() in ("absent", "a"):
+                disp_st = "ABSENT (A)"
+            elif str(l.get("status") or "").lower() in ("weekly_off", "wo"):
+                disp_st = "WEEKLY OFF (WO)"
+            elif str(l.get("status") or "").lower() in ("public_holiday", "ph"):
+                disp_st = "PUBLIC HOLIDAY (PH)"
+            else:
+                disp_st = str(l.get("status", "P")).replace("_", " ").upper()
             ws.cell(row=row, column=9, value=disp_st)
             ws.cell(row=row, column=10, value=l.get("distanceTraveledFormatted", "0 m"))
             dist_m = (l.get("checkIn") or {}).get("distanceMeters")

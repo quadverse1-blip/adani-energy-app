@@ -64,7 +64,7 @@ const ROLE_OPTIONS: { label: string; value: UserRole }[] = [
   { label: 'Operations Admin', value: 'admin' },
 ];
 
-const SHIFT_STATUS_OPTIONS = ['Present', 'Late', 'Absent', 'Completed', 'Half Day'];
+const SHIFT_STATUS_OPTIONS = ['Present', 'Absent', 'Half Day'];
 
 export const EmployeesScreen: React.FC = () => {
   const insets = useSafeAreaInsets();

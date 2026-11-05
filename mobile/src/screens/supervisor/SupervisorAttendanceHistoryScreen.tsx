@@ -32,7 +32,7 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { AppBackButton } from '../../components/common/AppBackButton';
 
 type PeriodType = 'Daily' | 'Weekly' | 'Monthly';
-type AttendanceStatusType = 'half_day' | 'late' | 'present' | 'absent';
+type AttendanceStatusType = 'half_day' | 'present' | 'absent';
 
 interface SupervisorLogItem {
   id: string;
@@ -83,8 +83,8 @@ const FALLBACK_SUPERVISOR_LOGS: SupervisorLogItem[] = [
     checkInTime: '09:15 AM',
     checkOutTime: '06:00 PM',
     duration: '8h 45m',
-    status: 'late',
-    adminRemarks: 'Late checked-in arrival',
+    status: 'present',
+    adminRemarks: 'Shift completed on schedule',
   },
   {
     id: 'att_suresh_19',
@@ -165,8 +165,8 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
           let st: AttendanceStatusType = 'present';
           const s = (item.status || '').toLowerCase();
           if (s === 'half_day' || s === 'half-day' || item.isHalfDay || item.attendanceCategory === 'HALF_DAY') st = 'half_day';
-          else if (s === 'late') st = 'late';
-          else if (s === 'absent') st = 'absent';
+          else if (s === 'absent' || item.attendanceCategory === 'ABSENT') st = 'absent';
+          else st = 'present';
 
           return {
             id: item.id || Math.random().toString(),
@@ -452,13 +452,6 @@ export const SupervisorAttendanceHistoryScreen: React.FC = () => {
                         <View style={styles.statusHalfDayBadge}>
                           <Clock size={12} color="#C2410C" style={{ marginRight: 5 }} />
                           <Text style={styles.statusHalfDayText}>Half Day</Text>
-                        </View>
-                      )}
-
-                      {item.status === 'late' && (
-                        <View style={styles.statusLateBadge}>
-                          <Clock size={12} color="#B45309" style={{ marginRight: 5 }} />
-                          <Text style={styles.statusLateText}>Late</Text>
                         </View>
                       )}
 

@@ -124,17 +124,23 @@ class SalaryService:
                     ci = att_rec.get("checkIn")
                     st = str(att_rec.get("status") or "").lower().replace("-", "_")
                     shift_st = str(att_rec.get("shiftStatus") or "").lower().replace("-", "_")
-                    is_hd_flag = bool(att_rec.get("isHalfDay"))
+                    cat = str(att_rec.get("attendanceCategory") or "").upper()
+                    is_hd_flag = bool(att_rec.get("isHalfDay")) or cat == "HALF_DAY" or st in ("half_day", "halfday", "hd") or shift_st in ("half_day", "halfday", "hd")
+                    is_admin_override = bool(att_rec.get("isAdminOverride") or att_rec.get("adminOverride"))
                     working_mins = att_rec.get("workingMinutes") or 0
 
-                    is_half = (
-                        is_hd_flag or
-                        st in ("half_day", "halfday") or
-                        shift_st in ("half_day", "halfday") or
-                        (ci and 0 < working_mins < 480)
-                    )
-
-                    if is_half:
+                    if st in ("absent", "a") or cat == "ABSENT":
+                        # Final approved status is Absent (even if previous punch existed)
+                        absent_days += 1
+                    elif is_hd_flag:
+                        # Final approved status is Half Day
+                        half_days += 1
+                        present_days += 1
+                    elif is_admin_override and (st in ("p", "present") or cat == "PRESENT"):
+                        # Admin override to full Present: strictly preserved, no automatic demotion
+                        present_days += 1
+                    elif ci and (0 < working_mins < 480):
+                        # Automatic calculation without admin override: partial hours -> half day
                         half_days += 1
                         present_days += 1
                     elif ci or st in ["p", "present", "late", "completed", "active"]:

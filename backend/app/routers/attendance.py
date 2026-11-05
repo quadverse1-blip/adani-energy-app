@@ -267,12 +267,26 @@ async def get_attendance_history(
             r["attendanceCategory"] = "HALF_DAY"
         records.append(r)
     
-    # Compute KPI summaries for this month
+    # Compute KPI summaries for this month (Only Present, Half Day, Absent, WO, PH)
     total_days = len(records)
-    present_count = sum(1 for r in records if r.get("status") in ["present", "P"])
-    late_count = sum(1 for r in records if r.get("status") == "late")
-    half_day_count = sum(1 for r in records if r.get("isHalfDay") or r.get("attendanceCategory") == "HALF_DAY" or r.get("status") in ["half_day", "half-day", "hd"])
-    absent_count = sum(1 for r in records if r.get("status") in ["absent", "A"])
+    half_day_count = sum(
+        1 for r in records
+        if r.get("isHalfDay")
+        or r.get("attendanceCategory") == "HALF_DAY"
+        or str(r.get("status") or "").lower() in ["half_day", "half-day", "hd"]
+    )
+    present_count = sum(
+        1 for r in records
+        if (
+            (r.get("status") in ["present", "P", "late"] or r.get("attendanceCategory") == "PRESENT")
+            and not (r.get("isHalfDay") or r.get("attendanceCategory") == "HALF_DAY" or str(r.get("status") or "").lower() in ["half_day", "half-day", "hd"])
+        )
+    )
+    absent_count = sum(
+        1 for r in records
+        if str(r.get("status") or "").lower() in ["absent", "a"]
+        or r.get("attendanceCategory") == "ABSENT"
+    )
     total_minutes = sum(r.get("workingMinutes", 0) for r in records)
     total_hours = round(total_minutes / 60.0, 1)
 
@@ -280,7 +294,7 @@ async def get_attendance_history(
         "summary": {
             "totalWorkingDays": 26,
             "presentDays": present_count,
-            "lateDays": late_count,
+            "lateDays": 0,
             "halfDays": half_day_count,
             "absentDays": absent_count,
             "totalHours": total_hours
@@ -473,14 +487,22 @@ async def get_all_attendance_logs(
                 or r.get("shiftStatus") in ("half_day", "hd")
                 or str(r.get("status") or "").lower() in ("half_day", "half-day", "hd")
             )
-            status_val = str(r.get("status") or "present")
-            if status_val == "half-day":
-                status_val = "half_day"
+            raw_st = str(r.get("status") or "present").lower().replace("-", "_")
             if is_half_day:
                 status_val = "half_day"
+            elif raw_st in ("late", "completed", "present", "p", "active"):
+                status_val = "present"
+            elif raw_st in ("absent", "a"):
+                status_val = "absent"
+            elif raw_st in ("weekly_off", "wo"):
+                status_val = "weekly_off"
+            elif raw_st in ("public_holiday", "ph"):
+                status_val = "public_holiday"
+            else:
+                status_val = raw_st
+
             remarks_val = r.get("adminRemarks") or r.get("remarks")
-            if not remarks_val and status_val == "late":
-                remarks_val = "Auto-checked out at 06:00 PM (Shift End)"
+            is_override = bool(r.get("isAdminOverride") or r.get("adminOverride"))
 
             co_site_name = r.get("checkOutSiteName") or (co_dict.get("siteName") if (co_dict and co_dict.get("time")) else None) or "--"
             photo_url = ci_dict.get("photoUrl") or r.get("photoUrl") or None
@@ -503,8 +525,9 @@ async def get_all_attendance_logs(
                 "distanceTraveled": dist_str,
                 "status": status_val,
                 "isHalfDay": is_half_day,
-                "attendanceCategory": "HALF_DAY" if is_half_day else None,
+                "attendanceCategory": "HALF_DAY" if is_half_day else "PRESENT",
                 "adminRemarks": remarks_val,
+                "isAdminOverride": is_override,
                 "latitude": ci_lat,
                 "longitude": ci_lon,
                 "checkInLatitude": ci_lat,
@@ -561,40 +584,44 @@ def _process_admin_attendance_update(
     emp_code = emp.get("employeeId", "")
     emp_name = emp.get("name", "Field Technician")
 
-    # 4. Status mapping: Keep fundamental statuses P, A, WO, PH strictly unchanged.
-    # Half Day is handled as a separate attendance category with underlying status 'present'.
-    st_clean = str(status_input).strip().lower().replace("-", "_")
+    # 4. Status mapping: Strictly Present, Absent, Half Day (retaining WO and PH)
+    st_clean = str(status_input).strip().lower().replace("-", "_").replace(" ", "_")
     is_half_day = False
     
     if st_clean in ["half_day", "halfday", "hd"] or is_half_day_flag is True or str(attendance_category).upper() == "HALF_DAY":
-        canonical_status = "present"
+        canonical_status = "half_day"
         is_half_day = True
         resolved_category = "HALF_DAY"
         resolved_shift_status = "half_day"
+        shift_status_label = "Half Day"
     elif st_clean in ["p", "present"]:
         canonical_status = "present"
         is_half_day = False
         resolved_category = "PRESENT"
         resolved_shift_status = "completed"
+        shift_status_label = "Present"
     elif st_clean in ["a", "absent"]:
         canonical_status = "absent"
         is_half_day = False
         resolved_category = "ABSENT"
         resolved_shift_status = "absent"
+        shift_status_label = "Absent"
     elif st_clean in ["wo", "weekly_off"]:
         canonical_status = "weekly_off"
         is_half_day = False
         resolved_category = "WEEKLY_OFF"
         resolved_shift_status = "off"
+        shift_status_label = "Weekly Off"
     elif st_clean in ["ph", "public_holiday"]:
         canonical_status = "public_holiday"
         is_half_day = False
         resolved_category = "PUBLIC_HOLIDAY"
         resolved_shift_status = "holiday"
+        shift_status_label = "Public Holiday"
     else:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid attendance status '{status_input}'. Supported statuses are P (Present), Half Day, A (Absent), WO (Weekly Off), and PH (Public Holiday)."
+            detail=f"Invalid attendance status '{status_input}'. Supported statuses are Present (P), Half Day (HD), and Absent (A)."
         )
 
     # 5. Resolve site details
@@ -604,7 +631,7 @@ def _process_admin_attendance_update(
     site_lat = raw_site.get("latitude", 21.1926) if raw_site else 21.1926
     site_lon = raw_site.get("longitude", 72.7997) if raw_site else 72.7997
 
-    # 6. Locate existing attendance record
+    # 6. Conflict Prevention: Locate existing attendance record (Strictly ONE per employee per date)
     target_rec = None
     if record_id and record_id in db.attendance:
         target_rec = db.attendance[record_id]
@@ -619,17 +646,19 @@ def _process_admin_attendance_update(
 
     now_iso = datetime.utcnow().isoformat()
 
-    # 7. Build punch details
+    # 7. Admin Override punches & working minutes
     if is_half_day:
         working_minutes = 240
-        check_in = {
+        existing_ci = target_rec.get("checkIn") if target_rec else None
+        check_in = existing_ci or {
             "time": f"{date_str}T09:00:00Z",
             "timeIST": "09:00 AM",
             "latitude": site_lat,
             "longitude": site_lon,
             "accuracy": 10.0,
             "siteName": resolved_site_name,
-            "remarks": admin_remarks or f"Marked Half Day by {actor_name}"
+            "remarks": admin_remarks or f"Marked Half Day by {actor_name}",
+            "isRealPunch": False
         }
         check_out = {
             "time": f"{date_str}T13:00:00Z",
@@ -642,14 +671,16 @@ def _process_admin_attendance_update(
         }
     elif canonical_status == "present":
         working_minutes = 540
-        check_in = {
+        existing_ci = target_rec.get("checkIn") if target_rec else None
+        check_in = existing_ci or {
             "time": f"{date_str}T09:00:00Z",
             "timeIST": "09:00 AM",
             "latitude": site_lat,
             "longitude": site_lon,
             "accuracy": 10.0,
             "siteName": resolved_site_name,
-            "remarks": admin_remarks or f"Marked Present by {actor_name}"
+            "remarks": admin_remarks or f"Marked Present by {actor_name}",
+            "isRealPunch": False
         }
         check_out = {
             "time": f"{date_str}T18:00:00Z",
@@ -661,6 +692,7 @@ def _process_admin_attendance_update(
             "remarks": "Shift Concluded"
         }
     else:
+        # Absent / WO / PH
         working_minutes = 0
         check_in = None
         check_out = None
@@ -671,6 +703,7 @@ def _process_admin_attendance_update(
         new_id = f"att_{uuid.uuid4().hex[:8]}"
         target_rec = {
             "_id": new_id,
+            "id": new_id,
             "employeeId": emp_primary_id,
             "technicianCode": emp_code,
             "technicianName": emp_name,
@@ -682,10 +715,15 @@ def _process_admin_attendance_update(
             "attendanceCategory": resolved_category,
             "shiftStatus": resolved_shift_status,
             "workingMinutes": working_minutes,
+            "workingHoursFormatted": f"{working_minutes // 60} hrs {working_minutes % 60} mins",
             "checkIn": check_in,
             "checkOut": check_out,
             "adminRemarks": display_remarks,
-            "createdAt": now_iso
+            "isAdminOverride": True,
+            "adminOverride": True,
+            "createdAt": now_iso,
+            "updatedAt": now_iso,
+            "updatedBy": actor_name
         }
         db.attendance[new_id] = target_rec
         db.set_firestore_document("attendance", new_id, target_rec)
@@ -695,6 +733,7 @@ def _process_admin_attendance_update(
         target_rec["attendanceCategory"] = resolved_category
         target_rec["shiftStatus"] = resolved_shift_status
         target_rec["workingMinutes"] = working_minutes
+        target_rec["workingHoursFormatted"] = f"{working_minutes // 60} hrs {working_minutes % 60} mins"
         target_rec["checkIn"] = check_in
         target_rec["checkOut"] = check_out
         target_rec["siteId"] = assigned_site_id
@@ -702,10 +741,21 @@ def _process_admin_attendance_update(
         target_rec["technicianName"] = target_rec.get("technicianName") or emp_name
         target_rec["technicianCode"] = target_rec.get("technicianCode") or emp_code
         target_rec["adminRemarks"] = display_remarks
+        target_rec["isAdminOverride"] = True
+        target_rec["adminOverride"] = True
         target_rec["updatedAt"] = now_iso
         target_rec["updatedBy"] = actor_name
         db.attendance[target_rec["_id"]] = target_rec
         db.set_firestore_document("attendance", target_rec["_id"], target_rec)
+
+    # 8. Centralized Synchronization: Update employee shiftStatus if today's record was updated
+    from app.utils.datetime_utils import get_today_ist_str
+    if date_str == get_today_ist_str():
+        emp["shiftStatus"] = shift_status_label
+        db.employees[emp_primary_id] = emp
+        if hasattr(db, "_raw_employees"):
+            db._raw_employees[emp_primary_id] = emp
+        db.set_firestore_document("employees", emp_primary_id, emp)
 
     return target_rec
 

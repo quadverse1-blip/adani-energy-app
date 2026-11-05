@@ -554,6 +554,23 @@ async def update_employee(
         emp["assignedSiteId"] = None
         emp["assignedSiteIds"] = []
 
+    # Centralized Attendance Synchronization: Link Admin Employee Attendance
+    if "shiftStatus" in update_dict and update_dict["shiftStatus"]:
+        try:
+            from app.routers.attendance import _process_admin_attendance_update
+            from app.utils.datetime_utils import get_today_ist_str
+            st_val = str(update_dict["shiftStatus"]).strip()
+            actor_name = token_data.get("name", "Operations Admin")
+            _process_admin_attendance_update(
+                employee_id=emp["_id"],
+                date_str=get_today_ist_str(),
+                status_input=st_val,
+                admin_remarks=f"Marked {st_val} via Employee Attendance Management by {actor_name}",
+                actor_name=actor_name
+            )
+        except Exception as err:
+            logger.warning(f"Notice: Failed to auto-sync today attendance on employee shiftStatus update: {err}")
+
     db.employees[emp["_id"]] = emp
     if hasattr(db, "_raw_employees"):
         db._raw_employees[emp["_id"]] = emp

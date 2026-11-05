@@ -36,12 +36,13 @@ class AttendanceResponse(BaseModel):
     photoUrl: Optional[str] = None
     checkIn: Optional[AttendancePunchRecord] = None
     checkOut: Optional[AttendancePunchRecord] = None
-    status: str  # present, late, half_day, absent, weekly_off
+    status: str  # present, half_day, absent, weekly_off, public_holiday
     isHalfDay: Optional[bool] = False
     attendanceCategory: Optional[str] = None
     workingMinutes: int
     workingHoursFormatted: Optional[str] = None
     adminRemarks: Optional[str] = None
+    isAdminOverride: Optional[bool] = False
 
 class AdjustAttendanceRequest(BaseModel):
     recordId: Optional[str] = None

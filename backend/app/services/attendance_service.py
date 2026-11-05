@@ -8,7 +8,9 @@ from app.utils.datetime_utils import (
     evaluate_check_in_punctuality,
     is_early_departure,
     calculate_working_hours_status,
-    format_datetime_ist
+    format_datetime_ist,
+    get_today_ist_str,
+    get_now_ist
 )
 
 class AttendanceService:
@@ -24,7 +26,7 @@ class AttendanceService:
             return record
 
         now_utc = datetime.utcnow()
-        ist_now = now_utc + timedelta(hours=5, minutes=30)
+        ist_now = get_now_ist()
         today_ist_str = ist_now.strftime("%Y-%m-%d")
         record_date = str(record.get("date") or "")
 
@@ -62,7 +64,11 @@ class AttendanceService:
 
         h = working_minutes // 60
         m = working_minutes % 60
+        
+        # Conflict Prevention: If Admin override is active, keep admin's approved status
         initial_status = record.get("status", "present")
+        is_admin_override = bool(record.get("isAdminOverride") or record.get("adminOverride"))
+        is_hd = bool(record.get("isHalfDay") or record.get("attendanceCategory") == "HALF_DAY" or str(initial_status).lower() in ("half_day", "halfday", "hd"))
 
         record["checkOut"] = {
             "time": auto_co_utc_str,
@@ -75,40 +81,16 @@ class AttendanceService:
         }
         record["workingMinutes"] = working_minutes
         record["workingHoursFormatted"] = f"{h} hrs {m} mins"
-        record["adminRemarks"] = "Auto-checked out at 06:00 PM (Shift End)"
+        if not record.get("adminRemarks"):
+            record["adminRemarks"] = "Auto-checked out at 06:00 PM (Shift End)"
         record["status"] = initial_status
+        record["isHalfDay"] = is_hd
+        record["attendanceCategory"] = "HALF_DAY" if is_hd else "PRESENT"
         record["updatedAt"] = now_utc.isoformat() + "Z"
 
         db.save_attendance(record)
         return record
-        try:
-            co_dt = datetime.fromisoformat(f"{record_date}T12:30:00")
-            working_seconds = max(0, (co_dt - ci_dt).total_seconds())
-            working_minutes = int(working_seconds // 60)
-        except Exception:
-            working_minutes = int(record.get("workingMinutes") or 480)
 
-        h = working_minutes // 60
-        m = working_minutes % 60
-        initial_status = record.get("status", "present")
-
-        record["checkOut"] = {
-            "time": auto_co_utc_str,
-            "timeIST": "06:00 PM",
-            "latitude": record["checkIn"].get("latitude", 18.5204),
-            "longitude": record["checkIn"].get("longitude", 73.8567),
-            "accuracy": 10.0,
-            "remarks": "Auto-checked out at 06:00 PM (Shift End)",
-            "isAutoCheckedOut": True
-        }
-        record["workingMinutes"] = working_minutes
-        record["workingHoursFormatted"] = f"{h} hrs {m} mins"
-        record["adminRemarks"] = "Auto-checked out at 06:00 PM (Shift End)"
-        record["status"] = initial_status
-        record["updatedAt"] = now_utc.isoformat() + "Z"
-
-        db.save_attendance(record)
-        return record
     @staticmethod
     def process_check_in(
         user: dict,
@@ -120,29 +102,28 @@ class AttendanceService:
         photo_url: Optional[str] = None
     ) -> dict:
         emp_id = user["id"]
-        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+        today_str = get_today_ist_str()
         
         # 1. Validate employee
         employee = db.get_employee(emp_id)
         if not employee:
             raise HTTPException(status_code=404, detail="Employee not found")
 
-        # 2. Check if technician has already checked in today (re-check in not allowed)
+        # 2. Conflict Prevention: Check if technician has an existing record for today (in IST)
         existing = db.get_today_attendance(emp_id, today_str)
         if existing and existing.get("checkIn"):
-            if not existing.get("checkOut"):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="You are already checked in for today. Active shift is currently in progress."
-                )
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="You have already completed your shift check-in for today. Re-check in is not allowed."
-                )
-
-        # 4. Photo is optional for field technicians (face photo is not compulsory)
-        # photo_url is optional and may be None
+            is_real = existing.get("checkIn", {}).get("isRealPunch", not existing.get("isAdminOverride"))
+            if is_real:
+                if not existing.get("checkOut"):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="You are already checked in for today. Active shift is currently in progress."
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="You have already completed your shift check-in for today. Re-check in is not allowed."
+                    )
 
         # 5. Validate Site
         site = db.get_site(site_id)
@@ -166,10 +147,28 @@ class AttendanceService:
                 detail=f"Outside Substation Geofence. You are {distance:.1f} meters away from {site['name']} (allowed radius: {site.get('radiusMeters', 500)}m)."
             )
 
-        # 8. Apply shift timing rules
+        # 8. Apply shift timing rules in Indian Standard Time (IST)
         now = datetime.utcnow()
-        initial_status = evaluate_check_in_punctuality(now)
         time_ist = format_datetime_ist(now)
+
+        # Conflict Prevention: Check if Admin previously marked/adjusted today's attendance
+        is_admin_override = bool(existing.get("isAdminOverride") or existing.get("adminOverride")) if existing else False
+        if is_admin_override:
+            # Preserves Admin override: Admin changes MUST NOT be overwritten by automatic check-in rules!
+            initial_status = existing.get("status", "present")
+            is_half_day = bool(existing.get("isHalfDay") or existing.get("attendanceCategory") == "HALF_DAY")
+            resolved_category = existing.get("attendanceCategory") or ("HALF_DAY" if is_half_day else "PRESENT")
+            resolved_shift_status = existing.get("shiftStatus") or ("half_day" if is_half_day else "present")
+            initial_remarks = existing.get("adminRemarks") or remarks or ""
+        else:
+            # Automatic Check-in Rules:
+            # Up to 10:30 AM IST (including 9:00 AM to 10:30 AM) -> Present (P)
+            # After 10:30 AM IST -> Half Day (HD)
+            initial_status = evaluate_check_in_punctuality(now)
+            is_half_day = (initial_status == "half_day")
+            resolved_category = "HALF_DAY" if is_half_day else "PRESENT"
+            resolved_shift_status = "half_day" if is_half_day else "present"
+            initial_remarks = remarks or ("Auto-marked Half Day (Check-in after 10:30 AM IST)" if is_half_day else "")
 
         # 9. Compulsory check-in photo enforcement for technician
         clean_photo_url = photo_url.strip() if photo_url and photo_url.strip() else None
@@ -190,18 +189,30 @@ class AttendanceService:
                 photo_path = saved.get("photoPath")
                 firebase_url = saved.get("firebaseUrl")
             except Exception as e:
-                logger.warning(f"Auto-process base64 photo notice: {e}")
+                pass
 
-        # 10. Create attendance record
-        record_id = f"att_{uuid.uuid4().hex[:12]}"
-        record = {
-            "_id": record_id,
-            "id": record_id,
-            "employeeId": emp_id,
-            "employeeName": employee.get("name"),
+        # 10. Conflict Prevention: Single attendance record per employee per date
+        if existing:
+            record = existing
+            record_id = record.get("_id") or record.get("id")
+        else:
+            record_id = f"att_{uuid.uuid4().hex[:12]}"
+            record = {
+                "_id": record_id,
+                "id": record_id,
+                "employeeId": emp_id,
+                "technicianCode": employee.get("employeeId", ""),
+                "technicianName": employee.get("name"),
+                "date": today_str,
+                "createdAt": now.isoformat() + "Z"
+            }
+
+        # If record was pre-marked by Admin without real punch, clear synthetic checkout for active shift
+        new_checkout = None if (existing and not existing.get("checkIn", {}).get("isRealPunch")) else (record.get("checkOut") if existing else None)
+
+        record.update({
             "siteId": site_id,
             "siteName": site.get("name"),
-            "date": today_str,
             "photoUrl": clean_photo_url,
             "photoPath": photo_path,
             "firebaseUrl": firebase_url,
@@ -213,15 +224,19 @@ class AttendanceService:
                 "accuracy": accuracy,
                 "distanceMeters": distance,
                 "photoUrl": clean_photo_url,
-                "remarks": remarks or ""
+                "remarks": remarks or "",
+                "isRealPunch": True
             },
-            "checkOut": None,
+            "checkOut": new_checkout,
             "status": initial_status,
-            "workingMinutes": 0,
-            "workingHoursFormatted": "0 hrs 0 mins",
-            "createdAt": now.isoformat() + "Z",
+            "isHalfDay": is_half_day,
+            "attendanceCategory": resolved_category,
+            "shiftStatus": resolved_shift_status,
+            "workingMinutes": record.get("workingMinutes") or (240 if is_half_day else 0),
+            "workingHoursFormatted": record.get("workingHoursFormatted") or ("4 hrs 0 mins" if is_half_day else "0 hrs 0 mins"),
+            "adminRemarks": initial_remarks,
             "updatedAt": now.isoformat() + "Z"
-        }
+        })
 
         db.save_attendance(record)
         return record
@@ -236,7 +251,7 @@ class AttendanceService:
         force_override: bool = False
     ) -> dict:
         emp_id = user["id"]
-        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+        today_str = get_today_ist_str()
         
         record = db.get_today_attendance(emp_id, today_str)
         if not record or not record.get("checkIn"):
@@ -256,15 +271,23 @@ class AttendanceService:
         
         # Check early departure rule (Technician cannot checkout before 18:00 unless supervisor or override)
         if is_early_departure(now) and user_role == "technician" and not force_override:
-            # We allow checkout with warning/authorization
             pass
 
         check_in_time_str = record["checkIn"]["time"].replace("Z", "")
         check_in_dt = datetime.fromisoformat(check_in_time_str)
 
+        is_admin_override = bool(record.get("isAdminOverride") or record.get("adminOverride"))
         hours, minutes, final_status = calculate_working_hours_status(
-            check_in_dt, now, record.get("status", "present")
+            check_in_dt, now, record.get("status", "present"), is_admin_override=is_admin_override
         )
+
+        is_hd = bool(
+            record.get("isHalfDay")
+            or record.get("attendanceCategory") == "HALF_DAY"
+            or final_status == "half_day"
+        )
+        resolved_category = "HALF_DAY" if is_hd else "PRESENT"
+        resolved_shift_status = "half_day" if is_hd else "completed"
 
         record["checkOut"] = {
             "time": now.isoformat() + "Z",
@@ -279,9 +302,14 @@ class AttendanceService:
         m = minutes % 60
         record["workingHoursFormatted"] = f"{h} hrs {m} mins"
         record["status"] = final_status
+        record["isHalfDay"] = is_hd
+        record["attendanceCategory"] = resolved_category
+        record["shiftStatus"] = resolved_shift_status
         record["updatedAt"] = now.isoformat() + "Z"
 
         db.save_attendance(record)
         return record
+
+attendance_service = AttendanceService()
 
 attendance_service = AttendanceService()

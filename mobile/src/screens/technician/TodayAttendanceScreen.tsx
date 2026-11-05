@@ -200,24 +200,20 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
       };
     }
     const rawStatus = (effectiveRecord?.status || '').toLowerCase().replace('-', '_');
-    if (rawStatus === 'half_day') {
+    const isHalfDay = Boolean(
+      effectiveRecord?.isHalfDay ||
+      effectiveRecord?.attendanceCategory === 'HALF_DAY' ||
+      rawStatus === 'half_day' ||
+      rawStatus === 'hd'
+    );
+    if (isHalfDay) {
       return {
         label: 'Half Day',
         bg: '#D97706', // Vibrant amber/orange
         badgeBg: '#FEF3C7',
         badgeBorder: '#F59E0B',
         badgeText: '#B45309',
-        isLate: true,
-      };
-    }
-    if (rawStatus === 'late') {
-      return {
-        label: 'Late',
-        bg: '#D97706', // Vibrant amber/orange
-        badgeBg: '#FEF3C7',
-        badgeBorder: '#F59E0B',
-        badgeText: '#B45309',
-        isLate: true,
+        isLate: false,
       };
     }
     if (effectiveStatus === 'active' || (!checkOut && checkIn)) {
