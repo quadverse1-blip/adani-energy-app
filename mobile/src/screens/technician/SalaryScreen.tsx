@@ -104,7 +104,13 @@ export const SalaryScreen: React.FC = () => {
       const rawFileName =
         slip?.fileName ||
         `Adani_Salary_Slip_${targetEmpId}_${selectedMonth}_${selectedYear}.pdf`;
-      const filename = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      let filename = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      if (!filename.toLowerCase().endsWith('.pdf')) {
+        filename = filename.replace(/\.[^/.]+$/, '') + '.pdf';
+        if (!filename.toLowerCase().endsWith('.pdf')) {
+          filename += '.pdf';
+        }
+      }
 
       if (Platform.OS === 'web') {
         const res = await salaryService.downloadPayslipFile(targetEmpId, selectedMonth, selectedYear, filename);
@@ -145,14 +151,14 @@ export const SalaryScreen: React.FC = () => {
       const canShare = await Sharing.isAvailableAsync();
       if (canShare && downloadedUri) {
         await Sharing.shareAsync(downloadedUri, {
-          mimeType: filename.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream',
+          mimeType: 'application/pdf',
           dialogTitle: `Adani Salary Slip - ${slip?.employeeName || user?.name || 'Employee'} (${MONTH_NAMES[selectedMonth - 1]} ${selectedYear})`,
           UTI: 'com.adobe.pdf',
         });
       } else if (downloadedUri) {
         Alert.alert(
           'Salary Slip Downloaded',
-          `Successfully saved ${filename} to your device.\n\nPath: ${downloadedUri}`
+          `Successfully saved ${filename} as an official PDF to your device.\n\nPath: ${downloadedUri}`
         );
       }
     } catch (err: any) {
@@ -169,9 +175,13 @@ export const SalaryScreen: React.FC = () => {
     }
   };
 
-  const documentName =
+  let rawDocName =
     slip?.fileName ||
     `Adani_Salary_Slip_${MONTH_NAMES[selectedMonth - 1]}_${selectedYear}.pdf`;
+  if (!rawDocName.toLowerCase().endsWith('.pdf')) {
+    rawDocName = rawDocName.replace(/\.[^/.]+$/, '') + '.pdf';
+  }
+  const documentName = rawDocName;
 
   const isDocumentAvailable = Boolean(slip?.hasUploadedDocument || slip?.fileName || slip?.documentUrl || slip?.payslipPdfUrl);
 

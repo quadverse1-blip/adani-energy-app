@@ -145,17 +145,26 @@ export const CompensationScreen: React.FC = () => {
     );
   }, [employees, selectedEmpId]);
 
-  // Pick Document (PDF, Image, etc.)
+  // Pick Document (Strictly PDF)
   const handlePickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
+        type: ['application/pdf'],
         copyToCacheDirectory: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
         let base64Data: string | undefined = undefined;
+
+        // Ensure filename always cleanly ends with .pdf
+        let cleanName = file.name || `Adani_Salary_Slip_${selectedEmpId}_${selectedMonth}_${selectedYear}.pdf`;
+        if (!cleanName.toLowerCase().endsWith('.pdf')) {
+          cleanName = cleanName.replace(/\.[^/.]+$/, '') + '.pdf';
+          if (!cleanName.toLowerCase().endsWith('.pdf')) {
+            cleanName += '.pdf';
+          }
+        }
 
         if (Platform.OS === 'web') {
           if ((file as any).file) {
@@ -185,21 +194,28 @@ export const CompensationScreen: React.FC = () => {
             } catch {}
           }
         } else {
-          // Native Android & iOS: read as base64 using expo-file-system
+          // Native Android & iOS in Expo SDK 58: read file bytes and convert to base64
           try {
-            const f = new ExpoFile(file.uri);
-            if (typeof f.base64 === 'function') {
-              base64Data = await f.base64();
+            const expoFile = new ExpoFile(file.uri);
+            let uint8: Uint8Array | null = null;
+            if (typeof (expoFile as any).bytes === 'function') {
+              uint8 = await (expoFile as any).bytes();
+            } else if (typeof expoFile.arrayBuffer === 'function') {
+              const buf = await expoFile.arrayBuffer();
+              uint8 = new Uint8Array(buf);
             }
-          } catch {}
 
-          if (!base64Data) {
-            try {
-              const FileSystemLegacy = require('expo-file-system/legacy');
-              if (FileSystemLegacy && typeof FileSystemLegacy.readAsStringAsync === 'function') {
-                base64Data = await FileSystemLegacy.readAsStringAsync(file.uri, { encoding: 'base64' });
+            if (uint8 && uint8.length > 0) {
+              let binary = '';
+              const chunkSize = 8192;
+              for (let i = 0; i < uint8.length; i += chunkSize) {
+                const sub = uint8.subarray(i, Math.min(i + chunkSize, uint8.length));
+                binary += String.fromCharCode.apply(null, Array.from(sub));
               }
-            } catch {}
+              base64Data = typeof btoa === 'function' ? btoa(binary) : undefined;
+            }
+          } catch (err) {
+            console.log('Error reading native ExpoFile bytes:', err);
           }
 
           if (!base64Data) {
@@ -214,12 +230,14 @@ export const CompensationScreen: React.FC = () => {
                 };
                 reader.readAsDataURL(blob);
               });
-            } catch {}
+            } catch (blobErr) {
+              console.log('Error reading blob via fetch:', blobErr);
+            }
           }
         }
 
         setPickedFile({
-          name: file.name,
+          name: cleanName,
           size: file.size,
           uri: file.uri,
           base64: base64Data,
@@ -246,6 +264,11 @@ export const CompensationScreen: React.FC = () => {
       selectedEmployee.id ||
       (selectedEmployee as any)._id;
 
+    let targetFileName = pickedFile?.name || `Adani_Salary_Slip_${empId}_${selectedMonth}_${selectedYear}.pdf`;
+    if (!targetFileName.toLowerCase().endsWith('.pdf')) {
+      targetFileName = targetFileName.replace(/\.[^/.]+$/, '') + '.pdf';
+    }
+
     try {
       await salaryService.uploadSalarySlip({
         employeeId: empId,
@@ -253,11 +276,11 @@ export const CompensationScreen: React.FC = () => {
         year: selectedYear,
         netAmount: parseFloat(netAmount) || 20000,
         notes: notes.trim() || `Verified salary slip for ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`,
-        fileName: pickedFile?.name || `Adani_Salary_Slip_${empId}_${selectedMonth}_${selectedYear}.pdf`,
+        fileName: targetFileName,
         fileBase64: pickedFile?.base64,
       });
 
-      const successText = `Salary slip for ${selectedEmployee.name} (${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}) uploaded successfully! It is now retrievable by the employee and supervisor.`;
+      const successText = `Salary slip for ${selectedEmployee.name} (${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}) uploaded successfully as an official PDF! It is now retrievable by the employee and supervisor.`;
       setUploadSuccessMsg(successText);
       setPickedFile(null);
 
@@ -480,7 +503,7 @@ export const CompensationScreen: React.FC = () => {
 
           {/* Form Step 2: Document Dropzone / File Picker */}
           <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>SALARY SLIP DOCUMENT (PDF / DOC / IMAGE) *</Text>
+            <Text style={styles.formLabel}>SALARY SLIP DOCUMENT (.PDF ONLY) *</Text>
             {pickedFile ? (
               <View style={styles.fileSelectedBox}>
                 <View style={styles.fileIconBadgeWrap}>
@@ -495,8 +518,8 @@ export const CompensationScreen: React.FC = () => {
                   </Text>
                   <Text style={styles.fileSelectedMeta}>
                     {pickedFile.size
-                      ? `${(pickedFile.size / 1024).toFixed(1)} KB • Ready to Upload`
-                      : 'Selected • Ready to Upload'}
+                      ? `${(pickedFile.size / 1024).toFixed(1)} KB • Official PDF Ready`
+                      : 'Official PDF Ready to Upload'}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -523,12 +546,12 @@ export const CompensationScreen: React.FC = () => {
                 <View style={styles.dropzoneIconWrap}>
                   <FileUp size={28} color="#2563EB" />
                 </View>
-                <Text style={styles.dropzoneTitle}>Tap to Browse & Select Salary Slip</Text>
+                <Text style={styles.dropzoneTitle}>Tap to Browse & Select Salary Slip (.PDF)</Text>
                 <Text style={styles.dropzoneSub}>
-                  Upload PDF, DOC, or Image file for {selectedEmployee?.name || 'the employee'}
+                  Upload official PDF document for {selectedEmployee?.name || 'the employee'}
                 </Text>
                 <View style={styles.browsePill}>
-                  <Text style={styles.browsePillText}>Browse Files</Text>
+                  <Text style={styles.browsePillText}>Select PDF File</Text>
                 </View>
               </TouchableOpacity>
             )}

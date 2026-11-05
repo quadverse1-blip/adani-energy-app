@@ -82,7 +82,10 @@ export const salaryService = {
         responseType: 'blob',
       });
 
-      const fileName = preferredFileName || `Adani_Salary_Slip_${employeeId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${month}_${year}.pdf`;
+      let fileName = preferredFileName || `Adani_Salary_Slip_${employeeId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${month}_${year}.pdf`;
+      if (!fileName.toLowerCase().endsWith('.pdf')) {
+        fileName = fileName.replace(/\.[^/.]+$/, '') + '.pdf';
+      }
 
       if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         const blob = new Blob([response.data], { type: 'application/pdf' });

@@ -390,19 +390,40 @@ class SalaryService:
         employee = db.get_employee(employee_id) or db.find_employee_by_identifier(employee_id)
         canonical_id = str((employee.get("employeeId") if employee else None) or employee_id)
         safe_canonical = canonical_id.replace("/", "_").replace("\\", "_")
-        final_file_name = file_name or f"payslip_{safe_canonical}_{year}_{month}.pdf"
 
-        # If base64 file data provided, also persist to uploads/payslips on disk
+        # Sanitize filename and enforce .pdf extension
+        raw_name = file_name or f"Adani_Salary_Slip_{safe_canonical}_{month}_{year}.pdf"
+        base_name = os.path.splitext(raw_name)[0]
+        final_file_name = f"{base_name}.pdf"
+
+        # If base64 file data provided, decode, wrap to PDF if image, and persist
         if file_base64:
             try:
+                clean_b64 = file_base64
+                if "," in clean_b64:
+                    clean_b64 = clean_b64.split(",", 1)[1]
+                file_bytes = base64.b64decode(clean_b64)
+
+                from app.services.pdf_service import ensure_pdf_bytes
+                pdf_bytes = ensure_pdf_bytes(file_bytes)
+                file_base64 = base64.b64encode(pdf_bytes).decode("ascii")
+
                 payslip_dir = os.path.join(settings.UPLOAD_DIR, "payslips")
                 os.makedirs(payslip_dir, exist_ok=True)
                 disk_path = os.path.join(payslip_dir, f"payslip_{safe_canonical}_{year}_{month}.pdf")
-                file_bytes = base64.b64decode(file_base64)
                 with open(disk_path, "wb") as f:
-                    f.write(file_bytes)
+                    f.write(pdf_bytes)
             except Exception as e:
-                print(f"[SalaryService] Warning: Failed to persist payslip to disk: {e}")
+                print(f"[SalaryService] Warning: Failed to process and persist payslip to disk: {e}")
+        else:
+            # Fallback: generate official Adani salary slip PDF bytes so document is never null
+            try:
+                from app.services.pdf_service import generate_salary_slip_pdf
+                statement_draft = SalaryService.get_salary_slip(employee_id, month, year)
+                pdf_bytes = generate_salary_slip_pdf(statement_draft, employee)
+                file_base64 = base64.b64encode(pdf_bytes).decode("ascii")
+            except Exception as e:
+                print(f"[SalaryService] Warning: Failed to generate fallback PDF bytes: {e}")
 
         record = {
             "employeeId": canonical_id,

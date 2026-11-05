@@ -15,6 +15,39 @@ from reportlab.platypus import (
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
+def convert_image_bytes_to_pdf(image_bytes: bytes) -> bytes:
+    """Converts uploaded image bytes (JPEG, PNG, WebP, etc.) into an authentic A4 PDF document."""
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(image_bytes))
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        pdf_buf = io.BytesIO()
+        img.save(pdf_buf, format="PDF", resolution=100.0)
+        return pdf_buf.getvalue()
+    except Exception as e:
+        print(f"[PDFService] Error converting image to PDF: {e}")
+        return image_bytes
+
+def ensure_pdf_bytes(raw_bytes: bytes) -> bytes:
+    """Ensures raw file bytes represent a valid PDF. If an image is detected, wraps it into a valid PDF."""
+    if not raw_bytes:
+        return raw_bytes
+    if raw_bytes.startswith(b"%PDF"):
+        return raw_bytes
+    # Image signatures: JPEG, PNG, GIF, TIFF, WebP (RIFF)
+    if (
+        raw_bytes.startswith(b"\xff\xd8\xff")
+        or raw_bytes.startswith(b"\x89PNG")
+        or raw_bytes.startswith(b"GIF8")
+        or raw_bytes.startswith(b"II*\x00")
+        or raw_bytes.startswith(b"MM\x00*")
+        or raw_bytes.startswith(b"RIFF")
+    ):
+        return convert_image_bytes_to_pdf(raw_bytes)
+    return raw_bytes
+
+
 def generate_salary_slip_pdf(slip: dict, employee: dict = None) -> bytes:
     """
     Generates an official, beautifully styled Adani Energy Solutions Limited

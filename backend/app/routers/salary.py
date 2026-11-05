@@ -299,18 +299,29 @@ async def download_payslip_pdf(
     file_base64 = (uploaded.get("fileBase64") if uploaded else None) or (statement.get("fileBase64") if statement else None)
     file_name = (uploaded.get("fileName") if uploaded else None) or (statement.get("fileName") if statement else None)
 
-    # If static uploaded document exists in RAM or DB, serve that document
+    # Clean and force final filename to always end with .pdf
+    raw_fname = file_name or f"Adani_Salary_Slip_{safe_canonical}_{month}_{year}.pdf"
+    base_fname = os.path.splitext(raw_fname)[0]
+    final_pdf_name = f"{base_fname}.pdf"
+
+    # If static uploaded document exists in RAM or DB, serve that document strictly as PDF
     if file_base64:
         try:
-            file_bytes = base64.b64decode(file_base64)
-            filename = file_name or f"payslip_{safe_canonical}_{year}_{month}.pdf"
-            media_type = "application/pdf" if filename.lower().endswith(".pdf") else (
-                "image/png" if filename.lower().endswith(".png") else "application/octet-stream"
-            )
+            clean_b64 = file_base64
+            if "," in clean_b64:
+                clean_b64 = clean_b64.split(",", 1)[1]
+            file_bytes = base64.b64decode(clean_b64)
+
+            from app.services.pdf_service import ensure_pdf_bytes
+            pdf_bytes = ensure_pdf_bytes(file_bytes)
+
             return Response(
-                content=file_bytes,
-                media_type=media_type,
-                headers={"Content-Disposition": f"attachment; filename={filename}"}
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{final_pdf_name}"',
+                    "Content-Type": "application/pdf"
+                }
             )
         except Exception as e:
             print(f"[SalaryRouter] Error processing base64 payslip: {e}")
@@ -321,11 +332,15 @@ async def download_payslip_pdf(
         if os.path.exists(disk_path):
             with open(disk_path, "rb") as f:
                 disk_bytes = f.read()
-            filename = file_name or f"payslip_{safe_canonical}_{year}_{month}.pdf"
+            from app.services.pdf_service import ensure_pdf_bytes
+            pdf_bytes = ensure_pdf_bytes(disk_bytes)
             return Response(
-                content=disk_bytes,
+                content=pdf_bytes,
                 media_type="application/pdf",
-                headers={"Content-Disposition": f"attachment; filename={filename}"}
+                headers={
+                    "Content-Disposition": f'attachment; filename="{final_pdf_name}"',
+                    "Content-Type": "application/pdf"
+                }
             )
     except Exception as e:
         print(f"[SalaryRouter] Error checking disk payslip: {e}")
@@ -340,7 +355,10 @@ async def download_payslip_pdf(
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Type": "application/pdf"
+            }
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating payslip PDF: {str(e)}")

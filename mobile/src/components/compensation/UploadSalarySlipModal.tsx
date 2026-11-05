@@ -107,7 +107,7 @@ export const UploadSalarySlipModal: React.FC<UploadSalarySlipModalProps> = ({
   const handlePickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
+        type: ['application/pdf'],
         copyToCacheDirectory: true,
       });
 
@@ -115,30 +115,84 @@ export const UploadSalarySlipModal: React.FC<UploadSalarySlipModalProps> = ({
         const file = result.assets[0];
         let base64Data: string | undefined = undefined;
 
-        if (Platform.OS === 'web' && (file as any).file) {
-          try {
-            const rawFile = (file as any).file as File;
-            const reader = new FileReader();
-            base64Data = await new Promise((resolve) => {
-              reader.onload = () => {
-                const res = reader.result as string;
-                resolve(res.includes(',') ? res.split(',')[1] : res);
-              };
-              reader.readAsDataURL(rawFile);
-            });
-          } catch {}
+        let cleanName = file.name || `Adani_Salary_Slip_${selectedEmpId}_${month}_${year}.pdf`;
+        if (!cleanName.toLowerCase().endsWith('.pdf')) {
+          cleanName = cleanName.replace(/\.[^/.]+$/, '') + '.pdf';
+          if (!cleanName.toLowerCase().endsWith('.pdf')) {
+            cleanName += '.pdf';
+          }
+        }
+
+        if (Platform.OS === 'web') {
+          if ((file as any).file) {
+            try {
+              const rawFile = (file as any).file as File;
+              const reader = new FileReader();
+              base64Data = await new Promise((resolve) => {
+                reader.onload = () => {
+                  const res = reader.result as string;
+                  resolve(res.includes(',') ? res.split(',')[1] : res);
+                };
+                reader.readAsDataURL(rawFile);
+              });
+            } catch {}
+          } else if (file.uri) {
+            try {
+              const resp = await fetch(file.uri);
+              const blob = await resp.blob();
+              const reader = new FileReader();
+              base64Data = await new Promise((resolve) => {
+                reader.onloadend = () => {
+                  const res = reader.result as string;
+                  resolve(res.includes(',') ? res.split(',')[1] : res);
+                };
+                reader.readAsDataURL(blob);
+              });
+            } catch {}
+          }
         } else if (file.uri) {
           try {
             const { File: ExpoFile } = await import('expo-file-system');
             const localFile = new ExpoFile(file.uri);
-            base64Data = await localFile.base64();
+            let uint8: Uint8Array | null = null;
+            if (typeof (localFile as any).bytes === 'function') {
+              uint8 = await (localFile as any).bytes();
+            } else if (typeof localFile.arrayBuffer === 'function') {
+              const buf = await localFile.arrayBuffer();
+              uint8 = new Uint8Array(buf);
+            }
+
+            if (uint8 && uint8.length > 0) {
+              let binary = '';
+              const chunkSize = 8192;
+              for (let i = 0; i < uint8.length; i += chunkSize) {
+                const sub = uint8.subarray(i, Math.min(i + chunkSize, uint8.length));
+                binary += String.fromCharCode.apply(null, Array.from(sub));
+              }
+              base64Data = typeof btoa === 'function' ? btoa(binary) : undefined;
+            }
           } catch (e) {
-            console.log('Native base64 resolution:', e);
+            console.log('Native base64 resolution error:', e);
+          }
+
+          if (!base64Data) {
+            try {
+              const resp = await fetch(file.uri);
+              const blob = await resp.blob();
+              const reader = new FileReader();
+              base64Data = await new Promise((resolve) => {
+                reader.onloadend = () => {
+                  const res = reader.result as string;
+                  resolve(res.includes(',') ? res.split(',')[1] : res);
+                };
+                reader.readAsDataURL(blob);
+              });
+            } catch {}
           }
         }
 
         setPickedFile({
-          name: file.name,
+          name: cleanName,
           size: file.size,
           uri: file.uri,
           base64: base64Data,
@@ -165,13 +219,19 @@ export const UploadSalarySlipModal: React.FC<UploadSalarySlipModalProps> = ({
     try {
       const targetEmpId =
         selectedEmployee.employeeId || selectedEmployee.id || (selectedEmployee as any)._id;
+
+      let targetFileName = pickedFile?.name || `Adani_Salary_Slip_${targetEmpId}_${month}_${year}.pdf`;
+      if (!targetFileName.toLowerCase().endsWith('.pdf')) {
+        targetFileName = targetFileName.replace(/\.[^/.]+$/, '') + '.pdf';
+      }
+
       const res = await salaryService.uploadSalarySlip({
         employeeId: targetEmpId,
         month,
         year,
         netAmount: numAmount,
         notes: notes.trim(),
-        fileName: pickedFile?.name || 'Verified_Signed_Payslip.pdf',
+        fileName: targetFileName,
         fileBase64: pickedFile?.base64,
       });
 
