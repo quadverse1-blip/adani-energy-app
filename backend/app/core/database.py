@@ -31,6 +31,25 @@ SEED_EMPLOYEES = [
         "department": "Executive Management",
         "shiftStatus": "present",
         "createdAt": "2023-01-01T09:00:00Z"
+    },
+    {
+        "_id": "emp_demo_admin",
+        "employeeId": "ADMIN001",
+        "name": "Demo Administrator",
+        "phone": "9999999999",
+        "password": "password",
+        "role": "admin",
+        "designation": "Operations Administrator",
+        "assignedSiteIds": [],
+        "assignedSiteId": None,
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
+        "status": "active",
+        "email": "admin@adani.com",
+        "circle": None,
+        "division": None,
+        "department": "Operations Administration",
+        "shiftStatus": "present",
+        "createdAt": "2026-01-01T09:00:00Z"
     }
 ]
 
@@ -537,7 +556,10 @@ class DatabaseManager:
             return None
 
         # Direct alias support for operations admin
-        if clean_id in ["admin", "b4s/adani/admin", "operations.admin", "admin@adani.com"]:
+        if clean_id in ["admin", "b4s/adani/admin", "operations.admin", "admin@adani.com", "admin001", "demo_admin", "demoadmin", "9999999999"]:
+            for emp in self._raw_employees.values():
+                if str(emp.get("employeeId", "")).upper() == "ADMIN001":
+                    return emp
             for emp in self._raw_employees.values():
                 if emp.get("role") == "admin":
                     return emp

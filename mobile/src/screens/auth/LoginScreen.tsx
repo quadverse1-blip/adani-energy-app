@@ -32,7 +32,7 @@ interface LoginScreenProps {
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const [username, setUsername] = useState('b4S/Adani/Admin');
+  const [username, setUsername] = useState('ADMIN001');
   const [password, setPassword] = useState('password');
   const [rememberMe, setRememberMe] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
@@ -274,15 +274,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             <TouchableOpacity delayPressIn={0}
               style={[
                 styles.demoPill,
-                (username === 'admin' || username === 'b4S/Adani/Admin') && styles.demoPillActive,
+                (username === 'admin' || username === 'ADMIN001' || username === 'b4S/Adani/Admin') && styles.demoPillActive,
               ]}
-              onPress={() => fillDemo('admin')}
+              onPress={() => fillDemo('ADMIN001')}
               activeOpacity={0.75}
             >
               <Text
                 style={[
                   styles.demoPillText,
-                  (username === 'admin' || username === 'b4S/Adani/Admin') && styles.demoPillTextActive,
+                  (username === 'admin' || username === 'ADMIN001' || username === 'b4S/Adani/Admin') && styles.demoPillTextActive,
                 ]}
               >
                 Operations Admin
