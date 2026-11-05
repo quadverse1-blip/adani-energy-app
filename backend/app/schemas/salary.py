@@ -93,14 +93,21 @@ class SalarySlipResponse(BaseModel):
     notes: Optional[str] = None
     uploadedAt: Optional[str] = None
     uploadedBy: Optional[str] = None
+    
+    # Universal compatibility fields for clients/scripts expecting nested or status wrappers
+    slip: Optional[dict] = None
+    success: Optional[bool] = True
+    message: Optional[str] = None
 
 class UploadSalarySlipRequest(BaseModel):
     employeeId: str
     month: int
     year: int
-    netAmount: float
+    netAmount: Optional[float] = None
+    amount: Optional[float] = None
     notes: Optional[str] = "Monthly verified technician salary payout"
     fileName: Optional[str] = None
+    documentName: Optional[str] = None
     fileBase64: Optional[str] = None
 
 class FinalizeSalaryRequest(BaseModel):

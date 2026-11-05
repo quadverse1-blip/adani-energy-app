@@ -159,12 +159,12 @@ class SalaryService:
         Otherwise calculates dynamically from attendance and current salary config.
         """
         employee = db.get_employee(employee_id) or db.find_employee_by_identifier(employee_id)
-        canonical_id = employee.get("employeeId") if employee else employee_id
-        name = employee.get("name", "Field Technician") if employee else "Field Technician"
-        desig = employee.get("designation", "Smart Meter Technician") if employee else "Smart Meter Technician"
-        dept = employee.get("department", "Smart Meter Operations") if employee else "Smart Meter Operations"
-        circle = (employee.get("circle") if employee else "") or ""
-        division = (employee.get("division") if employee else "") or ""
+        canonical_id = str((employee.get("employeeId") if employee else None) or employee_id)
+        name = str((employee.get("name") if employee else None) or "Field Technician")
+        desig = str((employee.get("designation") if employee else None) or "Smart Meter Technician")
+        dept = str((employee.get("department") if employee else None) or "Smart Meter Operations")
+        circle = str((employee.get("circle") if employee else None) or "Vadodara Circle")
+        division = str((employee.get("division") if employee else None) or "Central Division")
 
         # 1. Check if finalized statement is already recorded
         frozen_statement = db.get_salary_statement(employee_id, month, year)
@@ -382,7 +382,7 @@ class SalaryService:
         uploaded_by: Optional[str] = "Operations Administrator"
     ) -> dict:
         employee = db.get_employee(employee_id) or db.find_employee_by_identifier(employee_id)
-        canonical_id = employee.get("employeeId") if employee else employee_id
+        canonical_id = str((employee.get("employeeId") if employee else None) or employee_id)
         safe_canonical = canonical_id.replace("/", "_").replace("\\", "_")
         final_file_name = file_name or f"payslip_{safe_canonical}_{year}_{month}.pdf"
 

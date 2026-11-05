@@ -102,9 +102,10 @@ def generate_salary_slip_pdf(slip: dict, employee: dict = None) -> bytes:
 
     story = []
 
-    period_str = slip.get('monthName') or f"{slip.get('month', 10)}/{slip.get('year', 2026)}"
-    ref_no = slip.get('referenceNumber') or f"ADN-PAY-{slip.get('year', 2026)}{slip.get('month', 10):02d}-{slip.get('employeeId', 'EMP').replace('/', '-')}"
-    status_text = str(slip.get('status', 'FINALIZED')).upper()
+    period_str = str(slip.get('monthName') or f"{slip.get('month', 10)}/{slip.get('year', 2026)}")
+    raw_emp_id = str(slip.get('employeeId') or 'EMP').replace('/', '-')
+    ref_no = str(slip.get('referenceNumber') or f"ADN-PAY-{slip.get('year', 2026)}{slip.get('month', 10):02d}-{raw_emp_id}")
+    status_text = str(slip.get('status') or 'FINALIZED').upper()
 
     status_color = '#059669' if status_text in ('FINALIZED', 'PAID') else ('#2563EB' if status_text == 'REVISED' else '#D97706')
 
@@ -131,12 +132,12 @@ def generate_salary_slip_pdf(slip: dict, employee: dict = None) -> bytes:
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#1E3A8A'), spaceAfter=10))
 
     # 2. Employee Details Grid
-    emp_name = slip.get('employeeName') or (employee.get('name') if employee else 'Field Technician')
-    emp_id = slip.get('employeeId') or (employee.get('employeeId') if employee else 'b4S/Adani/01')
-    designation = slip.get('designation') or (employee.get('designation') if employee else 'Smart Meter Technician')
-    department = slip.get('department') or (employee.get('department') if employee else 'Smart Meter Operations')
-    circle = slip.get('circle') or (employee.get('circle') if employee else '') or ''
-    division = slip.get('division') or (employee.get('division') if employee else '') or ''
+    emp_name = str(slip.get('employeeName') or (employee.get('name') if employee else None) or 'Field Technician')
+    emp_id = str(slip.get('employeeId') or (employee.get('employeeId') if employee else None) or 'b4S/Adani/01')
+    designation = str(slip.get('designation') or (employee.get('designation') if employee else None) or 'Smart Meter Technician')
+    department = str(slip.get('department') or (employee.get('department') if employee else None) or 'Smart Meter Operations')
+    circle = str(slip.get('circle') or (employee.get('circle') if employee else None) or 'Operations Circle')
+    division = str(slip.get('division') or (employee.get('division') if employee else None) or 'Field Division')
 
     emp_data = [
         [
@@ -174,12 +175,13 @@ def generate_salary_slip_pdf(slip: dict, employee: dict = None) -> bytes:
     # 3. Attendance Summary Section
     story.append(Paragraph("<b>Attendance Summary (Centralized Real-Time Records)</b>", section_title_style))
 
-    pres_days = slip.get('presentDays', 25)
-    abs_days = slip.get('absentDays', 2)
-    hd_days = slip.get('halfDays', 2)
-    wo_days = slip.get('weeklyOffDays', 4)
-    ph_days = slip.get('publicHolidayDays', 1)
-    tot_days = slip.get('totalCalendarDays') or (pres_days + abs_days + wo_days + ph_days)
+    pres_days = int(slip.get('presentDays') or 25)
+    abs_days = int(slip.get('absentDays') or 0)
+    hd_days = int(slip.get('halfDays') or 0)
+    wo_days = int(slip.get('weeklyOffDays') or 4)
+    ph_days = int(slip.get('publicHolidayDays') or 1)
+    tot_days = int(slip.get('totalCalendarDays') or (pres_days + abs_days + wo_days + ph_days))
+    payable_days = int(slip.get('payableDays') or (pres_days + wo_days + ph_days))
 
     att_summary_data = [
         [
@@ -215,7 +217,7 @@ def generate_salary_slip_pdf(slip: dict, employee: dict = None) -> bytes:
         [
             Paragraph("<b>Total Calendar Days in Month</b>", cell_bold_style),
             Paragraph(f"<b>{tot_days} Days</b>", cell_right_bold),
-            Paragraph("<b>Total Payable Days: " + str(slip.get('payableDays', pres_days + wo_days + ph_days)) + " Days</b>", cell_bold_style)
+            Paragraph(f"<b>Total Payable Days: {payable_days} Days</b>", cell_bold_style)
         ]
     ]
 
@@ -294,9 +296,9 @@ def generate_salary_slip_pdf(slip: dict, employee: dict = None) -> bytes:
     story.append(Spacer(1, 14))
 
     # 5. Verification & Audit Trail Footer
-    finalized_by = slip.get('finalizedBy') or 'Operations Administrator'
-    finalized_at = slip.get('finalizedAt') or datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
-    notes = slip.get('notes') or 'Verified against centralized GPS radar attendance records.'
+    finalized_by = str(slip.get('finalizedBy') or 'Operations Administrator')
+    finalized_at = str(slip.get('finalizedAt') or datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'))
+    notes = str(slip.get('notes') or 'Verified against centralized GPS radar attendance records.')
 
     audit_text = f"<b>Statement Verification & Audit:</b> Verified by {finalized_by} on {finalized_at}.<br/>" \
                  f"<b>Remarks:</b> {notes}<br/>" \
