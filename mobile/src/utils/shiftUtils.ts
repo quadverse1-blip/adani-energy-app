@@ -18,16 +18,16 @@ export interface ShiftInfo {
   isPastShiftEnd: boolean;       // True if outside 09:00 AM - 06:00 PM
   isBeforeShiftStart: boolean;   // True if < 09:00 IST
   isAfterShiftEnd: boolean;      // True if >= 18:00 IST
-  punctualityLabel: 'On-Time' | 'Late Checked-In' | 'Half-Day' | 'Check-In Closed';
-  statusKey: 'present' | 'late' | 'half-day' | 'closed';
+  punctualityLabel: 'On-Time' | 'Half-Day' | 'Check-In Closed';
+  statusKey: 'present' | 'half-day' | 'closed';
   istHours: number;
   istMinutes: number;
   formattedTimeIST: string;
   windowMessage: string;
 }
 
-// Set to true to temporarily remove the shift check-in time limit for manual testing
-export const MANUAL_TESTING_BYPASS_SHIFT_LIMIT = true;
+// Strictly enforce shift limit: Check-in closes at 6:00 PM IST
+export const MANUAL_TESTING_BYPASS_SHIFT_LIMIT = false;
 
 export const getShiftInfo = (): ShiftInfo => {
   const now = new Date();
@@ -41,37 +41,10 @@ export const getShiftInfo = (): ShiftInfo => {
   const displayHours = istHours % 12 || 12;
   const formattedTimeIST = `${displayHours}:${istMinutes < 10 ? '0' : ''}${istMinutes} ${ampm}`;
 
-  // TEMPORARY MANUAL TESTING OVERRIDE:
-  // Allows employees and supervisors to check in 24/7 for manual testing
-  if (MANUAL_TESTING_BYPASS_SHIFT_LIMIT) {
-    let punctuality: 'On-Time' | 'Late Checked-In' | 'Half-Day' = 'On-Time';
-    let statusKey: 'present' | 'late' | 'half-day' = 'present';
-    if (istTotalMinutes > 10 * 60 + 30 && istTotalMinutes <= 18 * 60) {
-      punctuality = 'Half-Day';
-      statusKey = 'half-day';
-    } else if (istTotalMinutes > 9 * 60 + 30 && istTotalMinutes <= 10 * 60 + 30) {
-      punctuality = 'Late Checked-In';
-      statusKey = 'late';
-    }
-
-    return {
-      isCheckInAllowed: true,
-      isPastShiftEnd: false,
-      isBeforeShiftStart: false,
-      isAfterShiftEnd: false,
-      punctualityLabel: punctuality,
-      statusKey,
-      istHours,
-      istMinutes,
-      formattedTimeIST,
-      windowMessage: 'Manual Test Window Active • Check-In Enabled',
-    };
-  }
-
   const startMinutes = 9 * 60;       // 09:00 AM IST = 540 minutes
   const endMinutes = 18 * 60;        // 06:00 PM IST = 1080 minutes
 
-  // Case 1: After 06:00 PM IST (18:00 to 23:59)
+  // Case 1: After 06:00 PM IST (18:00 to 23:59) - Check-in strictly closed
   if (istTotalMinutes >= endMinutes) {
     return {
       isCheckInAllowed: false,
@@ -104,7 +77,8 @@ export const getShiftInfo = (): ShiftInfo => {
   }
 
   // Case 3: Within Check-In Window (09:00 AM to 06:00 PM IST)
-  if (istTotalMinutes <= 9 * 60 + 30) {
+  // Check-in up to 10:30 AM IST (09:00 to 10:30) -> On-Time (Present)
+  if (istTotalMinutes <= 10 * 60 + 30) {
     return {
       isCheckInAllowed: true,
       isPastShiftEnd: false,
@@ -115,22 +89,10 @@ export const getShiftInfo = (): ShiftInfo => {
       istHours,
       istMinutes,
       formattedTimeIST,
-      windowMessage: 'Check-in window active (09:00 AM – 06:00 PM IST)',
-    };
-  } else if (istTotalMinutes <= 10 * 60 + 30) {
-    return {
-      isCheckInAllowed: true,
-      isPastShiftEnd: false,
-      isBeforeShiftStart: false,
-      isAfterShiftEnd: false,
-      punctualityLabel: 'Late Checked-In',
-      statusKey: 'late',
-      istHours,
-      istMinutes,
-      formattedTimeIST,
-      windowMessage: 'Late check-in window active (09:30 AM – 10:30 AM IST)',
+      windowMessage: 'Check-in window active (09:00 AM – 10:30 AM IST: On-Time / Present)',
     };
   } else {
+    // Check-in after 10:30 AM IST -> Half-Day
     return {
       isCheckInAllowed: true,
       isPastShiftEnd: false,
@@ -141,7 +103,7 @@ export const getShiftInfo = (): ShiftInfo => {
       istHours,
       istMinutes,
       formattedTimeIST,
-      windowMessage: 'Half-day check-in window active (until 06:00 PM IST)',
+      windowMessage: 'Half-day check-in window active (10:30 AM – 06:00 PM IST)',
     };
   }
 };

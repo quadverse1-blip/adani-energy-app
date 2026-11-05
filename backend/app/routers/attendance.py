@@ -10,7 +10,7 @@ from app.core.security import get_current_user_token, require_roles
 from app.core.database import db
 from app.services.attendance_service import attendance_service
 from app.services.storage_service import storage_service
-from app.utils.datetime_utils import format_datetime_ist
+from app.utils.datetime_utils import format_datetime_ist, get_today_ist_str
 from app.schemas.attendance import (
     CheckInRequest,
     CheckOutRequest,
@@ -129,7 +129,7 @@ async def get_today_attendance(
 ):
     emp_id = token_data["id"]
     emp = db.get_employee(emp_id) or db.find_employee_by_identifier(emp_id)
-    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    today_str = get_today_ist_str()
     record = db.get_today_attendance(emp_id, today_str)
     if record:
         record = attendance_service.apply_auto_checkout_if_needed(record)

@@ -544,6 +544,16 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
 
   // Submit Check-In (Photo is COMPULSORY)
   const handleSubmitCheckIn = async () => {
+    const currentShift = getShiftInfo();
+    if (!currentShift.isCheckInAllowed || currentShift.isAfterShiftEnd) {
+      Alert.alert(
+        'Check-In Closed',
+        'Shift check-in closed at 06:00 PM IST. Check-in is not permitted after 06:00 PM.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+      return;
+    }
+
     if (isAlreadyCheckedIn) {
       Alert.alert(
         'Already Checked In',

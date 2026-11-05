@@ -125,6 +125,14 @@ class AttendanceService:
                         detail="You have already completed your shift check-in for today. Re-check in is not allowed."
                     )
 
+        # 3. Check-in Restriction: Employees must not be allowed to check in after 6:00 PM IST
+        ist_now = get_now_ist()
+        if ist_now.time() >= time(18, 0, 0):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Shift check-in is closed for today. Check-in is not permitted after 06:00 PM IST."
+            )
+
         # 5. Validate Site
         site = db.get_site(site_id)
         if not site:
@@ -310,6 +318,127 @@ class AttendanceService:
         db.save_attendance(record)
         return record
 
-attendance_service = AttendanceService()
+    @staticmethod
+    def perform_auto_checkout_all_open_shifts(force: bool = False, target_date_str: Optional[str] = None) -> dict:
+        """
+        Scheduled 6:00 PM IST Automatic Check-Out:
+        Automatically checks out all employees who are still checked in at 6:00 PM IST.
+        Saves checkout time as exactly 06:00 PM IST (12:30 UTC).
+        - Runs through a reliable background scheduled process even when employees have closed the app.
+        - Preserves Admin-approved attendance corrections (isAdminOverride).
+        - Synchronizes checkout records across Admin, Supervisor, and Employee dashboards, reports, and Excel.
+        """
+        now_utc = datetime.utcnow()
+        ist_now = get_now_ist()
+        today_ist_str = target_date_str or get_today_ist_str()
+        is_after_6pm = (ist_now.time() >= time(18, 0, 0))
+
+        checked_out_count = 0
+        updated_records = []
+
+        all_att = list(db.attendance.values())
+        for r in all_att:
+            if not isinstance(r, dict) or not r.get("checkIn") or r.get("checkOut"):
+                continue
+
+            r_date = str(r.get("date") or "")
+            # Check if this record should be auto checked-out:
+            # 1. Any record from a past date left open without checkout
+            # 2. Today's record if current IST time is >= 18:00 (or if force=True)
+            should_auto_checkout = False
+            if r_date < today_ist_str:
+                should_auto_checkout = True
+            elif r_date == today_ist_str and (is_after_6pm or force):
+                should_auto_checkout = True
+
+            if not should_auto_checkout:
+                continue
+
+            ci_str = str(r["checkIn"].get("time") or "").replace("Z", "")
+            try:
+                ci_dt = datetime.fromisoformat(ci_str)
+            except Exception:
+                ci_dt = datetime.utcnow()
+
+            auto_co_utc_str = f"{r_date}T12:30:00Z"
+            working_minutes = 0
+            try:
+                co_dt = datetime.fromisoformat(f"{r_date}T12:30:00")
+                working_seconds = max(0, (co_dt - ci_dt).total_seconds())
+                working_minutes = int(working_seconds // 60)
+            except Exception:
+                working_minutes = int(r.get("workingMinutes") or 480)
+
+            h = working_minutes // 60
+            m = working_minutes % 60
+
+            # Conflict Prevention: Preserve Admin-approved attendance corrections
+            is_admin_override = bool(r.get("isAdminOverride") or r.get("adminOverride"))
+            if is_admin_override:
+                final_status = r.get("status", "present")
+                is_hd = bool(r.get("isHalfDay") or r.get("attendanceCategory") == "HALF_DAY")
+                cat = r.get("attendanceCategory") or ("HALF_DAY" if is_hd else "PRESENT")
+                shift_st = r.get("shiftStatus") or ("half_day" if is_hd else "completed")
+            else:
+                initial_st = str(r.get("status") or "").lower().replace("-", "_")
+                if initial_st in ("half_day", "halfday", "hd") or bool(r.get("isHalfDay")) or working_minutes < 240:
+                    final_status = "half_day"
+                    is_hd = True
+                    cat = "HALF_DAY"
+                    shift_st = "half_day"
+                else:
+                    final_status = "present"
+                    is_hd = False
+                    cat = "PRESENT"
+                    shift_st = "completed"
+
+            r["checkOut"] = {
+                "time": auto_co_utc_str,
+                "timeIST": "06:00 PM",
+                "latitude": r["checkIn"].get("latitude", 18.5204),
+                "longitude": r["checkIn"].get("longitude", 73.8567),
+                "accuracy": 10.0,
+                "remarks": "Auto Check-Out at 06:00 PM IST (Shift Concluded)",
+                "isAutoCheckedOut": True
+            }
+            r["workingMinutes"] = working_minutes
+            r["workingHoursFormatted"] = f"{h} hrs {m} mins"
+            if not r.get("adminRemarks"):
+                r["adminRemarks"] = "Auto Check-Out at 06:00 PM IST (Shift Concluded)"
+            r["status"] = final_status
+            r["isHalfDay"] = is_hd
+            r["attendanceCategory"] = cat
+            r["shiftStatus"] = shift_st
+            r["updatedAt"] = now_utc.isoformat() + "Z"
+
+            db.save_attendance(r)
+            checked_out_count += 1
+            updated_records.append(r["_id"])
+
+            # Synchronize employee's shiftStatus in db.employees
+            emp_id = str(r.get("employeeId") or "")
+            if emp_id:
+                emp = db.get_employee(emp_id) or db.find_employee_by_identifier(emp_id)
+                if emp:
+                    emp["shiftStatus"] = "Half Day" if is_hd else "Present"
+                    db.employees[emp["_id"]] = emp
+                    if hasattr(db, "_raw_employees"):
+                        db._raw_employees[emp["_id"]] = emp
+                    db.set_firestore_document("employees", emp["_id"], emp)
+
+        return {
+            "success": True,
+            "checkedOutCount": checked_out_count,
+            "updatedRecords": updated_records,
+            "timestampIST": ist_now.strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+    @staticmethod
+    def check_and_run_scheduled_6pm_auto_checkout() -> dict:
+        """
+        Background scheduler trigger: checks if current IST time is >= 18:00
+        and executes auto-checkout across all open shifts.
+        """
+        return AttendanceService.perform_auto_checkout_all_open_shifts(force=False)
 
 attendance_service = AttendanceService()

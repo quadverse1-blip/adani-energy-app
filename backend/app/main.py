@@ -92,7 +92,7 @@ app.include_router(tracking.router)
 app.include_router(reports.router)
 app.include_router(holidays.router)
 
-# Middleware to ensure 8:00 AM - 9:00 AM IST photo deletion runs reliably on request activity
+# Middleware to ensure 8:00 AM - 9:00 AM IST photo deletion and 6:00 PM IST auto-checkout run reliably on request activity
 @app.middleware("http")
 async def check_scheduled_cleanup_middleware(request: Request, call_next):
     try:
@@ -100,19 +100,27 @@ async def check_scheduled_cleanup_middleware(request: Request, call_next):
         storage_service.check_and_run_scheduled_8am_cleanup()
     except Exception:
         pass
+    try:
+        from app.services.attendance_service import attendance_service
+        attendance_service.check_and_run_scheduled_6pm_auto_checkout()
+    except Exception:
+        pass
     return await call_next(request)
 
-# Automatic 8:00 AM - 9:00 AM IST Check-in Photo Deletion Scheduler from gs://adani-energy-2f5e0.firebasestorage.app
+# Automatic Schedulers:
+# 1. 8:00 AM - 9:00 AM IST Check-in Photo Deletion Scheduler
+# 2. 6:00 PM IST Automatic Check-Out Scheduler for open shifts
 @app.on_event("startup")
 async def start_auto_cleanup_scheduler():
     is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
     if is_serverless:
         # In Vercel serverless functions, background loops cause FUNCTION_INVOCATION_FAILED.
-        # Scheduled cleanup is handled cleanly by Vercel Cron (/api/cron/cleanup-photos) and middleware.
+        # Scheduled tasks are handled cleanly by Vercel Cron and middleware.
         return
 
     import asyncio
     from app.services.storage_service import storage_service
+    from app.services.attendance_service import attendance_service
 
     async def _cleanup_loop():
         # Immediate check on server boot
@@ -129,7 +137,35 @@ async def start_auto_cleanup_scheduler():
             except Exception:
                 pass
 
+    async def _auto_checkout_6pm_loop():
+        # Immediate check on server boot
+        try:
+            attendance_service.check_and_run_scheduled_6pm_auto_checkout()
+        except Exception:
+            pass
+
+        # Continuously monitor every 30 seconds for 6:00 PM IST shift conclusion
+        while True:
+            await asyncio.sleep(30)
+            try:
+                attendance_service.check_and_run_scheduled_6pm_auto_checkout()
+            except Exception:
+                pass
+
     asyncio.create_task(_cleanup_loop())
+    asyncio.create_task(_auto_checkout_6pm_loop())
+
+@app.api_route("/api/v1/attendance/auto-checkout-6pm", methods=["GET", "POST"])
+@app.api_route("/attendance/auto-checkout-6pm", methods=["GET", "POST"])
+@app.api_route("/api/cron/auto-checkout-6pm", methods=["GET", "POST"])
+async def trigger_6pm_auto_checkout(force: bool = False):
+    """
+    Triggers 6:00 PM IST automatic checkout for all active shifts.
+    Runs via backend scheduler, Vercel cron, or Admin on-demand trigger.
+    """
+    from app.services.attendance_service import attendance_service
+    result = attendance_service.perform_auto_checkout_all_open_shifts(force=force)
+    return result
 
 @app.get("/api/cron/cleanup-photos")
 @app.get("/cron/cleanup-photos")

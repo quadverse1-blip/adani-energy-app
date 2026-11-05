@@ -5,7 +5,8 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends
 from app.core.database import db
 from app.core.security import get_current_user_token
-from app.utils.datetime_utils import format_datetime_ist
+from app.utils.datetime_utils import format_datetime_ist, get_today_ist_str
+from app.services.attendance_service import attendance_service
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -23,7 +24,9 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
 
     def is_notif_read(notif_id: str) -> bool:
         return caller_all_read or (notif_id in caller_reads) or mark_all_read_active or (notif_id in read_notification_ids)
-    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    # Automatically ensure 6:00 PM IST auto-checkout has been applied
+    attendance_service.check_and_run_scheduled_6pm_auto_checkout()
+    today_str = get_today_ist_str()
     all_employees = db.get_all_employees()
     field_staff = [e for e in all_employees if e.get("role") == "technician"]
     total_staff = len(field_staff)

@@ -500,21 +500,27 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
             <View style={styles.sideCard}>
               <Text style={styles.sideCardTitle}>QUICK ACTIONS</Text>
 
-              <TouchableOpacity delayPressIn={0}
-                style={styles.primaryActionButton}
-                onPress={() => {
-                  if (checkIn && !checkOut) {
-                    navigation.navigate('CheckOut');
-                  } else if (!checkIn) {
-                    navigation.navigate('CheckIn');
-                  } else {
-                    navigation.navigate('CheckOut');
-                  }
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryActionButtonText}>Go to Shift Check-Out</Text>
-              </TouchableOpacity>
+              {checkIn && !checkOut ? (
+                <TouchableOpacity delayPressIn={0}
+                  style={styles.primaryActionButton}
+                  onPress={() => navigation.navigate('CheckOut')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.primaryActionButtonText}>Go to Shift Check-Out</Text>
+                </TouchableOpacity>
+              ) : checkOut ? (
+                <View style={[styles.primaryActionButton, { backgroundColor: '#F1F5F9' }]}>
+                  <Text style={[styles.primaryActionButtonText, { color: '#059669', fontWeight: '800' }]}>
+                    Shift Concluded (Checked Out)
+                  </Text>
+                </View>
+              ) : (
+                <View style={[styles.primaryActionButton, { backgroundColor: '#F1F5F9' }]}>
+                  <Text style={[styles.primaryActionButtonText, { color: '#64748B' }]}>
+                    Check-In Closed (After 06:00 PM)
+                  </Text>
+                </View>
+              )}
 
               <TouchableOpacity delayPressIn={0}
                 style={styles.secondaryActionButton}

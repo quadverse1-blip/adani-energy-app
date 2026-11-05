@@ -427,6 +427,16 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
     try {
       const currentShift = getShiftInfo();
+      if (!currentShift.isCheckInAllowed || currentShift.isAfterShiftEnd) {
+        Alert.alert(
+          'Check-In Closed',
+          'Shift check-in closed at 06:00 PM IST. Check-in is not permitted after 06:00 PM.',
+          [{ text: 'OK' }]
+        );
+        setShowCameraModal(false);
+        setIsSubmittingPhoto(false);
+        return;
+      }
       const siteId = user?.assignedSiteId || substation?.id || '';
 
       // 1. Upload live captured photo to server
@@ -958,16 +968,22 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
                   Shift Logged
                 </Text>
               </TouchableOpacity>
+            ) : shiftInfo.isAfterShiftEnd ? (
+              /* AFTER 06:00 PM IST: HIDE / DISABLE CHECK IN - NO OPTION TO CHECK IN */
+              <View style={[styles.bannerLockedBtn, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
+                <Lock size={15} color="#94A3B8" style={{ marginRight: 6 }} />
+                <Text style={[styles.bannerLockedBtnText, { color: '#64748B' }]}>
+                  Shift Ended (18:00)
+                </Text>
+              </View>
             ) : !shiftInfo.isCheckInAllowed ? (
-              /* DISABLED CHECK IN BUTTON OUTSIDE 09:00 AM - 06:00 PM */
+              /* BEFORE 09:00 AM IST */
               <TouchableOpacity
                 style={styles.bannerLockedBtn}
                 onPress={() =>
                   Alert.alert(
                     'Check-In Closed',
-                    shiftInfo.isAfterShiftEnd
-                      ? 'Shift hours ended at 06:00 PM IST.\n\nCheck-in is disabled and will reopen at 09:00 AM tomorrow.'
-                      : 'Shift check-in is closed (06:00 PM – 09:00 AM IST).\n\nCheck-in will reopen at 09:00 AM today.',
+                    'Shift check-in is closed (06:00 PM – 09:00 AM IST).\n\nCheck-in will reopen at 09:00 AM today.',
                     [{ text: 'OK' }]
                   )
                 }
@@ -975,7 +991,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
               >
                 <Lock size={15} color="#64748B" style={{ marginRight: 6 }} />
                 <Text style={styles.bannerLockedBtnText}>
-                  {shiftInfo.isAfterShiftEnd ? 'Check In (Closed)' : 'Check In (Opens 9 AM)'}
+                  Opens 9:00 AM
                 </Text>
               </TouchableOpacity>
             ) : (
