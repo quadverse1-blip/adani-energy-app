@@ -155,7 +155,7 @@ export const SalaryScreen: React.FC = () => {
     slip?.fileName ||
     `Adani_Salary_Slip_${MONTH_NAMES[selectedMonth - 1]}_${selectedYear}.pdf`;
 
-  const isDocumentAvailable = !!slip;
+  const isDocumentAvailable = Boolean(slip?.hasUploadedDocument || slip?.fileName || slip?.payslipPdfUrl);
 
   return (
     <View style={styles.container}>

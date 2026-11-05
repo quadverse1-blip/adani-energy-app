@@ -169,10 +169,10 @@ class SalaryService:
         # 1. Check if finalized statement is already recorded
         frozen_statement = db.get_salary_statement(employee_id, month, year)
         if frozen_statement:
-            frozen_statement["payslipPdfUrl"] = f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}"
-            if frozen_statement.get("hasUploadedDocument") or frozen_statement.get("fileBase64"):
-                frozen_statement["hasUploadedDocument"] = True
-                frozen_statement["documentUrl"] = f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}"
+            has_doc = bool(frozen_statement.get("hasUploadedDocument") or frozen_statement.get("fileBase64") or frozen_statement.get("fileName"))
+            frozen_statement["hasUploadedDocument"] = has_doc
+            frozen_statement["payslipPdfUrl"] = f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}" if has_doc else None
+            frozen_statement["documentUrl"] = f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}" if has_doc else None
             return frozen_statement
 
         # 2. Check if an admin uploaded an external slip file
@@ -186,7 +186,10 @@ class SalaryService:
             or UPLOADED_SLIPS.get(key3)
             or UPLOADED_SLIPS.get(key4)
         )
-        has_uploaded = uploaded_slip is not None
+        safe_canonical = canonical_id.replace("/", "_").replace("\\", "_")
+        disk_path = os.path.join(settings.UPLOAD_DIR, "payslips", f"payslip_{safe_canonical}_{year}_{month}.pdf")
+        has_disk = os.path.exists(disk_path)
+        has_uploaded = (uploaded_slip is not None) or has_disk
 
         # 3. Retrieve employee salary configuration (with Historical Salary Protection)
         cfg = db.get_salary_config(canonical_id)
@@ -280,13 +283,13 @@ class SalaryService:
                 "tds": 0.0,
                 "totalDeductions": total_deduction_amount
             },
-            "payslipPdfUrl": f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}",
+            "payslipPdfUrl": f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}" if has_uploaded else None,
             "hasUploadedDocument": has_uploaded,
             "documentUrl": f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}" if has_uploaded else None,
-            "fileName": uploaded_slip.get("fileName") if uploaded_slip else None,
-            "notes": uploaded_slip.get("notes") if uploaded_slip else "Attendance-based monthly compensation",
-            "uploadedAt": uploaded_slip.get("uploadedAt") if uploaded_slip else None,
-            "uploadedBy": uploaded_slip.get("uploadedBy") if uploaded_slip else None
+            "fileName": (uploaded_slip.get("fileName") if uploaded_slip else None) or (f"payslip_{safe_canonical}_{year}_{month}.pdf" if has_disk else None),
+            "notes": (uploaded_slip.get("notes") if uploaded_slip else None) or "Verified employee monthly salary slip",
+            "uploadedAt": (uploaded_slip.get("uploadedAt") if uploaded_slip else None),
+            "uploadedBy": (uploaded_slip.get("uploadedBy") if uploaded_slip else None)
         }
 
         return statement
