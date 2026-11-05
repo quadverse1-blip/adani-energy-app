@@ -69,7 +69,7 @@ const SHIFT_STATUS_OPTIONS = ['Present', 'Late', 'Absent', 'Completed', 'Half Da
 export const EmployeesScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { openDrawer } = useAdminDrawerStore();
-  const [employees, setEmployees] = useState<User[]>([]);
+  const [employees, setEmployees] = useState<User[]>(() => employeeService.getCachedEmployees());
   const [sites, setSites] = useState<Substation[]>([]);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<'All' | 'Technician' | 'Supervisor' | 'Active'>('All');

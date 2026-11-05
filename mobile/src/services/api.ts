@@ -8,7 +8,7 @@ let cachedAuthToken: string | null = null;
 
 export const apiClient = axios.create({
   baseURL: CONFIG.API_BASE_URL,
-  timeout: 10000,
+  timeout: 25000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -125,11 +125,29 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Intercept 401 Unauthorized to auto-clear dead or expired sessions and return to Login cleanly
+// Intercept responses: auto-retry on transient network errors & handle 401 Unauthorized
 let isHandling401 = false;
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
+    const config = error.config;
+
+    // 1. Auto-retry idempotent GET requests once on network hiccups or timeouts
+    if (
+      config &&
+      config.method?.toLowerCase() === 'get' &&
+      !config._isRetry &&
+      (error.code === 'ERR_NETWORK' ||
+        error.code === 'ECONNABORTED' ||
+        error.message?.includes('Network Error') ||
+        error.message?.includes('timeout'))
+    ) {
+      config._isRetry = true;
+      await new Promise((r) => setTimeout(r, 600));
+      return apiClient(config);
+    }
+
+    // 2. Intercept 401 Unauthorized to auto-clear dead or expired sessions and return to Login cleanly
     if (error.response?.status === 401) {
       const url = String(error.config?.url || '');
       // Don't auto-logout if the error comes from an active login attempt failing

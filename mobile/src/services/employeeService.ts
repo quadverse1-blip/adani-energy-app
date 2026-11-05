@@ -43,10 +43,48 @@ export interface BulkEmployeeItem {
   department?: string;
 }
 
+let cachedEmployeesList: User[] = [];
+
 export const employeeService = {
+  getCachedEmployees(): User[] {
+    return cachedEmployeesList;
+  },
+
   async getEmployees(filters?: EmployeeFilters): Promise<User[]> {
-    const response = await apiClient.get<User[]>('/employees', { params: filters });
-    return response.data;
+    try {
+      const response = await apiClient.get<User[]>('/employees', { params: filters });
+      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        // If query was unfiltered, cache entire master list
+        if (!filters || (!filters.role && !filters.search && !filters.status)) {
+          cachedEmployeesList = response.data;
+        } else if (cachedEmployeesList.length === 0) {
+          cachedEmployeesList = response.data;
+        }
+      }
+      return response.data;
+    } catch (err) {
+      if (cachedEmployeesList.length > 0) {
+        console.warn('Network error fetching employees, serving cached list of', cachedEmployeesList.length);
+        let list = [...cachedEmployeesList];
+        if (filters?.role) {
+          list = list.filter((e) => (e.role || '').toLowerCase() === filters.role?.toLowerCase());
+        }
+        if (filters?.status) {
+          list = list.filter((e) => (e.status || '').toLowerCase() === filters.status?.toLowerCase());
+        }
+        if (filters?.search) {
+          const s = filters.search.toLowerCase();
+          list = list.filter(
+            (e) =>
+              (e.name || '').toLowerCase().includes(s) ||
+              (e.employeeId || '').toLowerCase().includes(s) ||
+              (e.phone || '').includes(s)
+          );
+        }
+        return list;
+      }
+      throw err;
+    }
   },
 
   async getEmployeeById(employeeId: string): Promise<User> {

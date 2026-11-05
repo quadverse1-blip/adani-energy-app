@@ -83,7 +83,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
     setLoading(true);
     try {
       const [empList, siteList] = await Promise.all([
-        employeeService.getEmployees(),
+        employeeService.getEmployees().catch(() => employeeService.getCachedEmployees()),
         siteService.getSites(),
       ]);
 

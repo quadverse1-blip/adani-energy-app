@@ -193,8 +193,8 @@ export const AttendanceLogsScreen: React.FC = () => {
     setLoading(true);
     try {
       const [techList, siteList] = await Promise.all([
-        employeeService.getEmployees(),
-        siteService.getSites(),
+        employeeService.getEmployees().catch(() => employeeService.getCachedEmployees()),
+        siteService.getSites().catch(() => []),
       ]);
       setTechnicians(techList);
       setSites(siteList);

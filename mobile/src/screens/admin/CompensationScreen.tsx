@@ -61,13 +61,16 @@ export const CompensationScreen: React.FC = () => {
   const [showYearModal, setShowYearModal] = useState<boolean>(false);
 
   // Data States
-  const [employees, setEmployees] = useState<User[]>([]);
+  const [employees, setEmployees] = useState<User[]>(() => employeeService.getCachedEmployees());
   const [summary, setSummary] = useState<SalarySummaryResponse | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(() => employeeService.getCachedEmployees().length === 0);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
   // Upload Placeholder Form States
-  const [selectedEmpId, setSelectedEmpId] = useState<string>('');
+  const [selectedEmpId, setSelectedEmpId] = useState<string>(() => {
+    const cached = employeeService.getCachedEmployees();
+    return cached.length > 0 ? (cached[0].id || (cached[0] as any)._id || cached[0].employeeId) : '';
+  });
   const [showEmpModal, setShowEmpModal] = useState<boolean>(false);
   const [empSearchQuery, setEmpSearchQuery] = useState<string>('');
   const [netAmount, setNetAmount] = useState<string>('20000');
@@ -89,7 +92,7 @@ export const CompensationScreen: React.FC = () => {
     try {
       const [sumRes, empRes] = await Promise.all([
         salaryService.getSalarySummary(selectedMonth, selectedYear).catch(() => null),
-        employeeService.getEmployees().catch(() => []),
+        employeeService.getEmployees().catch(() => employeeService.getCachedEmployees()),
       ]);
 
       if (sumRes) {

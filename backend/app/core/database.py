@@ -798,7 +798,45 @@ class DatabaseManager:
         self.set_firestore_document_async("salary_configs", canonical.replace("/", "_"), existing)
         return existing
 
+    def _sync_salary_statements_from_firestore_if_needed(self, force: bool = False):
+        """Pre-fetches all Firestore salary statements in a single batch to avoid per-employee N+1 roundtrips."""
+        import time
+        now_ts = time.time()
+        is_synced = getattr(self, "_salary_statements_synced", False)
+        last_sync = getattr(self, "_last_salary_statement_sync", 0.0)
+        if not force and is_synced and (now_ts - last_sync) < 60.0:
+            return
+
+        try:
+            remote_docs = self.list_firestore_collection("salary_statements")
+            if remote_docs:
+                for doc in remote_docs:
+                    c = str(doc.get("employeeId") or "").strip()
+                    raw_id = str(doc.get("rawId") or doc.get("_id") or "").strip()
+                    m = doc.get("month", 10)
+                    y = doc.get("year", 2026)
+                    safe_c = c.replace('/', '_').lower()
+                    safe_r = raw_id.replace('/', '_').lower()
+                    for k in [
+                        f"{c.lower()}_{y}_{m}",
+                        f"{c.lower()}_{m}_{y}",
+                        f"{raw_id.lower()}_{y}_{m}",
+                        f"{raw_id.lower()}_{m}_{y}",
+                        f"{safe_c}_{y}_{m}",
+                        f"{safe_c}_{m}_{y}",
+                        f"{safe_r}_{y}_{m}",
+                        f"{safe_r}_{m}_{y}",
+                    ]:
+                        if k:
+                            self._raw_salary_statements[k] = doc
+            self._salary_statements_synced = True
+            self._last_salary_statement_sync = now_ts
+        except Exception as e:
+            logger.warning(f"Error syncing salary statements from Firestore: {e}")
+
     def get_salary_statement(self, emp_id: str, month: int, year: int) -> Optional[dict]:
+        self._sync_salary_statements_from_firestore_if_needed()
+
         emp = self.get_employee(emp_id) or self.find_employee_by_identifier(emp_id)
         canonical = str((emp.get("employeeId") if emp else None) or emp_id).strip()
         raw_id = str((emp.get("_id") if emp else None) or emp_id).strip()
@@ -821,39 +859,31 @@ class DatabaseManager:
             if k in self._raw_salary_statements:
                 return self._raw_salary_statements[k]
 
-        # Query Cloud Firestore directly if not present in memory
-        for doc_key in [
-            f"{safe_canonical}_{year}_{month}",
-            f"{safe_canonical}_{month}_{year}",
-            f"{safe_raw}_{year}_{month}",
-            f"{safe_raw}_{month}_{year}",
-            f"{canonical.replace('/', '_')}_{year}_{month}",
-            f"{canonical.replace('/', '_')}_{month}_{year}",
-        ]:
-            doc = self.get_firestore_document("salary_statements", doc_key)
-            if doc:
-                for pk in possible_keys:
-                    self._raw_salary_statements[pk] = doc
-                return doc
-
         return None
 
     def save_salary_statement(self, statement: dict) -> dict:
         canonical = str(statement.get("employeeId") or "").strip()
+        raw_id = str(statement.get("rawId") or statement.get("_id") or "").strip()
         month = statement.get("month", 10)
         year = statement.get("year", 2026)
 
         safe_canonical = canonical.replace('/', '_').lower()
+        safe_raw = raw_id.replace('/', '_').lower()
         doc_id = f"{safe_canonical}_{year}_{month}"
 
         possible_keys = [
             f"{canonical.lower()}_{year}_{month}",
             f"{canonical.lower()}_{month}_{year}",
+            f"{raw_id.lower()}_{year}_{month}",
+            f"{raw_id.lower()}_{month}_{year}",
             f"{safe_canonical}_{year}_{month}",
             f"{safe_canonical}_{month}_{year}",
+            f"{safe_raw}_{year}_{month}",
+            f"{safe_raw}_{month}_{year}",
         ]
         for pk in possible_keys:
-            self._raw_salary_statements[pk] = statement
+            if pk:
+                self._raw_salary_statements[pk] = statement
 
         self.set_firestore_document_async("salary_statements", doc_id, statement)
         return statement

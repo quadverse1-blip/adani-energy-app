@@ -59,7 +59,13 @@ class SalaryService:
         return db.set_salary_config(employee_id, config_data)
 
     @staticmethod
-    def calculate_attendance_summary(employee_id: str, month: int, year: int) -> dict:
+    def calculate_attendance_summary(
+        employee_id: str,
+        month: int,
+        year: int,
+        holiday_map: Optional[dict] = None,
+        emp_att_map: Optional[dict] = None
+    ) -> dict:
         """
         Dynamically calculates employee attendance categories from centralized attendance:
         - P (Present): Full days worked
@@ -71,27 +77,29 @@ class SalaryService:
         now = datetime.now()
         days_in_month = calendar.monthrange(year, month)[1]
 
-        # 1. Fetch holidays
-        holidays_list = db.get_all_holidays(year=year)
-        holiday_map = {}
-        for h in holidays_list:
-            if h.get("date") and h.get("status") != "deleted":
-                holiday_map[str(h["date"]).strip()] = h
+        # 1. Fetch holidays if not supplied
+        if holiday_map is None:
+            holidays_list = db.get_all_holidays(year=year)
+            holiday_map = {}
+            for h in holidays_list:
+                if h.get("date") and h.get("status") != "deleted":
+                    holiday_map[str(h["date"]).strip()] = h
 
-        # 2. Fetch employee attendance records
-        employee = db.get_employee(employee_id) or db.find_employee_by_identifier(employee_id)
-        emp_raw_id = employee.get("_id", employee_id) if employee else employee_id
-        emp_code = employee.get("employeeId", employee_id) if employee else employee_id
+        # 2. Fetch employee attendance records if not supplied
+        if emp_att_map is None:
+            employee = db.get_employee(employee_id) or db.find_employee_by_identifier(employee_id)
+            emp_raw_id = employee.get("_id", employee_id) if employee else employee_id
+            emp_code = employee.get("employeeId", employee_id) if employee else employee_id
 
-        emp_att_list = db.get_attendance_history(emp_raw_id, month=month, year=year)
-        if not emp_att_list and emp_code != emp_raw_id:
-            emp_att_list = db.get_attendance_history(emp_code, month=month, year=year)
+            emp_att_list = db.get_attendance_history(emp_raw_id, month=month, year=year)
+            if not emp_att_list and emp_code != emp_raw_id:
+                emp_att_list = db.get_attendance_history(emp_code, month=month, year=year)
 
-        emp_att_map: Dict[str, dict] = {}
-        for att in emp_att_list:
-            d_val = str(att.get("date") or "").strip()
-            if d_val:
-                emp_att_map[d_val] = att
+            emp_att_map = {}
+            for att in emp_att_list:
+                d_val = str(att.get("date") or "").strip()
+                if d_val:
+                    emp_att_map[d_val] = att
 
         present_days = 0
         half_days = 0
@@ -152,7 +160,13 @@ class SalaryService:
         }
 
     @staticmethod
-    def get_salary_slip(employee_id: str, month: int, year: int) -> dict:
+    def get_salary_slip(
+        employee_id: str,
+        month: int,
+        year: int,
+        holiday_map: Optional[dict] = None,
+        emp_att_map: Optional[dict] = None
+    ) -> dict:
         """
         Returns employee salary slip.
         If a statement was finalized by Admin, returns the frozen finalized record.
@@ -217,7 +231,9 @@ class SalaryService:
         half_day_rate = float(active_cfg.get("halfDayDeductionRate", 250.0))
 
         # 4. Calculate actual attendance counts
-        att = SalaryService.calculate_attendance_summary(employee_id, month, year)
+        att = SalaryService.calculate_attendance_summary(
+            employee_id, month, year, holiday_map=holiday_map, emp_att_map=emp_att_map
+        )
         days_in_month = att["totalCalendarDays"]
         daily_rate = round(monthly_salary / float(days_in_month), 2)
 
@@ -474,10 +490,51 @@ class SalaryService:
     @staticmethod
     def get_salary_summary(month: int, year: int) -> dict:
         """Returns monthly compensation summary across all active workforce employees."""
+        # Sync statements from Firestore once in a batch
+        db._sync_salary_statements_from_firestore_if_needed()
+
         all_emps = db.get_all_employees()
         all_emps.sort(key=lambda x: str(x.get("employeeId") or x.get("_id") or ""))
 
-        slips = [SalaryService.get_salary_slip(e["_id"], month, year) for e in all_emps]
+        # Pre-fetch holidays once for the year
+        holidays_list = db.get_all_holidays(year=year)
+        holiday_map = {}
+        for h in holidays_list:
+            if h.get("date") and h.get("status") != "deleted":
+                holiday_map[str(h["date"]).strip()] = h
+
+        # Pre-index attendance once for the month/year across all employees
+        all_att = db.attendance.values()
+        att_by_emp: Dict[str, Dict[str, dict]] = {}
+        target_prefix = f"{year}-{month:02d}"
+        for a in all_att:
+            if not isinstance(a, dict):
+                continue
+            date_str = str(a.get("date") or "")
+            if not date_str.startswith(target_prefix):
+                continue
+            for k in ["employeeId", "technicianCode", "userId"]:
+                val = str(a.get(k) or "").lower().strip()
+                if val:
+                    if val not in att_by_emp:
+                        att_by_emp[val] = {}
+                    att_by_emp[val][date_str] = a
+
+        slips = []
+        for e in all_emps:
+            e_id = e.get("_id") or e.get("id") or e.get("employeeId")
+            emp_code = str(e.get("employeeId") or "").lower().strip()
+            raw_id = str(e.get("_id") or "").lower().strip()
+
+            emp_map = dict(att_by_emp.get(raw_id, {}))
+            if emp_code and emp_code in att_by_emp:
+                emp_map.update(att_by_emp[emp_code])
+
+            s = SalaryService.get_salary_slip(
+                e_id, month, year, holiday_map=holiday_map, emp_att_map=emp_map
+            )
+            slips.append(s)
+
         total_disbursed = sum(s["netPay"] for s in slips)
         total_deductions = sum(s.get("totalDeductionAmount", 0.0) for s in slips)
         total_base = sum(s.get("monthlySalary", 0.0) for s in slips)

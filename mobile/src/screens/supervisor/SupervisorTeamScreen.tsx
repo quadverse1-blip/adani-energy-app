@@ -35,9 +35,15 @@ import { AppBackButton } from '../../components/common/AppBackButton';
 export const SupervisorTeamScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { openDrawer } = useSupervisorDrawerStore();
-  const [team, setTeam] = useState<User[]>([]);
+  const [team, setTeam] = useState<User[]>(() => {
+    const cached = employeeService.getCachedEmployees();
+    return cached.filter((e) => (e.role || '').toLowerCase() === 'technician');
+  });
   const [sites, setSites] = useState<Substation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const cached = employeeService.getCachedEmployees();
+    return cached.filter((e) => (e.role || '').toLowerCase() === 'technician').length === 0;
+  });
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = async () => {
