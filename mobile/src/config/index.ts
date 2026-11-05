@@ -12,16 +12,20 @@ const getDevApiUrl = () => {
   }
 
   // In Expo Go on physical device or simulator, hostUri contains "192.168.x.x:8081"
-  const hostUri = Constants.expoConfig?.hostUri;
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest?.debuggerHost ||
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri;
+
   if (hostUri) {
     const host = hostUri.split(':')[0];
-    if (host) {
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
       return `http://${host}:8000`;
     }
   }
 
-  // Local LAN IP fallback
-  return 'http://192.168.0.111:8000';
+  // Local LAN IP fallback matching active Wi-Fi interface (192.168.0.115)
+  return 'http://192.168.0.115:8000';
 };
 
 export const CONFIG = {

@@ -293,24 +293,41 @@ export const CompensationScreen: React.FC = () => {
       }
 
       const url = salaryService.getDownloadUrl(empId, selectedMonth, selectedYear, token || undefined);
-      const destination = new ExpoFile(Paths.document, filename);
-      const downloadedFile = await ExpoFile.downloadFileAsync(url, destination, {
-        headers: {
-          Authorization: token ? `Bearer ${token}` : '',
-        },
-      });
+      let downloadedUri: string | null = null;
+      try {
+        const destination = new ExpoFile(Paths.document, filename);
+        const downloadedFile = await ExpoFile.downloadFileAsync(url, destination, {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : '',
+          },
+        });
+        downloadedUri = downloadedFile.uri;
+      } catch (expoErr) {
+        try {
+          const FileSystemLegacy = require('expo-file-system/legacy');
+          const destUri = `${FileSystemLegacy.documentDirectory}${filename}`;
+          const res = await FileSystemLegacy.downloadAsync(url, destUri, {
+            headers: {
+              Authorization: token ? `Bearer ${token}` : '',
+            },
+          });
+          downloadedUri = res.uri;
+        } catch {
+          throw expoErr;
+        }
+      }
 
       const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(downloadedFile.uri, {
+      if (canShare && downloadedUri) {
+        await Sharing.shareAsync(downloadedUri, {
           mimeType: filename.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream',
           dialogTitle: `Adani Salary Slip - ${slip.employeeName} (${MONTH_NAMES[selectedMonth - 1]} ${selectedYear})`,
           UTI: 'com.adobe.pdf',
         });
-      } else {
+      } else if (downloadedUri) {
         Alert.alert(
           'Document Retrieved',
-          `Saved ${filename} to your device documents.\n\nPath: ${downloadedFile.uri}`
+          `Saved ${filename} to your device documents.\n\nPath: ${downloadedUri}`
         );
       }
     } catch (err: any) {

@@ -1,4 +1,5 @@
 import { apiClient } from './api';
+import { CONFIG } from '../config';
 import { SalarySlip, SalaryConfig, SalarySummaryResponse } from '../types';
 
 export interface SalaryConfigPayload {
@@ -63,7 +64,10 @@ export const salaryService = {
   },
 
   getDownloadUrl(employeeId: string, month: number = 10, year: number = 2026, token?: string): string {
-    const base = apiClient.defaults.baseURL || '';
+    let base = apiClient.defaults.baseURL || CONFIG.API_BASE_URL || 'http://192.168.0.115:8000';
+    if (base.startsWith('/')) {
+      base = `${CONFIG.API_BASE_URL}${base}`;
+    }
     const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
     const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
     // If employeeId contains slash (e.g. b4S/Adani/61), encode each segment or parameter

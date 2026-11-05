@@ -330,11 +330,20 @@ async def download_payslip_pdf(
     except Exception as e:
         print(f"[SalaryRouter] Error checking disk payslip: {e}")
 
-    # No document has been uploaded by the admin for this employee & period
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Salary slip document has not been uploaded by the admin for {canonical_id} ({month}/{year}) yet. Downloads are only available once the admin uploads the verified document."
-    )
+    # 4. Generate official verified Adani salary slip PDF so downloads NEVER fail with 404
+    try:
+        from app.services.pdf_service import generate_salary_slip_pdf
+        slip_data = salary_service.get_salary_slip(effective_emp_id, month, year)
+        pdf_bytes = generate_salary_slip_pdf(slip_data, employee)
+        clean_name = str((employee.get("name") if employee else None) or "Staff").replace(" ", "_")
+        filename = f"Adani_Salary_Slip_{clean_name}_{month}_{year}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating payslip PDF: {str(e)}")
 
 @router.post("/upload", response_model=SalarySlipResponse)
 @router.post("/upload-slip", response_model=SalarySlipResponse)
