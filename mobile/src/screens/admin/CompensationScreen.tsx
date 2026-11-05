@@ -157,18 +157,65 @@ export const CompensationScreen: React.FC = () => {
         const file = result.assets[0];
         let base64Data: string | undefined = undefined;
 
-        if (Platform.OS === 'web' && (file as any).file) {
+        if (Platform.OS === 'web') {
+          if ((file as any).file) {
+            try {
+              const rawFile = (file as any).file as File;
+              const reader = new FileReader();
+              base64Data = await new Promise((resolve) => {
+                reader.onload = () => {
+                  const res = reader.result as string;
+                  resolve(res.includes(',') ? res.split(',')[1] : res);
+                };
+                reader.readAsDataURL(rawFile);
+              });
+            } catch {}
+          } else if (file.uri) {
+            try {
+              const resp = await fetch(file.uri);
+              const blob = await resp.blob();
+              const reader = new FileReader();
+              base64Data = await new Promise((resolve) => {
+                reader.onload = () => {
+                  const res = reader.result as string;
+                  resolve(res.includes(',') ? res.split(',')[1] : res);
+                };
+                reader.readAsDataURL(blob);
+              });
+            } catch {}
+          }
+        } else {
+          // Native Android & iOS: read as base64 using expo-file-system
           try {
-            const rawFile = (file as any).file as File;
-            const reader = new FileReader();
-            base64Data = await new Promise((resolve) => {
-              reader.onload = () => {
-                const res = reader.result as string;
-                resolve(res.includes(',') ? res.split(',')[1] : res);
-              };
-              reader.readAsDataURL(rawFile);
-            });
+            const f = new ExpoFile(file.uri);
+            if (typeof f.base64 === 'function') {
+              base64Data = await f.base64();
+            }
           } catch {}
+
+          if (!base64Data) {
+            try {
+              const FileSystemLegacy = require('expo-file-system/legacy');
+              if (FileSystemLegacy && typeof FileSystemLegacy.readAsStringAsync === 'function') {
+                base64Data = await FileSystemLegacy.readAsStringAsync(file.uri, { encoding: 'base64' });
+              }
+            } catch {}
+          }
+
+          if (!base64Data) {
+            try {
+              const resp = await fetch(file.uri);
+              const blob = await resp.blob();
+              const reader = new FileReader();
+              base64Data = await new Promise((resolve) => {
+                reader.onloadend = () => {
+                  const res = reader.result as string;
+                  resolve(res.includes(',') ? res.split(',')[1] : res);
+                };
+                reader.readAsDataURL(blob);
+              });
+            } catch {}
+          }
         }
 
         setPickedFile({

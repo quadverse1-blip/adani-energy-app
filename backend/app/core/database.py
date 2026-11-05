@@ -800,23 +800,61 @@ class DatabaseManager:
 
     def get_salary_statement(self, emp_id: str, month: int, year: int) -> Optional[dict]:
         emp = self.get_employee(emp_id) or self.find_employee_by_identifier(emp_id)
-        canonical = emp.get("employeeId", emp_id) if emp else emp_id
-        raw_id = emp.get("_id", emp_id) if emp else emp_id
+        canonical = str((emp.get("employeeId") if emp else None) or emp_id).strip()
+        raw_id = str((emp.get("_id") if emp else None) or emp_id).strip()
 
-        k1 = f"{canonical.lower()}_{year}_{month}"
-        k2 = f"{raw_id.lower()}_{year}_{month}"
+        safe_canonical = canonical.replace('/', '_').lower()
+        safe_raw = raw_id.replace('/', '_').lower()
 
-        return self._raw_salary_statements.get(k1) or self._raw_salary_statements.get(k2)
+        # Check all possible RAM keys
+        possible_keys = [
+            f"{canonical.lower()}_{year}_{month}",
+            f"{raw_id.lower()}_{year}_{month}",
+            f"{canonical.lower()}_{month}_{year}",
+            f"{raw_id.lower()}_{month}_{year}",
+            f"{safe_canonical}_{year}_{month}",
+            f"{safe_raw}_{year}_{month}",
+            f"{safe_canonical}_{month}_{year}",
+            f"{safe_raw}_{month}_{year}",
+        ]
+        for k in possible_keys:
+            if k in self._raw_salary_statements:
+                return self._raw_salary_statements[k]
+
+        # Query Cloud Firestore directly if not present in memory
+        for doc_key in [
+            f"{safe_canonical}_{year}_{month}",
+            f"{safe_canonical}_{month}_{year}",
+            f"{safe_raw}_{year}_{month}",
+            f"{safe_raw}_{month}_{year}",
+            f"{canonical.replace('/', '_')}_{year}_{month}",
+            f"{canonical.replace('/', '_')}_{month}_{year}",
+        ]:
+            doc = self.get_firestore_document("salary_statements", doc_key)
+            if doc:
+                for pk in possible_keys:
+                    self._raw_salary_statements[pk] = doc
+                return doc
+
+        return None
 
     def save_salary_statement(self, statement: dict) -> dict:
-        canonical = str(statement.get("employeeId") or "").strip().lower()
+        canonical = str(statement.get("employeeId") or "").strip()
         month = statement.get("month", 10)
         year = statement.get("year", 2026)
 
-        key = f"{canonical}_{year}_{month}"
-        doc_id = f"{canonical.replace('/', '_')}_{year}_{month}"
+        safe_canonical = canonical.replace('/', '_').lower()
+        doc_id = f"{safe_canonical}_{year}_{month}"
 
-        self._raw_salary_statements[key] = statement
+        possible_keys = [
+            f"{canonical.lower()}_{year}_{month}",
+            f"{canonical.lower()}_{month}_{year}",
+            f"{safe_canonical}_{year}_{month}",
+            f"{safe_canonical}_{month}_{year}",
+        ]
+        for pk in possible_keys:
+            self._raw_salary_statements[pk] = statement
+
         self.set_firestore_document_async("salary_statements", doc_id, statement)
         return statement
 

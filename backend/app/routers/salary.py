@@ -279,15 +279,19 @@ async def download_payslip_pdf(
     safe_canonical = canonical_id.replace("/", "_").replace("\\", "_")
 
     # 1. Check in-memory uploaded slips under all permutations
-    key1 = f"{effective_emp_id}_{month}_{year}"
-    key2 = f"{canonical_id}_{month}_{year}"
-    key3 = f"{effective_emp_id}_{year}_{month}"
-    key4 = f"{canonical_id}_{year}_{month}"
     uploaded = (
-        UPLOADED_SLIPS.get(key1)
-        or UPLOADED_SLIPS.get(key2)
-        or UPLOADED_SLIPS.get(key3)
-        or UPLOADED_SLIPS.get(key4)
+        UPLOADED_SLIPS.get(f"{effective_emp_id}_{month}_{year}")
+        or UPLOADED_SLIPS.get(f"{canonical_id}_{month}_{year}")
+        or UPLOADED_SLIPS.get(f"{effective_emp_id}_{year}_{month}")
+        or UPLOADED_SLIPS.get(f"{canonical_id}_{year}_{month}")
+        or UPLOADED_SLIPS.get(f"{effective_emp_id.lower()}_{month}_{year}")
+        or UPLOADED_SLIPS.get(f"{canonical_id.lower()}_{month}_{year}")
+        or UPLOADED_SLIPS.get(f"{effective_emp_id.lower()}_{year}_{month}")
+        or UPLOADED_SLIPS.get(f"{canonical_id.lower()}_{year}_{month}")
+        or UPLOADED_SLIPS.get(f"{safe_canonical}_{month}_{year}")
+        or UPLOADED_SLIPS.get(f"{safe_canonical}_{year}_{month}")
+        or UPLOADED_SLIPS.get(f"{safe_canonical.lower()}_{month}_{year}")
+        or UPLOADED_SLIPS.get(f"{safe_canonical.lower()}_{year}_{month}")
     )
 
     # 2. Check persistent database statement if in-memory was cleared on server reload

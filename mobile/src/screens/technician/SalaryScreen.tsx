@@ -69,7 +69,7 @@ export const SalaryScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
   // STRICT EMPLOYEE ISOLATION: Technicians can ONLY retrieve their own salary records
-  const currentUserId = user?.id || (user as any)?._id || '';
+  const currentUserId = user?.employeeId || user?.id || (user as any)?._id || '';
 
   const fetchSalary = async () => {
     if (!currentUserId) return;
@@ -155,7 +155,7 @@ export const SalaryScreen: React.FC = () => {
     slip?.fileName ||
     `Adani_Salary_Slip_${MONTH_NAMES[selectedMonth - 1]}_${selectedYear}.pdf`;
 
-  const isDocumentAvailable = Boolean(slip?.hasUploadedDocument || slip?.fileName || slip?.payslipPdfUrl);
+  const isDocumentAvailable = Boolean(slip?.hasUploadedDocument || slip?.fileName || slip?.documentUrl || slip?.payslipPdfUrl);
 
   return (
     <View style={styles.container}>

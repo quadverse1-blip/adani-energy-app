@@ -176,17 +176,21 @@ class SalaryService:
             return frozen_statement
 
         # 2. Check if an admin uploaded an external slip file
-        key1 = f"{employee_id}_{month}_{year}"
-        key2 = f"{canonical_id}_{month}_{year}"
-        key3 = f"{employee_id}_{year}_{month}"
-        key4 = f"{canonical_id}_{year}_{month}"
-        uploaded_slip = (
-            UPLOADED_SLIPS.get(key1)
-            or UPLOADED_SLIPS.get(key2)
-            or UPLOADED_SLIPS.get(key3)
-            or UPLOADED_SLIPS.get(key4)
-        )
         safe_canonical = canonical_id.replace("/", "_").replace("\\", "_")
+        uploaded_slip = (
+            UPLOADED_SLIPS.get(f"{employee_id}_{month}_{year}")
+            or UPLOADED_SLIPS.get(f"{canonical_id}_{month}_{year}")
+            or UPLOADED_SLIPS.get(f"{employee_id}_{year}_{month}")
+            or UPLOADED_SLIPS.get(f"{canonical_id}_{year}_{month}")
+            or UPLOADED_SLIPS.get(f"{employee_id.lower()}_{month}_{year}")
+            or UPLOADED_SLIPS.get(f"{canonical_id.lower()}_{month}_{year}")
+            or UPLOADED_SLIPS.get(f"{employee_id.lower()}_{year}_{month}")
+            or UPLOADED_SLIPS.get(f"{canonical_id.lower()}_{year}_{month}")
+            or UPLOADED_SLIPS.get(f"{safe_canonical}_{month}_{year}")
+            or UPLOADED_SLIPS.get(f"{safe_canonical}_{year}_{month}")
+            or UPLOADED_SLIPS.get(f"{safe_canonical.lower()}_{month}_{year}")
+            or UPLOADED_SLIPS.get(f"{safe_canonical.lower()}_{year}_{month}")
+        )
         disk_path = os.path.join(settings.UPLOAD_DIR, "payslips", f"payslip_{safe_canonical}_{year}_{month}.pdf")
         has_disk = os.path.exists(disk_path)
         has_uploaded = (uploaded_slip is not None) or has_disk
@@ -420,6 +424,14 @@ class SalaryService:
             f"{canonical_id}_{month}_{year}",
             f"{employee_id}_{year}_{month}",
             f"{canonical_id}_{year}_{month}",
+            f"{employee_id.lower()}_{month}_{year}",
+            f"{canonical_id.lower()}_{month}_{year}",
+            f"{employee_id.lower()}_{year}_{month}",
+            f"{canonical_id.lower()}_{year}_{month}",
+            f"{safe_canonical}_{month}_{year}",
+            f"{safe_canonical}_{year}_{month}",
+            f"{safe_canonical.lower()}_{month}_{year}",
+            f"{safe_canonical.lower()}_{year}_{month}",
         ]:
             UPLOADED_SLIPS[k] = record
 
