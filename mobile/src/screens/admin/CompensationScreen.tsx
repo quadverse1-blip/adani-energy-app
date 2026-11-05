@@ -557,30 +557,42 @@ export const CompensationScreen: React.FC = () => {
             )}
           </View>
 
-          {/* Form Step 3: Optional Net Amount & Remarks */}
-          <View style={styles.formRow}>
-            <View style={[styles.formGroup, { flex: 1 }]}>
-              <Text style={styles.formLabel}>NET SALARY AMOUNT (₹)</Text>
-              <TextInput
-                style={styles.inputField}
-                value={netAmount}
-                onChangeText={setNetAmount}
-                placeholder="20000"
-                keyboardType="numeric"
-                placeholderTextColor="#94A3B8"
-              />
-            </View>
+          {/* Form Step 3: Net Amount */}
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>NET SALARY AMOUNT (₹) *</Text>
+            <TextInput
+              style={styles.inputField}
+              value={netAmount}
+              onChangeText={setNetAmount}
+              placeholder="e.g. 20000"
+              keyboardType="numeric"
+              placeholderTextColor="#94A3B8"
+            />
+          </View>
 
-            <View style={[styles.formGroup, { flex: 1.5 }]}>
-              <Text style={styles.formLabel}>REMARKS / NOTES</Text>
-              <TextInput
-                style={styles.inputField}
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="Verified monthly payout"
-                placeholderTextColor="#94A3B8"
-              />
+          {/* Form Step 4: Remarks / Notes */}
+          <View style={styles.formGroup}>
+            <View style={styles.formLabelRow}>
+              <Text style={styles.formLabel}>REMARKS / NOTES (OPTIONAL)</Text>
+              {notes.trim().length > 0 && (
+                <TouchableOpacity onPress={() => setNotes('')} activeOpacity={0.7}>
+                  <Text style={styles.clearBtnText}>Clear</Text>
+                </TouchableOpacity>
+              )}
             </View>
+            <TextInput
+              style={styles.remarksInputField}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Add optional remarks or notes for employee (e.g. Verified monthly salary payout, shift bonus, adjustments)..."
+              placeholderTextColor="#94A3B8"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+            <Text style={styles.formHelperText}>
+              These remarks will appear on the employee's salary slip view and archived record.
+            </Text>
           </View>
 
           {/* Upload Button */}
@@ -1154,16 +1166,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
+  formLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  clearBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#2563EB',
+    paddingHorizontal: 4,
+  },
   inputField: {
     backgroundColor: '#F8FAFC',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#CBD5E1',
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 10,
     fontSize: 13,
     color: '#0F172A',
     fontWeight: '600',
+  },
+  remarksInputField: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '500',
+    minHeight: 74,
+    textAlignVertical: 'top',
+  },
+  formHelperText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 4,
+    fontWeight: '500',
   },
   uploadSubmitBtn: {
     flexDirection: 'row',

@@ -403,16 +403,24 @@ export const UploadSalarySlipModal: React.FC<UploadSalarySlipModalProps> = ({
                 </TouchableOpacity>
               </View>
 
-              {/* Field 6: Accounting / Compliance Notes */}
+              {/* Field 6: Remarks & Compliance Notes */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Accounting / Compliance Notes</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={styles.fieldLabel}>Remarks / Compliance Notes</Text>
+                  {notes.trim().length > 0 && (
+                    <TouchableOpacity onPress={() => setNotes('')} activeOpacity={0.7}>
+                      <Text style={{ fontSize: 11.5, color: '#2563EB', fontWeight: '700' }}>Clear</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
                 <TextInput
                   style={styles.textArea}
                   multiline
                   numberOfLines={3}
+                  textAlignVertical="top"
                   value={notes}
                   onChangeText={setNotes}
-                  placeholder="Monthly verified technician salary payout"
+                  placeholder="Add optional remarks or notes for employee (e.g. Verified monthly salary payout)..."
                   placeholderTextColor="#94A3B8"
                 />
               </View>
