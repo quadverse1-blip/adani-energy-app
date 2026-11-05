@@ -100,18 +100,23 @@ export const SalaryScreen: React.FC = () => {
     setDownloading(true);
     try {
       const token = useAuthStore.getState().token;
-      const url = salaryService.getDownloadUrl(currentUserId, selectedMonth, selectedYear, token || undefined);
+      const targetEmpId = slip?.employeeId || user?.employeeId || currentUserId;
+      const rawFileName =
+        slip?.fileName ||
+        `Adani_Salary_Slip_${targetEmpId}_${selectedMonth}_${selectedYear}.pdf`;
+      const filename = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
 
       if (Platform.OS === 'web') {
-        window.open(url, '_blank');
+        const res = await salaryService.downloadPayslipFile(targetEmpId, selectedMonth, selectedYear, filename);
+        if (!res.success) {
+          const fallbackUrl = salaryService.getDownloadUrl(targetEmpId, selectedMonth, selectedYear, token || undefined);
+          window.open(fallbackUrl, '_blank');
+        }
         setDownloading(false);
         return;
       }
 
-      const rawFileName =
-        slip?.fileName ||
-        `Adani_Salary_Slip_${slip?.employeeId || currentUserId}_${selectedMonth}_${selectedYear}.pdf`;
-      const filename = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const url = salaryService.getDownloadUrl(targetEmpId, selectedMonth, selectedYear, token || undefined);
       const destination = new ExpoFile(Paths.document, filename);
       const downloadedFile = await ExpoFile.downloadFileAsync(url, destination, {
         headers: {
@@ -134,7 +139,8 @@ export const SalaryScreen: React.FC = () => {
       }
     } catch (err: any) {
       console.warn('Salary slip download error:', err);
-      const url = salaryService.getDownloadUrl(currentUserId, selectedMonth, selectedYear);
+      const targetEmpId = slip?.employeeId || user?.employeeId || currentUserId;
+      const url = salaryService.getDownloadUrl(targetEmpId, selectedMonth, selectedYear);
       try {
         await Linking.openURL(url);
       } catch (linkErr) {

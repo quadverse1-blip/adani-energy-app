@@ -1,3 +1,4 @@
+import os
 import base64
 from datetime import datetime
 from typing import Optional
@@ -7,6 +8,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from app.core.security import get_current_user_token, security_bearer, decode_access_token, require_roles
 from app.services.salary_service import salary_service, UPLOADED_SLIPS
 from app.services.pdf_service import generate_salary_slip_pdf
+from app.core.config import settings
 from app.schemas.salary import (
     SalarySlipResponse,
     SalarySummaryResponse,
@@ -223,15 +225,30 @@ async def download_payslip_pdf(
 
     employee = db.get_employee(employeeId) or db.find_employee_by_identifier(employeeId)
     canonical_id = employee.get("employeeId") if employee else employeeId
+    safe_canonical = canonical_id.replace("/", "_").replace("\\", "_")
+
+    # 1. Check in-memory uploaded slips under all permutations
     key1 = f"{employeeId}_{month}_{year}"
     key2 = f"{canonical_id}_{month}_{year}"
-    uploaded = UPLOADED_SLIPS.get(key1) or UPLOADED_SLIPS.get(key2)
+    key3 = f"{employeeId}_{year}_{month}"
+    key4 = f"{canonical_id}_{year}_{month}"
+    uploaded = (
+        UPLOADED_SLIPS.get(key1)
+        or UPLOADED_SLIPS.get(key2)
+        or UPLOADED_SLIPS.get(key3)
+        or UPLOADED_SLIPS.get(key4)
+    )
 
-    # If admin uploaded a static document, serve that document
-    if uploaded and uploaded.get("fileBase64"):
+    # 2. Check persistent database statement if in-memory was cleared on server reload
+    statement = db.get_salary_statement(employeeId, month, year)
+    file_base64 = (uploaded.get("fileBase64") if uploaded else None) or (statement.get("fileBase64") if statement else None)
+    file_name = (uploaded.get("fileName") if uploaded else None) or (statement.get("fileName") if statement else None)
+
+    # If static uploaded document exists in RAM or DB, serve that document
+    if file_base64:
         try:
-            file_bytes = base64.b64decode(uploaded["fileBase64"])
-            filename = uploaded.get("fileName") or f"payslip_{canonical_id}_{month}_{year}.pdf"
+            file_bytes = base64.b64decode(file_base64)
+            filename = file_name or f"payslip_{safe_canonical}_{year}_{month}.pdf"
             media_type = "application/pdf" if filename.lower().endswith(".pdf") else (
                 "image/png" if filename.lower().endswith(".png") else "application/octet-stream"
             )
@@ -241,7 +258,22 @@ async def download_payslip_pdf(
                 headers={"Content-Disposition": f"attachment; filename={filename}"}
             )
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error processing uploaded payslip: {str(e)}")
+            print(f"[SalaryRouter] Error processing base64 payslip: {e}")
+
+    # 3. Check persistent disk file in uploads/payslips/
+    try:
+        disk_path = os.path.join(settings.UPLOAD_DIR, "payslips", f"payslip_{safe_canonical}_{year}_{month}.pdf")
+        if os.path.exists(disk_path):
+            with open(disk_path, "rb") as f:
+                disk_bytes = f.read()
+            filename = file_name or f"payslip_{safe_canonical}_{year}_{month}.pdf"
+            return Response(
+                content=disk_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+    except Exception as e:
+        print(f"[SalaryRouter] Error checking disk payslip: {e}")
 
     # Dynamically generate official verified Adani salary slip PDF
     try:

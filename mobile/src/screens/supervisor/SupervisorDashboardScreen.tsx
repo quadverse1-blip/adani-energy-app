@@ -51,6 +51,7 @@ import { AppButton } from '../../components/common/AppButton';
 import { ConfirmationModal } from '../../components/common/ConfirmationModal';
 import { holidayService } from '../../services/holidayService';
 import { getShiftInfo } from '../../utils/shiftUtils';
+import { getStorageItem, setStorageItem } from '../../services/api';
 
 interface StaffAttendanceItem {
   id: string;
@@ -78,6 +79,27 @@ export const SupervisorDashboardScreen: React.FC = () => {
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [showNotifModal, setShowNotifModal] = useState<boolean>(false);
   const [notifFilter, setNotifFilter] = useState<'all' | 'admin' | 'employee'>('all');
+  const [markedAllRead, setMarkedAllRead] = useState<boolean>(false);
+  const [readNotifIds, setReadNotifIds] = useState<string[]>([]);
+
+  // Load persistent read state for supervisor
+  useEffect(() => {
+    (async () => {
+      try {
+        const userKey = user?.employeeId || user?.id || (user as any)?._id || 'sup';
+        const storedReads = await getStorageItem(`sup_read_notifs_${userKey}`);
+        if (storedReads) {
+          try {
+            setReadNotifIds(JSON.parse(storedReads));
+          } catch (_) {}
+        }
+        const storedAll = await getStorageItem(`sup_all_read_${userKey}`);
+        if (storedAll === 'true') {
+          setMarkedAllRead(true);
+        }
+      } catch (_) {}
+    })();
+  }, [user]);
 
   // Today's attendance state
   const [todayData, setTodayData] = useState<TodayAttendanceResult | null>(null);
@@ -182,8 +204,9 @@ export const SupervisorDashboardScreen: React.FC = () => {
 
   // Notification Counts & Filtering (Both Admin Directives & Employee Field Updates)
   const unreadCount = useMemo(() => {
-    return notifications.filter((n) => !n.isRead).length;
-  }, [notifications]);
+    if (markedAllRead) return 0;
+    return notifications.filter((n) => !n.isRead && !readNotifIds.includes(n.id)).length;
+  }, [notifications, markedAllRead, readNotifIds]);
 
   const adminNotificationsCount = useMemo(() => {
     return notifications.filter((n) => n.source === 'admin').length;
@@ -198,11 +221,20 @@ export const SupervisorDashboardScreen: React.FC = () => {
       if (notifFilter === 'admin') return item.source === 'admin';
       if (notifFilter === 'employee') return item.source === 'employee' || !item.source;
       return true;
-    });
-  }, [notifications, notifFilter]);
+    }).map((item) => ({
+      ...item,
+      isRead: markedAllRead || readNotifIds.includes(item.id) || item.isRead,
+    }));
+  }, [notifications, notifFilter, markedAllRead, readNotifIds]);
 
   const handleMarkAllRead = async () => {
     try {
+      setMarkedAllRead(true);
+      const allIds = notifications.map((n) => n.id);
+      setReadNotifIds(allIds);
+      const userKey = user?.employeeId || user?.id || (user as any)?._id || 'sup';
+      await setStorageItem(`sup_all_read_${userKey}`, 'true');
+      await setStorageItem(`sup_read_notifs_${userKey}`, JSON.stringify(allIds));
       await dashboardService.markNotificationsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     } catch (e) {
@@ -211,15 +243,18 @@ export const SupervisorDashboardScreen: React.FC = () => {
   };
 
   const handleToggleRead = async (item: AdminNotification) => {
-    if (!item.isRead) {
-      try {
-        await dashboardService.markNotificationsRead(item.id);
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n))
-        );
-      } catch (e) {
-        console.warn('Toggle read error:', e);
-      }
+    if (item.isRead || markedAllRead || readNotifIds.includes(item.id)) return;
+    const newReads = Array.from(new Set([...readNotifIds, item.id]));
+    setReadNotifIds(newReads);
+    const userKey = user?.employeeId || user?.id || (user as any)?._id || 'sup';
+    await setStorageItem(`sup_read_notifs_${userKey}`, JSON.stringify(newReads));
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n))
+    );
+    try {
+      await dashboardService.markNotificationsRead(item.id);
+    } catch (e) {
+      console.warn('Toggle read error:', e);
     }
   };
 

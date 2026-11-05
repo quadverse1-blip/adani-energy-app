@@ -66,6 +66,7 @@ import { ConfirmationModal } from '../../components/common/ConfirmationModal';
 import { holidayService, HolidayItem } from '../../services/holidayService';
 import { getShiftInfo, formatTimeIST } from '../../utils/shiftUtils';
 import { TechnicianDrawerModal } from '../../components/navigation/TechnicianDrawerModal';
+import { getStorageItem, setStorageItem } from '../../services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -134,9 +135,30 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
   const [analyticsTab, setAnalyticsTab] = useState<'daily' | 'distribution'>('daily');
   const [selectedBar, setSelectedBar] = useState<DailyWorkData | null>(WEEKLY_HOURS_DATA[6]);
 
-  // Notifications Modal State
+  // Notifications Modal State & Persistent Read State
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [readNotifIds, setReadNotifIds] = useState<string[]>([]);
+  const [markedAllRead, setMarkedAllRead] = useState<boolean>(false);
+
+  // Load persistent read state for technician
+  useEffect(() => {
+    (async () => {
+      try {
+        const userKey = user?.employeeId || user?.id || (user as any)?._id || 'tech';
+        const storedReads = await getStorageItem(`tech_read_notifs_${userKey}`);
+        if (storedReads) {
+          try {
+            setReadNotifIds(JSON.parse(storedReads));
+          } catch (_) {}
+        }
+        const storedAll = await getStorageItem(`tech_all_read_${userKey}`);
+        if (storedAll === 'true') {
+          setMarkedAllRead(true);
+        }
+      } catch (_) {}
+    })();
+  }, [user]);
 
   // Holidays Modal State
   const [showHolidaysModal, setShowHolidaysModal] = useState(false);
@@ -563,6 +585,12 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
     const currentName = (user?.name || '').toLowerCase();
     const firstName = currentName.split(' ')[0];
 
+    const isItemRead = (id: string, defaultRead: boolean = false) => {
+      if (markedAllRead) return true;
+      if (readNotifIds.includes(id)) return true;
+      return defaultRead;
+    };
+
     // Seeded personal notifications for this employee to match professional standards
     const personalDefaults: AdminNotification[] = [
       {
@@ -574,7 +602,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         timestamp: '10:14 AM',
         employeeId: user?.employeeId || '',
         employeeName: user?.name || 'Technician',
-        isRead: false,
+        isRead: isItemRead('emp_notif_geo_01', false),
         source: 'employee',
       },
       {
@@ -586,7 +614,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         timestamp: '09:00 AM',
         employeeId: user?.employeeId || '',
         employeeName: user?.name || 'Technician',
-        isRead: false,
+        isRead: isItemRead('emp_notif_policy_02', false),
         source: 'admin',
       },
       {
@@ -598,7 +626,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         timestamp: 'Yesterday',
         employeeId: user?.employeeId || '',
         employeeName: user?.name || 'Technician',
-        isRead: true,
+        isRead: isItemRead('emp_notif_safety_03', true),
         source: 'admin',
       },
     ];
@@ -615,7 +643,10 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         if (!notifEmpId.includes('01') && !notifEmpId.includes(currentEmpId)) return false;
       }
       return true;
-    });
+    }).map((sn) => ({
+      ...sn,
+      isRead: isItemRead(sn.id, sn.isRead),
+    }));
 
     const combined = [...personalDefaults];
     serverFiltered.forEach((sn) => {
@@ -625,14 +656,32 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
     });
 
     return combined;
-  }, [notifications, user, substation]);
+  }, [notifications, user, substation, readNotifIds, markedAllRead]);
 
   const unreadNotifCount = useMemo(() => {
+    if (markedAllRead) return 0;
     return employeeNotifications.filter((n) => !n.isRead).length;
-  }, [employeeNotifications]);
+  }, [employeeNotifications, markedAllRead]);
+
+  const handleToggleNotifRead = async (item: AdminNotification) => {
+    if (item.isRead) return;
+    const newReads = Array.from(new Set([...readNotifIds, item.id]));
+    setReadNotifIds(newReads);
+    const userKey = user?.employeeId || user?.id || (user as any)?._id || 'tech';
+    await setStorageItem(`tech_read_notifs_${userKey}`, JSON.stringify(newReads));
+    try {
+      await dashboardService.markNotificationsRead(item.id);
+    } catch (_) {}
+  };
 
   const handleMarkAllNotifRead = async () => {
     try {
+      setMarkedAllRead(true);
+      const allIds = employeeNotifications.map((n) => n.id);
+      setReadNotifIds(allIds);
+      const userKey = user?.employeeId || user?.id || (user as any)?._id || 'tech';
+      await setStorageItem(`tech_all_read_${userKey}`, 'true');
+      await setStorageItem(`tech_read_notifs_${userKey}`, JSON.stringify(allIds));
       await dashboardService.markNotificationsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     } catch (e) {
@@ -1273,12 +1322,14 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
                 const isDanger = notif.type === 'danger';
 
                 return (
-                  <View
+                  <TouchableOpacity
                     key={notif.id}
                     style={[
                       styles.notifCard,
                       !notif.isRead && styles.notifCardUnread,
                     ]}
+                    onPress={() => handleToggleNotifRead(notif)}
+                    activeOpacity={0.75}
                   >
                     <View style={styles.notifIconCol}>
                       {isSuccess ? (
@@ -1305,7 +1356,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
                         {!notif.isRead && <View style={styles.unreadBlueDot} />}
                       </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </ScrollView>

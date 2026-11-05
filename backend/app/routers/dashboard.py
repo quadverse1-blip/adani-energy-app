@@ -12,9 +12,17 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 # In-memory store for read notifications
 read_notification_ids = set()
 mark_all_read_active = False
+user_read_notifications: Dict[str, set] = {}
+user_marked_all_read: Dict[str, bool] = {}
 
 @router.get("/stats")
 async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)):
+    caller_id = str(token_data.get("id") or token_data.get("employeeId") or token_data.get("sub") or "admin").strip().lower()
+    caller_reads = user_read_notifications.get(caller_id, set())
+    caller_all_read = user_marked_all_read.get(caller_id, False)
+
+    def is_notif_read(notif_id: str) -> bool:
+        return caller_all_read or (notif_id in caller_reads) or mark_all_read_active or (notif_id in read_notification_ids)
     today_str = datetime.utcnow().strftime("%Y-%m-%d")
     all_employees = db.get_all_employees()
     field_staff = [e for e in all_employees if e.get("role") == "technician"]
@@ -245,7 +253,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
                 "employeeName": emp_name,
                 "avatar": emp_avatar,
                 "siteName": site_name,
-                "isRead": mark_all_read_active or (notif_id in read_notification_ids)
+                "isRead": is_notif_read(notif_id)
             })
 
         # 2. Geofence Perimeter Warning
@@ -264,7 +272,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
                 "employeeName": emp_name,
                 "avatar": emp_avatar,
                 "siteName": site_name,
-                "isRead": mark_all_read_active or (notif_id in read_notification_ids)
+                "isRead": is_notif_read(notif_id)
             })
 
         # 3. Early Checkout Warning
@@ -283,7 +291,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
                 "employeeName": emp_name,
                 "avatar": emp_avatar,
                 "siteName": site_name,
-                "isRead": mark_all_read_active or (notif_id in read_notification_ids)
+                "isRead": is_notif_read(notif_id)
             })
 
         # 4. Standard On-Duty Verified
@@ -302,7 +310,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
                 "employeeName": emp_name,
                 "avatar": emp_avatar,
                 "siteName": site_name,
-                "isRead": mark_all_read_active or (notif_id in read_notification_ids)
+                "isRead": is_notif_read(notif_id)
             })
 
     # --- Official Admin Broadcast Notifications ---
@@ -317,7 +325,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
             "message": "Admin circular: On-time check-in before 09:00 AM, half-day after 10:30 AM, and strict 06:00 PM auto check-out with check-in disabled after 06:00 PM IST.",
             "timestamp": "09:00 AM",
             "avatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&q=80",
-            "isRead": mark_all_read_active or ("notif_admin_shift_policy" in read_notification_ids)
+            "isRead": is_notif_read("notif_admin_shift_policy")
         },
         {
             "id": "notif_admin_salary_slip",
@@ -329,7 +337,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
             "message": "Verified salary slips for October 2026 have been generated and uploaded. Supervisors and employees can view and download their verified payslips.",
             "timestamp": "10:30 AM",
             "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-            "isRead": mark_all_read_active or ("notif_admin_salary_slip" in read_notification_ids)
+            "isRead": is_notif_read("notif_admin_salary_slip")
         },
         {
             "id": "notif_admin_safety_audit",
@@ -341,7 +349,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
             "message": "Safety audit for Pune - Phase 1 Substation passed with 98.4% compliance. Ensure high-voltage protective gear remains verified.",
             "timestamp": "02:15 PM",
             "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
-            "isRead": mark_all_read_active or ("notif_admin_safety_audit" in read_notification_ids)
+            "isRead": is_notif_read("notif_admin_safety_audit")
         },
         {
             "id": "notif_admin_smart_meter",
@@ -353,7 +361,7 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
             "message": "Feeder #SF-33-04 allocated to Pune Phase 1 operations team. Zonal technicians may record inspection logs in Field Operations portal.",
             "timestamp": "04:45 PM",
             "avatar": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=400&q=80",
-            "isRead": mark_all_read_active or ("notif_admin_smart_meter" in read_notification_ids)
+            "isRead": is_notif_read("notif_admin_smart_meter")
         }
     ]
     notifications.extend(admin_notifications)
@@ -426,12 +434,17 @@ async def get_dashboard_stats(token_data: dict = Depends(get_current_user_token)
 @router.post("/notifications/mark-read")
 async def mark_notifications_read(payload: Dict[str, Any] = {}, token_data: dict = Depends(get_current_user_token)):
     global mark_all_read_active
+    caller_id = str(token_data.get("id") or token_data.get("employeeId") or token_data.get("sub") or "admin").strip().lower()
+    if caller_id not in user_read_notifications:
+        user_read_notifications[caller_id] = set()
+
     notif_id = payload.get("notificationId")
     if notif_id:
+        user_read_notifications[caller_id].add(notif_id)
         read_notification_ids.add(notif_id)
     else:
-        mark_all_read_active = True
-        read_notification_ids.update([
+        user_marked_all_read[caller_id] = True
+        all_default_ids = [
             "notif_admin_shift_policy",
             "notif_admin_salary_slip",
             "notif_admin_safety_audit",
@@ -439,10 +452,15 @@ async def mark_notifications_read(payload: Dict[str, Any] = {}, token_data: dict
             "emp_notif_geo_01",
             "emp_notif_policy_02",
             "emp_notif_safety_03"
-        ])
+        ]
+        read_notification_ids.update(all_default_ids)
+        user_read_notifications[caller_id].update(all_default_ids)
         for item in ["notif_late_", "notif_geo_", "notif_early_", "notif_cin_"]:
             for i in range(200):
-                read_notification_ids.add(f"{item}{i}")
+                notif_key = f"{item}{i}"
+                read_notification_ids.add(notif_key)
+                user_read_notifications[caller_id].add(notif_key)
+    return {"status": "success", "message": "All notifications marked as read"}
     return {"status": "success", "message": "All notifications marked as read"}
 
 @router.get("/holidays/pdf")

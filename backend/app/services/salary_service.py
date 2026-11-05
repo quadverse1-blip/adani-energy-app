@@ -1,7 +1,10 @@
+import os
+import base64
 import calendar
 from datetime import datetime, date
 from typing import Dict, Any, List, Optional
 from app.core.database import db
+from app.core.config import settings
 
 UPLOADED_SLIPS: Dict[str, dict] = {}
 
@@ -166,14 +169,23 @@ class SalaryService:
         # 1. Check if finalized statement is already recorded
         frozen_statement = db.get_salary_statement(employee_id, month, year)
         if frozen_statement:
-            # Ensure URL is populated
             frozen_statement["payslipPdfUrl"] = f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}"
+            if frozen_statement.get("hasUploadedDocument") or frozen_statement.get("fileBase64"):
+                frozen_statement["hasUploadedDocument"] = True
+                frozen_statement["documentUrl"] = f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}"
             return frozen_statement
 
         # 2. Check if an admin uploaded an external slip file
         key1 = f"{employee_id}_{month}_{year}"
         key2 = f"{canonical_id}_{month}_{year}"
-        uploaded_slip = UPLOADED_SLIPS.get(key1) or UPLOADED_SLIPS.get(key2)
+        key3 = f"{employee_id}_{year}_{month}"
+        key4 = f"{canonical_id}_{year}_{month}"
+        uploaded_slip = (
+            UPLOADED_SLIPS.get(key1)
+            or UPLOADED_SLIPS.get(key2)
+            or UPLOADED_SLIPS.get(key3)
+            or UPLOADED_SLIPS.get(key4)
+        )
         has_uploaded = uploaded_slip is not None
 
         # 3. Retrieve employee salary configuration (with Historical Salary Protection)
@@ -371,6 +383,20 @@ class SalaryService:
     ) -> dict:
         employee = db.get_employee(employee_id) or db.find_employee_by_identifier(employee_id)
         canonical_id = employee.get("employeeId") if employee else employee_id
+        safe_canonical = canonical_id.replace("/", "_").replace("\\", "_")
+        final_file_name = file_name or f"payslip_{safe_canonical}_{year}_{month}.pdf"
+
+        # If base64 file data provided, also persist to uploads/payslips on disk
+        if file_base64:
+            try:
+                payslip_dir = os.path.join(settings.UPLOAD_DIR, "payslips")
+                os.makedirs(payslip_dir, exist_ok=True)
+                disk_path = os.path.join(payslip_dir, f"payslip_{safe_canonical}_{year}_{month}.pdf")
+                file_bytes = base64.b64decode(file_base64)
+                with open(disk_path, "wb") as f:
+                    f.write(file_bytes)
+            except Exception as e:
+                print(f"[SalaryService] Warning: Failed to persist payslip to disk: {e}")
 
         record = {
             "employeeId": canonical_id,
@@ -379,17 +405,36 @@ class SalaryService:
             "year": year,
             "netAmount": float(net_amount),
             "notes": notes or "Monthly verified technician salary payout",
-            "fileName": file_name or f"payslip_{canonical_id}_{month}_{year}.pdf",
+            "fileName": final_file_name,
             "fileBase64": file_base64,
             "uploadedAt": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
             "uploadedBy": uploaded_by
         }
 
-        UPLOADED_SLIPS[f"{employee_id}_{month}_{year}"] = record
-        if canonical_id != employee_id:
-            UPLOADED_SLIPS[f"{canonical_id}_{month}_{year}"] = record
+        # Store in memory under all key variants for instant lookup
+        for k in [
+            f"{employee_id}_{month}_{year}",
+            f"{canonical_id}_{month}_{year}",
+            f"{employee_id}_{year}_{month}",
+            f"{canonical_id}_{year}_{month}",
+        ]:
+            UPLOADED_SLIPS[k] = record
 
-        return SalaryService.get_salary_slip(employee_id, month, year)
+        # Generate complete statement and save into database so it persists across reloads
+        statement = SalaryService.get_salary_slip(employee_id, month, year)
+        statement["status"] = "FINALIZED"
+        statement["netPay"] = float(net_amount)
+        statement["hasUploadedDocument"] = True
+        statement["fileName"] = final_file_name
+        statement["fileBase64"] = file_base64
+        statement["documentUrl"] = f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}"
+        statement["payslipPdfUrl"] = f"/api/v1/salary/download/{canonical_id}?month={month}&year={year}"
+        statement["uploadedAt"] = record["uploadedAt"]
+        statement["uploadedBy"] = uploaded_by
+        statement["notes"] = notes or "Monthly verified technician salary payout"
+
+        db.save_salary_statement(statement)
+        return statement
 
     @staticmethod
     def get_salary_summary(month: int, year: int) -> dict:

@@ -66,7 +66,36 @@ export const salaryService = {
     const base = apiClient.defaults.baseURL || '';
     const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
     const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-    return `${cleanBase}/salary/download/${employeeId}?month=${month}&year=${year}${tokenParam}`;
+    // If employeeId contains slash (e.g. b4S/Adani/61), encode each segment or parameter
+    const safeEmpId = encodeURIComponent(employeeId);
+    return `${cleanBase}/salary/download/${safeEmpId}?month=${month}&year=${year}${tokenParam}`;
+  },
+
+  async downloadPayslipFile(employeeId: string, month: number = 10, year: number = 2026, preferredFileName?: string): Promise<{ success: boolean; uri?: string; error?: string }> {
+    try {
+      const response = await apiClient.get(`/salary/download/${encodeURIComponent(employeeId)}`, {
+        params: { month, year },
+        responseType: 'blob',
+      });
+
+      const fileName = preferredFileName || `Adani_Salary_Slip_${employeeId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${month}_${year}.pdf`;
+
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+        return { success: true, uri: blobUrl };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Download failed' };
+    }
   },
 
   async uploadSalarySlip(payload: {

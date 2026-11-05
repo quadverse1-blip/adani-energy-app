@@ -111,6 +111,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
   const [accuracy, setAccuracy] = useState<number>(8.5);
   const [currentAddress, setCurrentAddress] = useState<string | null>(null);
   const watcherCleanupRef = useRef<(() => void) | null>(null);
+  const coordsRef = useRef<DeviceCoordinates>({ latitude: 0, longitude: 0, accuracy: 8 });
 
   // Camera & Photo Verification State
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -174,6 +175,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
   // Helper: Apply valid coordinates and reverse geocode
   const applyCoordinates = useCallback(async (lat: number, lon: number, acc: number = 8) => {
     if (!lat || !lon || (lat === 0 && lon === 0)) return;
+    coordsRef.current = { latitude: lat, longitude: lon, accuracy: acc };
     setLatitude(lat);
     setLongitude(lon);
     setAccuracy(acc);
@@ -198,28 +200,20 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
 
   // 2. Fetch Live GPS Telemetry with pure hardware satellite acquisition
   const obtainGps = useCallback(async (isManualPress = false) => {
-    // Pre-check browser permission state if supported
-    const permState = await checkBrowserPermissionState();
-
-    // If browser explicitly reports denied on passive page load (not manual tap),
-    // mark state so banner can display instructions without an intrusive alert.
-    if (permState === 'denied' && !isManualPress && Platform.OS === 'web') {
-      setPermissionDenied(true);
-      setIsGpsOff(false);
-      setIsGpsTimeout(false);
-      setGpsLoading(false);
-      setGpsErrorMessage('Location permission was previously blocked in browser.');
+    // If valid coordinates are already acquired, don't reset back to loading on background focus
+    if (!isManualPress && coordsRef.current.latitude !== 0 && coordsRef.current.longitude !== 0) {
       return;
     }
 
     setGpsLoading(true);
     setGpsErrorMessage(null);
 
-    // Call fetchRealDeviceLocation directly (synchronously triggered on user tap)
+    // Call fetchRealDeviceLocation directly (synchronously triggered on user tap or mount)
     try {
       await fetchRealDeviceLocation(
         {
           onCoordinatesAcquired: async (coords: DeviceCoordinates) => {
+            coordsRef.current = coords;
             setPermissionDenied(false);
             setIsGpsOff(false);
             setIsGpsTimeout(false);
@@ -227,10 +221,11 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
             setGpsLoading(false);
             await applyCoordinates(coords.latitude, coords.longitude, coords.accuracy);
 
-            // Once permission is granted, start continuous real-time watcher
+            // Once permission is granted and coordinates received, start continuous real-time watcher
             if (!watcherCleanupRef.current) {
               watcherCleanupRef.current = subscribeRealDeviceLocationWatcher(
                 (liveCoords) => {
+                  coordsRef.current = liveCoords;
                   setPermissionDenied(false);
                   setIsGpsOff(false);
                   setIsGpsTimeout(false);
@@ -240,7 +235,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                 },
                 (err: GeolocationErrorDetail) => {
                   // Only report error if we don't have valid coordinates yet
-                  if (latitude === 0 && longitude === 0) {
+                  if (coordsRef.current.latitude === 0 && coordsRef.current.longitude === 0) {
                     if (err.isPermissionDenied) {
                       setPermissionDenied(true);
                       setIsGpsOff(false);
@@ -257,6 +252,11 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
           },
           onError: (err: GeolocationErrorDetail) => {
             setGpsLoading(false);
+            // If valid coordinates were already received, do not replace with transient error
+            if (coordsRef.current.latitude !== 0 && coordsRef.current.longitude !== 0) {
+              return;
+            }
+
             if (err.isPermissionDenied) {
               setPermissionDenied(true);
               setIsGpsOff(false);
@@ -266,7 +266,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                 if (Platform.OS === 'web') {
                   Alert.alert(
                     'Reset Location Permission',
-                    `Location permission is blocked in your browser.\n\nTo enable it:\n1. Tap the 🔒 lock or tune icon in Chrome's address bar.\n2. Tap "Permissions" or "Site settings".\n3. Tap "Location" and choose "Allow" (or tap "Reset permissions").\n4. Return here and tap "Fetch Live Location".`,
+                    `Location permission was denied.\n\nTo enable it:\n1. Tap the lock icon in the Chrome address bar.\n2. Tap "Permissions" or "Site settings".\n3. Tap "Location" and choose "Allow" (or tap "Reset permissions").\n4. Return here and tap "Fetch Live Location".`,
                     [{ text: 'OK' }]
                   );
                 } else {
@@ -300,7 +300,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
       setGpsLoading(false);
       setGpsErrorMessage(err.message || 'Unable to acquire GPS signal.');
     }
-  }, [applyCoordinates, latitude, longitude]);
+  }, [applyCoordinates]);
 
   // Listen to browser permission state change (e.g. user toggles permissions in Chrome address bar)
   useEffect(() => {

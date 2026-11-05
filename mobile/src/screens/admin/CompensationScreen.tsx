@@ -35,6 +35,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import { Paths, File as ExpoFile } from 'expo-file-system';
 import { useAdminDrawerStore } from '../../store/useAdminDrawerStore';
+import { useAuthStore } from '../../store/useAuthStore';
 import { salaryService } from '../../services/salaryService';
 import { employeeService } from '../../services/employeeService';
 import { SalarySlip, SalarySummaryResponse, User } from '../../types';
@@ -229,19 +230,28 @@ export const CompensationScreen: React.FC = () => {
     const empId = slip.employeeId;
     setDownloadingEmpId(empId);
     try {
-      const url = salaryService.getDownloadUrl(empId, selectedMonth, selectedYear);
+      const token = useAuthStore.getState().token;
+      const rawFileName =
+        slip.fileName || `Adani_Salary_Slip_${empId}_${selectedMonth}_${selectedYear}.pdf`;
+      const filename = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
 
       if (Platform.OS === 'web') {
-        window.open(url, '_blank');
+        const res = await salaryService.downloadPayslipFile(empId, selectedMonth, selectedYear, filename);
+        if (!res.success) {
+          const fallbackUrl = salaryService.getDownloadUrl(empId, selectedMonth, selectedYear, token || undefined);
+          window.open(fallbackUrl, '_blank');
+        }
         setDownloadingEmpId(null);
         return;
       }
 
-      const rawFileName =
-        slip.fileName || `Adani_Salary_Slip_${empId}_${selectedMonth}_${selectedYear}.pdf`;
-      const filename = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const url = salaryService.getDownloadUrl(empId, selectedMonth, selectedYear, token || undefined);
       const destination = new ExpoFile(Paths.document, filename);
-      const downloadedFile = await ExpoFile.downloadFileAsync(url, destination);
+      const downloadedFile = await ExpoFile.downloadFileAsync(url, destination, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+      });
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {

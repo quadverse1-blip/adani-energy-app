@@ -80,20 +80,6 @@ export const fetchRealDeviceLocation = async (
 
   // 1. Web Browser Environment (Chrome on Android, Safari, Desktop Chrome)
   if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.geolocation) {
-    // Check HTTPS security boundary
-    if (!isSecureWebContext()) {
-      const detail: GeolocationErrorDetail = {
-        code: 'INSECURE_CONTEXT',
-        message: 'Browser requires HTTPS for location. Please access over https:// or localhost.',
-        isPermissionDenied: true,
-        isGpsDisabled: false,
-        isTimeout: false,
-        isInsecureContext: true,
-      };
-      dispatchError(detail);
-      return null;
-    }
-
     return new Promise((resolve) => {
       // Directly invoke navigator.geolocation.getCurrentPosition()
       // Calling this directly ensures Chrome/Android displays the native
@@ -127,17 +113,33 @@ export const fetchRealDeviceLocation = async (
             };
             dispatchError(detail);
             resolve(null);
+          } else if (err.code === 2) {
+            // POSITION_UNAVAILABLE (code 2): GPS hardware / Location toggle is OFF on device
+            const detail: GeolocationErrorDetail = {
+              code: 'POSITION_UNAVAILABLE',
+              message: 'Phone GPS is turned OFF. Please pull down quick settings and turn ON Location.',
+              isPermissionDenied: false,
+              isGpsDisabled: true,
+              isTimeout: false,
+            };
+            dispatchError(detail);
+            if (isManualPress) {
+              Alert.alert(
+                'Turn ON Phone GPS',
+                'Your phone GPS / Location is currently turned OFF. Please pull down your phone notification bar and turn ON Location (GPS).',
+                [{ text: 'OK' }]
+              );
+            }
+            resolve(null);
           } else {
-            // POSITION_UNAVAILABLE (code 2) or TIMEOUT (code 3):
-            // Satellite lock might take time indoors or while warm-up occurs.
-            // Immediately attempt standard network/Wi-Fi triangulation fallback!
+            // TIMEOUT (code 3): Immediately attempt standard network/Wi-Fi triangulation fallback!
             tryStandardAccuracyFallback(resolve);
           }
         },
         {
           enableHighAccuracy: true,
-          timeout: 30000,
-          maximumAge: 15000,
+          timeout: 15000,
+          maximumAge: 10000,
         }
       );
 
@@ -214,8 +216,8 @@ export const fetchRealDeviceLocation = async (
           },
           {
             enableHighAccuracy: false,
-            timeout: 15000,
-            maximumAge: 60000,
+            timeout: 10000,
+            maximumAge: 30000,
           }
         );
       }
@@ -224,13 +226,54 @@ export const fetchRealDeviceLocation = async (
 
   // 2. Native Android / iOS Mobile Environment (Expo Go, APK, IPA)
   try {
-    // 2a. Prompt Foreground Location Permission FIRST
+    // 2a. Check if Phone GPS (Location Service) is turned ON FIRST
+    let servicesEnabled = false;
+    try {
+      servicesEnabled = await Location.hasServicesEnabledAsync();
+    } catch (_) {}
+
+    if (!servicesEnabled) {
+      // Phone GPS is OFF! Do NOT return any cached or fake location!
+      if (Platform.OS === 'android') {
+        try {
+          await Location.enableNetworkProviderAsync();
+          servicesEnabled = await Location.hasServicesEnabledAsync();
+        } catch (_) {}
+      }
+
+      if (!servicesEnabled) {
+        const detail: GeolocationErrorDetail = {
+          code: 'POSITION_UNAVAILABLE',
+          message: 'Phone GPS is turned OFF. Please turn ON Location in settings.',
+          isPermissionDenied: false,
+          isGpsDisabled: true,
+          isTimeout: false,
+        };
+        dispatchError(detail);
+        if (isManualPress) {
+          Alert.alert(
+            'Turn ON Device Location (GPS)',
+            'Your phone GPS is currently turned OFF. Please pull down quick settings or open settings and turn ON Location (GPS).',
+            [
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              { text: 'Cancel', style: 'cancel' },
+            ]
+          );
+        }
+        return null;
+      }
+    }
+
+    // 2b. Foreground Location Permission
     let perm = await Location.getForegroundPermissionsAsync();
     if (!perm.granted && perm.status !== 'granted') {
-      perm = await Location.requestForegroundPermissionsAsync();
+      if (isManualPress || perm.canAskAgain) {
+        perm = await Location.requestForegroundPermissionsAsync();
+      }
     }
 
     if (!perm.granted && perm.status !== 'granted') {
+      const isPermanentlyDenied = perm.status === 'denied' && !perm.canAskAgain;
       const detail: GeolocationErrorDetail = {
         code: 'PERMISSION_DENIED',
         message: 'Location permission is denied. Tap to open Settings.',
@@ -238,83 +281,29 @@ export const fetchRealDeviceLocation = async (
         isGpsDisabled: false,
         isTimeout: false,
       };
-      dispatchError(detail);
-      if (isManualPress) {
-        Alert.alert(
-          'Location Permission Required',
-          'Please allow Location access ("While using the app" or "Only this time") in device settings to detect your real location.',
-          [
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-            { text: 'Cancel', style: 'cancel' },
-          ]
-        );
+      if (isPermanentlyDenied || isManualPress) {
+        dispatchError(detail);
+        if (isManualPress) {
+          Alert.alert(
+            'Location Permission Required',
+            'Please allow Location access ("While using the app" or "Only this time") in device settings to detect your real location.',
+            [
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              { text: 'Cancel', style: 'cancel' },
+            ]
+          );
+        }
       }
       return null;
     }
 
-    // 2b. Check if Phone GPS (Location Service) is turned ON
-    try {
-      const servicesEnabled = await Location.hasServicesEnabledAsync();
-      if (!servicesEnabled) {
-        if (Platform.OS === 'android') {
-          try {
-            await Location.enableNetworkProviderAsync();
-          } catch (_) {
-            const detail: GeolocationErrorDetail = {
-              code: 'POSITION_UNAVAILABLE',
-              message: 'Phone GPS is turned OFF. Please turn ON Location in settings.',
-              isPermissionDenied: false,
-              isGpsDisabled: true,
-              isTimeout: false,
-            };
-            dispatchError(detail);
-            if (isManualPress) {
-              Alert.alert(
-                'Turn ON Device Location (GPS)',
-                'Your phone GPS is currently turned OFF. Please turn ON Location in your quick settings or phone settings to detect your real location.',
-                [
-                  { text: 'Open Settings', onPress: () => Linking.openSettings() },
-                  { text: 'Cancel', style: 'cancel' },
-                ]
-              );
-            }
-            return null;
-          }
-        } else {
-          const detail: GeolocationErrorDetail = {
-            code: 'POSITION_UNAVAILABLE',
-            message: 'Phone GPS is turned OFF. Please turn ON Location in settings.',
-            isPermissionDenied: false,
-            isGpsDisabled: true,
-            isTimeout: false,
-          };
-          dispatchError(detail);
-          return null;
-        }
-      }
-    } catch (svcErr) {
-      console.warn('[RealGPS] hasServicesEnabledAsync check failed:', svcErr);
-    }
-
-    // 2c. Fetch REAL device coordinates from GPS hardware (No fallbacks, no fakes)
+    // 2c. Fetch REAL device coordinates from GPS hardware (No stale fake fallbacks)
     let realCoords: DeviceCoordinates | null = null;
-
-    try {
-      const cached = await Location.getLastKnownPositionAsync({ maxAge: 300000 });
-      if (cached?.coords && cached.coords.latitude !== 0 && cached.coords.longitude !== 0) {
-        realCoords = {
-          latitude: cached.coords.latitude,
-          longitude: cached.coords.longitude,
-          accuracy: cached.coords.accuracy || 10,
-        };
-        onCoordinatesAcquired(realCoords);
-      }
-    } catch (_) {}
 
     try {
       const fresh = await Promise.race([
         Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-        new Promise<null>((res) => setTimeout(() => res(null), 8000)),
+        new Promise<null>((res) => setTimeout(() => res(null), 6000)),
       ]);
 
       if (fresh?.coords && fresh.coords.latitude !== 0 && fresh.coords.longitude !== 0) {
@@ -326,25 +315,25 @@ export const fetchRealDeviceLocation = async (
         onCoordinatesAcquired(realCoords);
         return realCoords;
       }
-    } catch (highErr) {
-      try {
-        const balanced = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        if (balanced?.coords && balanced.coords.latitude !== 0 && balanced.coords.longitude !== 0) {
-          realCoords = {
-            latitude: balanced.coords.latitude,
-            longitude: balanced.coords.longitude,
-            accuracy: balanced.coords.accuracy || 12,
-          };
-          onCoordinatesAcquired(realCoords);
-          return realCoords;
-        }
-      } catch (_) {}
-    }
+    } catch (_) {}
+
+    try {
+      const balanced = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      if (balanced?.coords && balanced.coords.latitude !== 0 && balanced.coords.longitude !== 0) {
+        realCoords = {
+          latitude: balanced.coords.latitude,
+          longitude: balanced.coords.longitude,
+          accuracy: balanced.coords.accuracy || 12,
+        };
+        onCoordinatesAcquired(realCoords);
+        return realCoords;
+      }
+    } catch (_) {}
 
     if (!realCoords) {
       const detail: GeolocationErrorDetail = {
         code: 'TIMEOUT',
-        message: 'Device GPS is searching for satellites. Please ensure Location is ON.',
+        message: 'Searching for GPS satellite signal. Tap "Fetch Live Location" to retry.',
         isPermissionDenied: false,
         isGpsDisabled: false,
         isTimeout: true,

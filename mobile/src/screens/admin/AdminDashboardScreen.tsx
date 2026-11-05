@@ -153,6 +153,25 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
     }
   };
 
+  const handleToggleRead = async (item: AdminNotification) => {
+    if (item.isRead || markedAllRead || readNotifIds.includes(item.id)) return;
+    const newReads = Array.from(new Set([...readNotifIds, item.id]));
+    setReadNotifIds(newReads);
+    await setStorageItem('admin_read_notif_ids', JSON.stringify(newReads));
+    if (stats) {
+      const updated = stats.notifications.map((n) => (n.id === item.id ? { ...n, isRead: true } : n));
+      const remainingUnread = updated.filter((n) => !n.isRead && !newReads.includes(n.id)).length;
+      setStats({
+        ...stats,
+        notifications: updated,
+        unreadNotificationsCount: remainingUnread,
+      });
+    }
+    try {
+      await dashboardService.markNotificationsRead(item.id);
+    } catch (_) {}
+  };
+
 
 
   useEffect(() => {
@@ -1169,7 +1188,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                   const isEarly = item.type === 'info';
 
                   return (
-                    <View
+                    <TouchableOpacity
                       key={item.id}
                       style={[
                         styles.notifItem,
@@ -1177,6 +1196,8 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                         isLate && styles.notifItemLate,
                         isGeo && styles.notifItemGeo,
                       ]}
+                      onPress={() => handleToggleRead(item)}
+                      activeOpacity={0.75}
                     >
                       <View style={styles.notifTopRow}>
                         <View style={styles.notifBadgeRow}>
@@ -1220,7 +1241,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                           <Text style={styles.notifMessageText}>{item.message}</Text>
                         </View>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })
               )}

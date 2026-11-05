@@ -63,13 +63,6 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
           {employee.employeeId} | {employee.designation || 'Junior Engineer'}
         </Text>
 
-        {/* Circle & Division */}
-        {(employee.circle || employee.division) && (
-          <Text style={styles.circleDivisionText} numberOfLines={1}>
-            {[employee.circle ? `Circle: ${employee.circle}` : null, employee.division ? `Div: ${employee.division}` : null].filter(Boolean).join(' • ')}
-          </Text>
-        )}
-
         {/* Tags Row */}
         <View style={styles.tagsRow}>
           {/* Substation Badges */}
@@ -170,12 +163,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: '#64748B',
-    marginBottom: 4,
-  },
-  circleDivisionText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#0284C7',
     marginBottom: 8,
   },
   tagsRow: {

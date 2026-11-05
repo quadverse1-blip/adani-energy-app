@@ -75,26 +75,26 @@ def normalize_dict_keys(d: dict) -> dict:
             continue
         lk = str(k).strip().lower().replace("_", " ").replace("-", " ")
         val_str = str(v).strip()
-        if lk in ["employee id", "employeeid", "emp id", "empid", "id", "code", "user id", "userid"]:
+        if lk in ["employee id", "employeeid", "emp id", "empid", "id", "code"]:
             normalized["employeeId"] = val_str
-        elif lk in ["mobile number", "mobile no", "mobile", "phone number", "phonenumber", "phone", "contact", "contact no", "mobile_no", "phone_no"]:
+        elif lk in ["mobile number", "mobile no", "mobile", "phone number", "phonenumber", "phone", "contact", "contact no"]:
             normalized["phone"] = val_str
-        elif lk in ["password", "pass", "pwd", "user password", "login password"]:
+        elif lk in ["password", "pass", "pwd"]:
             normalized["password"] = val_str
-        elif lk in ["employee name", "name", "emp name", "fullname", "full name", "employee_name", "staff name"]:
+        elif lk in ["name", "emp name", "employee name", "fullname", "full name"]:
             normalized["name"] = val_str
-        elif lk in ["designation", "job title", "post", "role title", "designation name"]:
-            normalized["designation"] = val_str
-        elif lk in ["circle", "zonal circle", "zone", "circle name", "circle_name"]:
-            normalized["circle"] = val_str
-        elif lk in ["division", "sub division", "subdivision", "division name", "division_name"]:
-            normalized["division"] = val_str
         elif lk in ["role", "user role"]:
             normalized["role"] = val_str
-        elif lk in ["assigned sites", "assigned site", "site id", "site", "assignedsiteids", "assignedsiteid", "substation", "substations"]:
+        elif lk in ["designation", "job title"]:
+            normalized["designation"] = val_str
+        elif lk in ["assigned sites", "assigned site", "site id", "site", "assignedsiteids", "assignedsiteid"]:
             normalized["assignedSiteIds"] = val_str
         elif lk in ["email", "email address"]:
             normalized["email"] = val_str
+        elif lk in ["circle"]:
+            normalized["circle"] = val_str
+        elif lk in ["division"]:
+            normalized["division"] = val_str
         elif lk in ["department"]:
             normalized["department"] = val_str
     return normalized
@@ -174,10 +174,6 @@ def process_bulk_employee_records(
                 existing["role"] = role
             if r.get("designation"):
                 existing["designation"] = designation
-            if r.get("circle"):
-                existing["circle"] = r.get("circle")
-            if r.get("division"):
-                existing["division"] = r.get("division")
             if assigned_site_ids:
                 existing["assignedSiteIds"] = assigned_site_ids
                 existing["assignedSiteId"] = primary_site
@@ -194,9 +190,6 @@ def process_bulk_employee_records(
                 "name": existing.get("name", name),
                 "phone": phone_clean,
                 "role": existing.get("role", role),
-                "designation": existing.get("designation", designation),
-                "circle": existing.get("circle", r.get("circle")),
-                "division": existing.get("division", r.get("division")),
                 "status": "updated"
             })
         else:
@@ -230,9 +223,6 @@ def process_bulk_employee_records(
                 "name": name,
                 "phone": phone_clean,
                 "role": role,
-                "designation": designation,
-                "circle": r.get("circle") or None,
-                "division": r.get("division") or None,
                 "status": "added"
             })
 
@@ -263,21 +253,19 @@ async def download_bulk_template(
 
     headers = [
         "Employee ID",
-        "Employee Name",
         "Mobile Number",
         "Password",
-        "Designation",
-        "Circle",
-        "Division",
+        "Name",
         "Role",
+        "Designation",
         "Assigned Sites"
     ]
     ws.append(headers)
 
-    # Standard sample rows representing Adani workforce
-    ws.append(["ADN-TECH-01", "Amit Verma", "9876543211", "Adani@123", "Field Smart Meter Technician", "Ahmedabad South", "Metering & Substation Div-1", "technician", "site_surat_01"])
-    ws.append(["ADN-TECH-02", "Priya Patel", "9876543212", "Pass@2026", "Senior Metering Technician", "Surat City", "Smart Meter Division-2", "technician", "site_pune_01"])
-    ws.append(["ADN-SUP-01", "Suresh Patil", "9876543213", "Super@2026", "Zonal Workforce Supervisor", "Pune Urban", "Operations & Field Div-A", "supervisor", "site_st_joseph"])
+    # 3 standard sample rows representing Adani workforce
+    ws.append(["ADN-TECH-01", "9876543211", "Adani@123", "Amit Verma", "technician", "Field Smart Meter Technician", "site_surat_01"])
+    ws.append(["ADN-TECH-02", "9876543212", "Pass@2026", "Priya Patel", "technician", "Field Smart Meter Technician", "site_pune_01"])
+    ws.append(["ADN-SUP-01", "9876543213", "Super@2026", "Suresh Patil", "supervisor", "Zonal Workforce Supervisor", "site_st_joseph"])
 
     # Header styling (Adani Deep Navy Blue fill with bold white text)
     header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
@@ -359,12 +347,7 @@ async def bulk_upload_employees(
                 row_dict = {}
                 for h, val in zip(header_row, row_vals):
                     if h:
-                        if isinstance(val, float) and val.is_integer():
-                            row_dict[h] = str(int(val))
-                        elif val is not None:
-                            row_dict[h] = str(val).strip()
-                        else:
-                            row_dict[h] = ""
+                        row_dict[h] = str(val).strip() if val is not None else ""
                 records.append(normalize_dict_keys(row_dict))
         except Exception as e:
             if isinstance(e, HTTPException):
