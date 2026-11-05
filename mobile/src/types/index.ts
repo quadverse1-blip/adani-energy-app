@@ -199,6 +199,12 @@ export interface FleetTechnician {
   distanceMeters: number;
   lastSeen: string;
   locationName?: string;
+  isOnline?: boolean;
+  isLive?: boolean;
+  lastLocationDate?: string;
+  lastLocationTime?: string;
+  lastLocationUpdate?: string;
+  coordSource?: string;
 }
 
 export interface OfflinePunchTransaction {

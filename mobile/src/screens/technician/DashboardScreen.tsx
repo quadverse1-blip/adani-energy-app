@@ -205,6 +205,35 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
     })();
   }, []);
 
+  // Sync real-time location telemetry to Admin Tracking radar
+  useEffect(() => {
+    if (!liveCoords?.latitude || !liveCoords?.longitude) return;
+
+    dashboardService.pingLocation(
+      liveCoords.latitude,
+      liveCoords.longitude,
+      10,
+      100,
+      substation?.id,
+      substation?.name
+    ).catch(() => {});
+
+    const pingInterval = setInterval(() => {
+      if (liveCoords?.latitude && liveCoords?.longitude) {
+        dashboardService.pingLocation(
+          liveCoords.latitude,
+          liveCoords.longitude,
+          10,
+          100,
+          substation?.id,
+          substation?.name
+        ).catch(() => {});
+      }
+    }, 30000);
+
+    return () => clearInterval(pingInterval);
+  }, [liveCoords?.latitude, liveCoords?.longitude, substation?.id, substation?.name]);
+
   const deviceCoords = {
     latitude: liveCoords?.latitude || substation?.latitude || 0,
     longitude: liveCoords?.longitude || substation?.longitude || 0,

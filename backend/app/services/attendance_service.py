@@ -247,6 +247,24 @@ class AttendanceService:
         })
 
         db.save_attendance(record)
+
+        # Synchronize employee's latest known GPS coordinates and timestamps
+        try:
+            emp_doc = db.get_employee(emp_id) or db.find_employee_by_identifier(emp_id)
+            if emp_doc:
+                emp_doc["latitude"] = latitude
+                emp_doc["longitude"] = longitude
+                emp_doc["hasGps"] = True
+                emp_doc["lastSeen"] = time_ist
+                emp_doc["lastLocationDate"] = today_str
+                emp_doc["lastLocationTime"] = time_ist
+                emp_doc["locationName"] = site.get("name") if site else "Field Check-In Point"
+                db.employees[emp_doc["_id"]] = emp_doc
+                if hasattr(db, "_raw_employees"):
+                    db._raw_employees[emp_doc["_id"]] = emp_doc
+        except Exception as ex:
+            logger.warning(f"Error syncing employee location on checkin: {ex}")
+
         return record
 
     @staticmethod
@@ -316,6 +334,24 @@ class AttendanceService:
         record["updatedAt"] = now.isoformat() + "Z"
 
         db.save_attendance(record)
+
+        # Synchronize employee's latest known GPS coordinates and timestamps
+        try:
+            emp_doc = db.get_employee(emp_id) or db.find_employee_by_identifier(emp_id)
+            if emp_doc:
+                if latitude is not None and longitude is not None:
+                    emp_doc["latitude"] = latitude
+                    emp_doc["longitude"] = longitude
+                emp_doc["hasGps"] = True
+                emp_doc["lastSeen"] = now_ist.strftime("%I:%M %p")
+                emp_doc["lastLocationDate"] = today_str
+                emp_doc["lastLocationTime"] = now_ist.strftime("%I:%M %p IST")
+                db.employees[emp_doc["_id"]] = emp_doc
+                if hasattr(db, "_raw_employees"):
+                    db._raw_employees[emp_doc["_id"]] = emp_doc
+        except Exception as ex:
+            logger.warning(f"Error syncing employee location on checkout: {ex}")
+
         return record
 
     @staticmethod

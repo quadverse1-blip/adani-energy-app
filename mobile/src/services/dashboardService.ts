@@ -110,6 +110,18 @@ export const dashboardService = {
     return response.data;
   },
 
+  async pingLocation(latitude: number, longitude: number, accuracy?: number, batteryLevel?: number, siteId?: string, locationName?: string): Promise<{ status: string }> {
+    const response = await apiClient.post('/locations/ping', {
+      latitude,
+      longitude,
+      accuracy: accuracy || 10,
+      batteryLevel: batteryLevel || 100,
+      siteId,
+      locationName,
+    });
+    return response.data;
+  },
+
   async markNotificationsRead(notificationId?: string): Promise<{ status: string }> {
     const response = await apiClient.post('/dashboard/notifications/mark-read', {
       notificationId,

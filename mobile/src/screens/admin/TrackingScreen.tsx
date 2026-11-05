@@ -9,6 +9,7 @@ import {
   Dimensions,
   Platform,
   LogBox,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -36,6 +37,8 @@ import {
   X,
   Layers,
   Crosshair,
+  Phone,
+  PhoneCall,
 } from 'lucide-react-native';
 import MapView, { Marker, Circle } from '../../components/common/AppMapView';
 import { dashboardService, FleetRadarData } from '../../services/dashboardService';
@@ -178,48 +181,29 @@ export const TrackingScreen: React.FC = () => {
   const technicians = data?.technicians || [];
   const substations = data?.substations || [];
 
-  const activeCount = useMemo(() => technicians.filter((t) => t.hasGps).length, [technicians]);
+  const activeCount = useMemo(
+    () => technicians.filter((t) => t.isOnline || t.status === 'online' || t.status === 'on_duty_inside' || t.status === 'on_duty_outside').length,
+    [technicians]
+  );
   const offlineCount = useMemo(() => technicians.length - activeCount, [technicians, activeCount]);
 
-  // When a particular person is clicked, ONLY display that person on the map
+  // Display all employees with recorded GPS coordinates on the map (retains offline employee markers)
   const displayedTechnicians = useMemo(() => {
-    if (viewMode === 'single' && selectedTech) {
-      if (selectedTech.latitude !== null && selectedTech.latitude !== undefined &&
-          selectedTech.longitude !== null && selectedTech.longitude !== undefined) {
-        return [selectedTech];
+    return technicians.filter((t) => {
+      if (t.latitude === null || t.latitude === undefined || t.longitude === null || t.longitude === undefined) {
+        return false;
       }
-      const site = substations.find(
-        (s) =>
-          s.id === selectedTech.assignedSiteId ||
-          s.name.toLowerCase() === (selectedTech.assignedSiteName || '').toLowerCase()
-      );
-      if (site) {
-        return [
-          {
-            ...selectedTech,
-            latitude: site.latitude,
-            longitude: site.longitude,
-            hasGps: true,
-          },
-        ];
-      }
-      return [selectedTech];
-    }
-    return technicians.filter((t) => t.latitude !== null && t.longitude !== null);
-  }, [technicians, selectedTech, viewMode, substations]);
+      const isOnline = Boolean(t.isOnline || t.status === 'online' || t.status === 'on_duty_inside' || t.status === 'on_duty_outside');
+      if (filterTab === 'active') return isOnline;
+      if (filterTab === 'offline') return !isOnline;
+      return true;
+    });
+  }, [technicians, filterTab]);
 
   // Display relevant substation(s)
   const displayedSubstations = useMemo(() => {
-    if (viewMode === 'single' && selectedTech) {
-      const match = substations.find(
-        (s) =>
-          s.id === selectedTech.assignedSiteId ||
-          s.name.toLowerCase() === (selectedTech.assignedSiteName || '').toLowerCase()
-      );
-      return match ? [match] : [];
-    }
     return substations;
-  }, [substations, selectedTech, viewMode]);
+  }, [substations]);
 
   const filteredTechnicians = useMemo(() => {
     return technicians.filter((t) => {
@@ -228,12 +212,15 @@ export const TrackingScreen: React.FC = () => {
         !q ||
         t.name.toLowerCase().includes(q) ||
         t.employeeId.toLowerCase().includes(q) ||
-        t.assignedSiteName.toLowerCase().includes(q);
+        (t.designation && t.designation.toLowerCase().includes(q)) ||
+        (t.assignedSiteName && t.assignedSiteName.toLowerCase().includes(q)) ||
+        (t.locationName && t.locationName.toLowerCase().includes(q));
 
       if (!matchSearch) return false;
 
-      if (filterTab === 'active') return t.hasGps;
-      if (filterTab === 'offline') return !t.hasGps;
+      const isOnline = Boolean(t.isOnline || t.status === 'online' || t.status === 'on_duty_inside' || t.status === 'on_duty_outside');
+      if (filterTab === 'active') return isOnline;
+      if (filterTab === 'offline') return !isOnline;
       return true;
     });
   }, [technicians, search, filterTab]);
@@ -462,7 +449,7 @@ export const TrackingScreen: React.FC = () => {
               filterTab === 'active' && styles.filterTabTextActive,
             ]}
           >
-            Active ({activeCount})
+            Active/Online ({activeCount})
           </Text>
         </TouchableOpacity>
 
@@ -496,10 +483,7 @@ export const TrackingScreen: React.FC = () => {
             .substring(0, 2)
             .toUpperCase();
 
-          const isLate = tech.attendanceBadge?.toLowerCase() === 'late';
-          const isHalfDay = tech.attendanceBadge?.toLowerCase() === 'half day';
-          const isNotCheckedIn = tech.attendanceBadge?.toLowerCase() === 'not checked in';
-          const has100 = tech.batteryLevel === 100 && tech.name.includes('Neha');
+          const isOnline = Boolean(tech.isOnline || tech.status === 'online' || tech.status === 'on_duty_inside' || tech.status === 'on_duty_outside');
 
           return (
             <TouchableOpacity delayPressIn={0}
@@ -526,65 +510,53 @@ export const TrackingScreen: React.FC = () => {
                 >
                   {initials}
                 </Text>
+                {isOnline && <View style={styles.onlineAvatarDot} />}
               </View>
 
               {/* Card Content */}
               <View style={styles.techCardBody}>
-                {/* Name & Badge Row */}
+                {/* Name & Status Badge Row */}
                 <View style={styles.cardHeaderRow}>
                   <Text style={styles.techName} numberOfLines={1}>
                     {tech.name}{' '}
                     <Text style={styles.techEmpCode}>({tech.employeeId})</Text>
                   </Text>
 
-                  {/* Top-Right Badge */}
-                  {isLate ? (
-                    <View style={styles.badgeLate}>
-                      <Text style={styles.badgeLateText}>Late</Text>
-                    </View>
-                  ) : isHalfDay ? (
-                    <View style={styles.badgeHalfDay}>
-                      <Text style={styles.badgeHalfDayText}>Half Day</Text>
-                    </View>
-                  ) : has100 ? (
-                    <View style={styles.badgeBattery}>
-                      <Text style={styles.badgeBatteryText}>100%</Text>
-                    </View>
-                  ) : isNotCheckedIn ? (
-                    <View style={styles.badgeNotCheckedIn}>
-                      <Text style={styles.badgeNotCheckedInText}>Not Checked In</Text>
+                  {/* Online / Offline Status Badge */}
+                  {isOnline ? (
+                    <View style={styles.badgeOnline}>
+                      <View style={styles.onlineMiniDot} />
+                      <Text style={styles.badgeOnlineText}>Online</Text>
                     </View>
                   ) : (
-                    <View style={styles.badgeOnDuty}>
-                      <Text style={styles.badgeOnDutyText}>On Duty</Text>
+                    <View style={styles.badgeOffline}>
+                      <View style={styles.offlineMiniDot} />
+                      <Text style={styles.badgeOfflineText}>Offline</Text>
                     </View>
                   )}
                 </View>
 
-                {/* Site Row */}
-                <View style={styles.siteRow}>
-                  <Building size={12} color="#94A3B8" />
-                  <Text style={styles.siteName} numberOfLines={1}>
-                    {tech.assignedSiteName}
+                {/* Designation Row */}
+                <View style={styles.designationRow}>
+                  <Text style={styles.designationText} numberOfLines={1}>
+                    {tech.designation || 'Field Staff'}
                   </Text>
                 </View>
 
-                {/* Last Location Row */}
-                {tech.locationName ? (
-                  <View style={styles.locationNameRow}>
-                    <MapPin size={11} color="#6366F1" />
-                    <Text style={styles.locationNameText} numberOfLines={1}>
-                      {tech.locationName}
-                    </Text>
-                  </View>
-                ) : null}
+                {/* Location / Site Row */}
+                <View style={styles.siteRow}>
+                  <Building size={11} color="#64748B" />
+                  <Text style={styles.siteName} numberOfLines={1}>
+                    {tech.locationName || tech.assignedSiteName || 'Site Location'}
+                  </Text>
+                </View>
 
                 {/* GPS & Timestamp Row */}
                 <View style={styles.cardFooterRow}>
                   <View style={styles.gpsRow}>
                     <MapPin
                       size={11}
-                      color={tech.hasGps ? '#10B981' : '#94A3B8'}
+                      color={isOnline ? '#10B981' : '#64748B'}
                     />
                     <Text
                       style={[
@@ -593,16 +565,16 @@ export const TrackingScreen: React.FC = () => {
                       ]}
                       numberOfLines={1}
                     >
-                      {tech.hasGps && tech.latitude && tech.longitude
-                        ? `${tech.latitude.toFixed(4)}, ${tech.longitude.toFixed(4)}`
+                      {tech.latitude !== null && tech.latitude !== undefined && tech.longitude !== null && tech.longitude !== undefined
+                        ? `${Number(tech.latitude).toFixed(4)}, ${Number(tech.longitude).toFixed(4)}`
                         : 'No GPS Logged'}
                     </Text>
                   </View>
 
                   <View style={styles.timeRow}>
                     <Clock size={11} color="#94A3B8" />
-                    <Text style={styles.timeText}>
-                      {tech.checkInTime || '--'}
+                    <Text style={styles.timeText} numberOfLines={1}>
+                      {tech.lastLocationTime || tech.lastSeen || '--'}
                     </Text>
                   </View>
                 </View>
@@ -621,29 +593,27 @@ export const TrackingScreen: React.FC = () => {
       <View style={styles.mapFrame}>
         {/* Floating Top Overview Pill */}
         <View style={styles.mapFloatingTopBadge}>
-          <View style={viewMode === 'single' ? styles.greenMiniDot : styles.blueMiniDot} />
+          <View style={selectedTech?.isOnline ? styles.greenMiniDot : styles.greyMiniDot} />
           <Text style={styles.mapFloatingTopText} numberOfLines={1}>
-            {viewMode === 'single' && selectedTech
-              ? `Last Location: ${selectedTech.name} • ${selectedTech.locationName || selectedTech.assignedSiteName} (${selectedTech.checkInTime || selectedTech.lastSeen || '10:14 AM'})`
-              : `Fleet Overview: ${activeCount} Personnel Active Online`}
+            {selectedTech
+              ? `${selectedTech.name} (${selectedTech.isOnline ? 'Online' : 'Offline'}) • ${selectedTech.lastLocationUpdate || selectedTech.lastSeen || 'Last Known'}`
+              : `Fleet Overview: ${activeCount} Online • ${offlineCount} Offline`}
           </Text>
-          {viewMode === 'single' && (
-            <TouchableOpacity delayPressIn={0}
-              style={styles.floatingShowAllBtn}
-              onPress={handleViewAllOnMap}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.floatingShowAllText}>Show All</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity delayPressIn={0}
+            style={styles.floatingShowAllBtn}
+            onPress={handleViewAllOnMap}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.floatingShowAllText}>Show All</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Floating Warning Pill if Selected Tech has No GPS */}
-        {viewMode === 'single' && selectedTech && !selectedTech.hasGps && (
+        {selectedTech && !selectedTech.hasGps && (
           <View style={styles.noGpsFloatingBanner}>
             <MapPin size={13} color="#D97706" />
             <Text style={styles.noGpsFloatingText} numberOfLines={1}>
-              {selectedTech.name} has no GPS logged yet today
+              {selectedTech.name} has no GPS logged yet
             </Text>
           </View>
         )}
@@ -661,37 +631,47 @@ export const TrackingScreen: React.FC = () => {
           showsUserLocation={false}
           showsMyLocationButton={false}
         >
-          {/* 1. Substation Sites & Geofence Circles (Only in 'all' mode) */}
-          {viewMode === 'all' &&
-            substations.map((s) => (
-              <React.Fragment key={s.id}>
-                <Circle
-                  center={{ latitude: s.latitude, longitude: s.longitude }}
-                  radius={s.radiusMeters || 500}
-                  fillColor="rgba(220, 38, 38, 0.15)"
-                  strokeColor="#DC2626"
-                  strokeWidth={2}
-                />
-                <Marker
-                  coordinate={{ latitude: s.latitude, longitude: s.longitude }}
-                  title={`${s.name} (Substation)`}
-                  description={`${s.code} • 500m Geofence`}
-                  pinColor="#DC2626"
-                />
-              </React.Fragment>
-            ))}
-
-          {/* 2. Technicians Real Live Locations (In single mode, ONLY the clicked person's pin is rendered!) */}
-          {displayedTechnicians.map((tech) => (
-            <Marker
-              key={tech.id}
-              coordinate={{ latitude: tech.latitude!, longitude: tech.longitude! }}
-              title={`📍 Last Location: ${tech.name} (${tech.employeeId})`}
-              description={`${tech.locationName || tech.assignedSiteName} • Recorded: ${tech.checkInTime || tech.lastSeen || '10:14 AM'}`}
-              pinColor={tech.markerColor === 'amber' ? '#F59E0B' : '#22C55E'}
-              onPress={() => handleSelectTechnician(tech)}
-            />
+          {/* 1. Substation Sites & Geofence Circles */}
+          {substations.map((s) => (
+            <React.Fragment key={s.id}>
+              <Circle
+                center={{ latitude: s.latitude, longitude: s.longitude }}
+                radius={s.radiusMeters || 500}
+                fillColor="rgba(220, 38, 38, 0.15)"
+                strokeColor="#DC2626"
+                strokeWidth={2}
+              />
+              <Marker
+                coordinate={{ latitude: s.latitude, longitude: s.longitude }}
+                title={`${s.name} (Substation)`}
+                description={`${s.code} • 500m Geofence`}
+                pinColor="#DC2626"
+              />
+            </React.Fragment>
           ))}
+
+          {/* 2. All Employees Last Known / Live GPS Locations (Distinct styling for Online vs Offline) */}
+          {displayedTechnicians.map((tech) => {
+            const isSelected = selectedTech?.id === tech.id;
+            const isOnline = Boolean(tech.isOnline || tech.status === 'online' || tech.status === 'on_duty_inside' || tech.status === 'on_duty_outside');
+            // Online = Vibrant Green (#10B981), Offline = Slate Grey (#64748B), Selected = Vibrant Blue (#2563EB)
+            const pinColor = isSelected ? '#2563EB' : isOnline ? '#10B981' : '#64748B';
+            const markerTitle = isOnline
+              ? `🟢 LIVE: ${tech.name} (${tech.employeeId})`
+              : `⚪ LAST KNOWN: ${tech.name} (${tech.employeeId})`;
+            const markerDesc = `${tech.designation || 'Field Staff'} • ${isOnline ? 'Online (Real-Time)' : 'Offline (Last Known)'} • ${tech.lastLocationUpdate || tech.lastSeen || ''}`;
+
+            return (
+              <Marker
+                key={tech.id}
+                coordinate={{ latitude: tech.latitude!, longitude: tech.longitude! }}
+                title={markerTitle}
+                description={markerDesc}
+                pinColor={pinColor}
+                onPress={() => handleSelectTechnician(tech)}
+              />
+            );
+          })}
 
           {/* 3. User's Own Device Last Known Location Marker (Admin) */}
           {userLocation ? (
@@ -802,26 +782,128 @@ export const TrackingScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Prominent Last Known Location Highlight Banner */}
-        <View style={styles.lastLocationCardBanner}>
-          <View style={styles.lastLocationPinCircle}>
-            <MapPin size={18} color="#1E63F0" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={styles.lastLocationTagRow}>
-              <Text style={styles.lastLocationTag}>LAST KNOWN LOCATION OF USER</Text>
-              <Text style={styles.lastLocationTimeTag}>
-                {selectedTech?.checkInTime || selectedTech?.lastSeen || '10:14 AM'}
-              </Text>
+        {/* Prominent Employee Details & Last Known Location Inspection Card */}
+        {selectedTech && (
+          <View style={styles.techInspectionCard}>
+            {/* Header: Avatar, Name, Employee ID, Designation & Quick Call */}
+            <View style={styles.inspectionHeader}>
+              <View style={styles.inspectionAvatarWrap}>
+                <Text style={styles.inspectionAvatarText}>
+                  {selectedTech.name.split(' ').map((w) => w[0]).join('').substring(0, 2).toUpperCase()}
+                </Text>
+              </View>
+
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <View style={styles.inspectionNameRow}>
+                  <Text style={styles.inspectionNameText} numberOfLines={1}>
+                    {selectedTech.name}
+                  </Text>
+                  {/* Online/Offline Status Badge */}
+                  {selectedTech.isOnline || selectedTech.status === 'online' ? (
+                    <View style={styles.badgeOnline}>
+                      <View style={styles.onlinePulseDot} />
+                      <Text style={styles.badgeOnlineText}>Online (Live)</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.badgeOffline}>
+                      <View style={styles.offlineMiniDot} />
+                      <Text style={styles.badgeOfflineText}>Offline (Last Known)</Text>
+                    </View>
+                  )}
+                </View>
+
+                <Text style={styles.inspectionSubText} numberOfLines={1}>
+                  {selectedTech.employeeId} • {selectedTech.designation || 'Field Staff'}
+                </Text>
+              </View>
+
+              {/* Quick Call Button */}
+              {selectedTech.phone ? (
+                <TouchableOpacity delayPressIn={0}
+                  style={styles.inspectionCallBtn}
+                  onPress={() => Linking.openURL(`tel:${selectedTech.phone}`)}
+                  activeOpacity={0.8}
+                >
+                  <Phone size={13} color="#FFFFFF" />
+                  <Text style={styles.inspectionCallBtnText}>Call</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
-            <Text style={styles.lastLocationMainAddress} numberOfLines={2}>
-              {selectedTech?.locationName || `${activeSiteName}, Sector Operational Grid`}
-            </Text>
-            <Text style={styles.lastLocationCoordsText}>
-              GPS: {activeLat}, {activeLon} • {selectedTech ? selectedTech.name : 'User'} ({selectedTech ? selectedTech.employeeId : 'EMP'}) • {selectedTech?.attendanceBadge || 'On Duty'}
-            </Text>
+
+            {/* 4 Details Grid (Name, Phone, Status, Location, Date & Time) */}
+            <View style={styles.inspectionDetailsGrid}>
+              {/* 1. Contact Number */}
+              <View style={styles.inspectionDetailRow}>
+                <View style={styles.inspectionIconCircle}>
+                  <Phone size={13} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inspectionFieldLabel}>CONTACT NUMBER</Text>
+                  <TouchableOpacity delayPressIn={0}
+                    onPress={() => selectedTech.phone && Linking.openURL(`tel:${selectedTech.phone}`)}
+                    disabled={!selectedTech.phone}
+                  >
+                    <Text style={[styles.inspectionFieldValue, selectedTech.phone && styles.phoneLinkText]}>
+                      {selectedTech.phone || 'No phone registered'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* 2. Online / Offline Status */}
+              <View style={styles.inspectionDetailRow}>
+                <View style={styles.inspectionIconCircle}>
+                  <Radio size={13} color={selectedTech.isOnline ? '#10B981' : '#64748B'} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inspectionFieldLabel}>ONLINE / OFFLINE STATUS</Text>
+                  <Text style={[styles.inspectionFieldValue, { color: selectedTech.isOnline ? '#059669' : '#475569', fontWeight: '800' }]}>
+                    {selectedTech.isOnline ? 'Online • Real-Time GPS Tracking Active' : 'Offline • Last Recorded Location Retained'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* 3. Last Known Location */}
+              <View style={styles.inspectionDetailRow}>
+                <View style={styles.inspectionIconCircle}>
+                  <MapPin size={13} color="#D97706" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inspectionFieldLabel}>LAST KNOWN LOCATION</Text>
+                  <Text style={styles.inspectionFieldValue} numberOfLines={2}>
+                    {selectedTech.locationName || selectedTech.assignedSiteName || 'Site Location'}
+                  </Text>
+                  <Text style={styles.inspectionCoordsSub}>
+                    GPS: {activeLat}, {activeLon}
+                  </Text>
+                </View>
+                <TouchableOpacity delayPressIn={0}
+                  style={[styles.copyGpsInlineBtn, copyFeedback && styles.copyGpsInlineSuccess]}
+                  onPress={handleCopyGPS}
+                  activeOpacity={0.8}
+                >
+                  {copyFeedback ? <Check size={11} color="#15803D" /> : <Copy size={11} color="#475569" />}
+                  <Text style={[styles.copyGpsInlineText, copyFeedback && { color: '#15803D' }]}>
+                    {copyFeedback ? 'Copied' : 'Copy'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* 4. Last Location Update Date and Time */}
+              <View style={styles.inspectionDetailRow}>
+                <View style={styles.inspectionIconCircle}>
+                  <Clock size={13} color="#7C3AED" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inspectionFieldLabel}>LAST LOCATION UPDATE DATE & TIME</Text>
+                  <Text style={styles.inspectionFieldValue}>
+                    {selectedTech.lastLocationUpdate || `${selectedTech.lastLocationDate || 'Today'} at ${selectedTech.lastLocationTime || selectedTech.lastSeen || '--'}`}
+                  </Text>
+                </View>
+              </View>
+            </View>
           </View>
-        </View>
+        )}
 
         {/* 3 Metric Summary Boxes */}
         <View style={styles.metricsGrid}>
@@ -857,12 +939,12 @@ export const TrackingScreen: React.FC = () => {
           <View style={styles.metricBox}>
             <Text style={styles.metricLabel}>LAST RECORDED TELEMETRY SIGNAL</Text>
             <Text style={styles.metricTime} numberOfLines={1}>
-              {activeTime}
+              {selectedTech?.lastLocationTime || activeTime}
             </Text>
             <View style={styles.metricSubRow}>
               <Radio size={12} color="#3B82F6" />
               <Text style={styles.metricSubText} numberOfLines={1}>
-                Provider: Firebase Cloud Database
+                Signal: {selectedTech?.isOnline ? 'Real-Time Live Signal' : 'Retained Last Known'}
               </Text>
             </View>
           </View>
@@ -1452,6 +1534,82 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#64748B',
   },
+  designationRow: {
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  designationText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  onlineAvatarDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#16A34A',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  badgeOnline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  badgeOnlineText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  onlineMiniDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16A34A',
+  },
+  onlinePulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16A34A',
+  },
+  badgeOffline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  badgeOfflineText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  offlineMiniDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
+  },
+  greyMiniDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#94A3B8',
+  },
   badgeLate: {
     backgroundColor: '#FEF3C7',
     paddingHorizontal: 7,
@@ -1506,6 +1664,139 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     fontWeight: '700',
     color: '#15803D',
+  },
+  techInspectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: '#1E40AF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  inspectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  inspectionAvatarWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inspectionAvatarText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1D4ED8',
+  },
+  inspectionNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  inspectionNameText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  inspectionSubText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  inspectionCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  inspectionCallBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  inspectionDetailsGrid: {
+    marginTop: 10,
+    gap: 9,
+  },
+  inspectionDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 9,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  inspectionIconCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inspectionFieldLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+  },
+  inspectionFieldValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  phoneLinkText: {
+    color: '#2563EB',
+    textDecorationLine: 'underline',
+  },
+  inspectionCoordsSub: {
+    fontSize: 10.5,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 1,
+  },
+  copyGpsInlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  copyGpsInlineSuccess: {
+    borderColor: '#86EFAC',
+    backgroundColor: '#F0FDF4',
+  },
+  copyGpsInlineText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#475569',
   },
   siteRow: {
     flexDirection: 'row',
