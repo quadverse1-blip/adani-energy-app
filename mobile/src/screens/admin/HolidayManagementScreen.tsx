@@ -277,7 +277,7 @@ export const HolidayManagementScreen: React.FC = () => {
       {/* Top Header Card */}
       <View style={[styles.headerCard, { paddingTop: Math.max(insets.top, 16) }]}>
         <View style={styles.headerRow}>
-          <AppBackButton onPress={handleBack} style={{ marginRight: 8 }} />
+          <AppBackButton onPress={handleBack} style={{ marginRight: 6 }} />
 
           <TouchableOpacity delayPressIn={0}
             style={styles.headerIconBtn}
@@ -288,8 +288,9 @@ export const HolidayManagementScreen: React.FC = () => {
             <Menu size={20} color="#0F172A" />
           </TouchableOpacity>
 
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.headerTitle}>Holiday Management</Text>
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.headerTitle} numberOfLines={1}>Holiday Management</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>Centralized Public Holiday Calendar</Text>
           </View>
 
           <TouchableOpacity delayPressIn={0}
@@ -297,7 +298,7 @@ export const HolidayManagementScreen: React.FC = () => {
             onPress={handleOpenAddModal}
             activeOpacity={0.85}
           >
-            <Plus size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Plus size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
             <Text style={styles.headerAddBtnText}>Add Holiday</Text>
           </TouchableOpacity>
         </View>
@@ -342,11 +343,11 @@ export const HolidayManagementScreen: React.FC = () => {
       >
         {/* Sync Info Banner */}
         <View style={styles.syncBanner}>
-          <Sparkles size={18} color="#8B5CF6" style={{ marginRight: 8, marginTop: 2 }} />
+          <Sparkles size={18} color="#7C3AED" style={{ marginRight: 10, marginTop: 2 }} />
           <View style={{ flex: 1 }}>
             <Text style={styles.syncBannerTitle}>Centralized Application Synchronization Active</Text>
             <Text style={styles.syncBannerText}>
-              Any holiday added here automatically assigns status <Text style={{ fontWeight: '800', color: '#6B21A8' }}>PH (Public Holiday)</Text> across all Admin, Supervisor, and Employee attendance calendars, reports, and Excel exports.
+              Any holiday added here automatically assigns status <Text style={{ fontWeight: '800', color: '#5B21B6' }}>PH (Public Holiday)</Text> across all Admin, Supervisor, and Employee attendance calendars, reports, and Excel exports.
             </Text>
           </View>
         </View>
@@ -354,19 +355,19 @@ export const HolidayManagementScreen: React.FC = () => {
         {/* KPI Stats Strip */}
         <View style={styles.kpiStrip}>
           <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>TOTAL PUBLIC HOLIDAYS</Text>
+            <Text style={styles.kpiLabel}>TOTAL HOLIDAYS</Text>
             <Text style={[styles.kpiValue, { color: '#6B21A8' }]}>{stats.total}</Text>
             <Text style={styles.kpiSub}>In {selectedYear} master ledger</Text>
           </View>
 
           <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>NATIONAL GAZETTED</Text>
+            <Text style={styles.kpiLabel}>NATIONAL</Text>
             <Text style={[styles.kpiValue, { color: '#059669' }]}>{stats.national}</Text>
-            <Text style={styles.kpiSub}>All Circles & States</Text>
+            <Text style={styles.kpiSub}>Gazetted / All Circles</Text>
           </View>
 
           <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>STATE & REGIONAL</Text>
+            <Text style={styles.kpiLabel}>REGIONAL / STATE</Text>
             <Text style={[styles.kpiValue, { color: '#D97706' }]}>{stats.regional + stats.gazetted}</Text>
             <Text style={styles.kpiSub}>Substation Grid Sites</Text>
           </View>
@@ -375,10 +376,15 @@ export const HolidayManagementScreen: React.FC = () => {
         {/* Holidays List Card */}
         <View style={styles.holidaysCard}>
           <View style={styles.holidaysCardHeader}>
-            <Calendar size={18} color="#1E63F0" style={{ marginRight: 8 }} />
-            <Text style={styles.holidaysCardTitle}>
-              Official Public Holidays Schedule ({selectedYear})
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <Calendar size={18} color="#1E63F0" style={{ marginRight: 8 }} />
+              <Text style={styles.holidaysCardTitle}>
+                Official Public Holidays ({selectedYear})
+              </Text>
+            </View>
+            <View style={styles.holidayCountBadge}>
+              <Text style={styles.holidayCountBadgeText}>{holidays.length} Days</Text>
+            </View>
           </View>
 
           {loading ? (
@@ -394,66 +400,81 @@ export const HolidayManagementScreen: React.FC = () => {
               </Text>
             </View>
           ) : (
-            holidays.map((item, idx) => (
-              <View
-                key={item._id || idx}
-                style={[
-                  styles.holidayRow,
-                  idx === holidays.length - 1 && { borderBottomWidth: 0 },
-                ]}
-              >
-                {/* Left Date Block */}
-                <View style={styles.dateBlock}>
-                  <Text style={styles.dateDayText}>
-                    {item.date ? item.date.split('-')[2] : '--'}
-                  </Text>
-                  <Text style={styles.dateMonthText}>
-                    {item.date
-                      ? new Date(item.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
-                      : '--'}
-                  </Text>
-                  <Text style={styles.dateWeekdayText}>{item.day || 'Day'}</Text>
-                </View>
+            holidays.map((item, idx) => {
+              const weekdayStr =
+                item.day && item.day !== 'Day'
+                  ? item.day.length > 3
+                    ? item.day.slice(0, 3)
+                    : item.day
+                  : item.date
+                  ? new Date(item.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })
+                  : 'Day';
 
-                {/* Center Content */}
-                <View style={styles.holidayInfoCol}>
-                  <View style={styles.holidayTitleRow}>
-                    <Text style={styles.holidayNameText}>{item.name}</Text>
-                    <View style={styles.phBadge}>
-                      <Text style={styles.phBadgeText}>PH</Text>
+              return (
+                <View
+                  key={item._id || idx}
+                  style={[
+                    styles.holidayRow,
+                    idx === holidays.length - 1 && { borderBottomWidth: 0 },
+                  ]}
+                >
+                  {/* Left Date Block */}
+                  <View style={styles.dateBlock}>
+                    <Text style={styles.dateDayText}>
+                      {item.date ? item.date.split('-')[2] : '--'}
+                    </Text>
+                    <Text style={styles.dateMonthText}>
+                      {item.date
+                        ? new Date(item.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+                        : '--'}
+                    </Text>
+                    <Text style={styles.dateWeekdayText}>{weekdayStr}</Text>
+                  </View>
+
+                  {/* Center Content */}
+                  <View style={styles.holidayInfoCol}>
+                    <View style={styles.holidayTitleRow}>
+                      <Text style={styles.holidayNameText} numberOfLines={1}>{item.name}</Text>
+                      <View style={styles.phBadge}>
+                        <Text style={styles.phBadgeText}>PH</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.holidayMetaRow}>
+                      <View style={styles.typeTag}>
+                        <Text style={styles.holidayTypeText}>{item.type || 'Gazetted'}</Text>
+                      </View>
+                      {item.description ? (
+                        <Text style={styles.holidayDescText} numberOfLines={1}>
+                          • {item.description}
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
 
-                  <View style={styles.holidayMetaRow}>
-                    <Text style={styles.holidayTypeText}>{item.type || 'Gazetted'}</Text>
-                    {item.description ? (
-                      <Text style={styles.holidayDescText} numberOfLines={1}>
-                        • {item.description}
-                      </Text>
-                    ) : null}
+                  {/* Right Actions */}
+                  <View style={styles.actionsRow}>
+                    <TouchableOpacity delayPressIn={0}
+                      style={styles.actionIconBtn}
+                      onPress={() => handleOpenEditModal(item)}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Edit Holiday"
+                    >
+                      <Edit2 size={15} color="#1E63F0" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity delayPressIn={0}
+                      style={styles.actionDeleteBtn}
+                      onPress={() => confirmDeleteHoliday(item)}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Delete Holiday"
+                    >
+                      <Trash2 size={15} color="#DC2626" />
+                    </TouchableOpacity>
                   </View>
                 </View>
-
-                {/* Right Actions */}
-                <View style={styles.actionsRow}>
-                  <TouchableOpacity delayPressIn={0}
-                    style={styles.actionIconBtn}
-                    onPress={() => handleOpenEditModal(item)}
-                    activeOpacity={0.7}
-                  >
-                    <Edit2 size={16} color="#1E63F0" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity delayPressIn={0}
-                    style={[styles.actionIconBtn, { backgroundColor: '#FEE2E2', marginLeft: 6 }]}
-                    onPress={() => confirmDeleteHoliday(item)}
-                    activeOpacity={0.7}
-                  >
-                    <Trash2 size={16} color="#DC2626" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
+              );
+            })
           )}
         </View>
       </ScrollView>
@@ -721,25 +742,38 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   headerIconBtn: {
-    padding: 8,
+    width: 38,
+    height: 38,
     borderRadius: 8,
     backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitleWrap: {
+    flex: 1,
+    marginHorizontal: 10,
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.3,
+    includeFontPadding: false,
   },
   headerSubtitle: {
     fontSize: 11,
+    fontWeight: '500',
     color: '#64748B',
     marginTop: 1,
+    includeFontPadding: false,
   },
   headerAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#1E63F0',
-    paddingVertical: 8,
+    height: 38,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
@@ -747,6 +781,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+    includeFontPadding: false,
   },
   actionBarRow: {
     flexDirection: 'row',
@@ -759,11 +794,13 @@ const styles = StyleSheet.create({
   },
   yearPill: {
     paddingVertical: 5,
-    paddingHorizontal: 12,
+    paddingHorizontal: 13,
     borderRadius: 20,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   yearPillActive: {
     backgroundColor: '#1E63F0',
@@ -773,6 +810,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#64748B',
+    includeFontPadding: false,
   },
   yearPillTextActive: {
     color: '#FFFFFF',
@@ -780,7 +818,8 @@ const styles = StyleSheet.create({
   pdfDownloadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    justifyContent: 'center',
+    height: 32,
     paddingHorizontal: 12,
     borderRadius: 8,
     backgroundColor: '#EFF6FF',
@@ -791,10 +830,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#1E63F0',
+    includeFontPadding: false,
   },
   scrollContent: {
     padding: 16,
-    gap: 16,
+    gap: 14,
   },
   syncBanner: {
     flexDirection: 'row',
@@ -803,44 +843,60 @@ const styles = StyleSheet.create({
     borderColor: '#DDD6FE',
     borderRadius: 12,
     padding: 12,
+    alignItems: 'flex-start',
   },
   syncBannerTitle: {
     fontSize: 13,
     fontWeight: '800',
     color: '#5B21B6',
     marginBottom: 2,
+    letterSpacing: -0.2,
+    includeFontPadding: false,
   },
   syncBannerText: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: '#6D28D9',
-    lineHeight: 16,
+    lineHeight: 16.5,
+    includeFontPadding: false,
   },
   kpiStrip: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   kpiCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    minHeight: 88,
+    justifyContent: 'space-between',
+    elevation: 1,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   kpiLabel: {
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#64748B',
-    marginBottom: 4,
+    letterSpacing: 0.4,
+    includeFontPadding: false,
   },
   kpiValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '900',
+    lineHeight: 26,
+    includeFontPadding: false,
   },
   kpiSub: {
-    fontSize: 10,
+    fontSize: 9.5,
+    fontWeight: '500',
     color: '#94A3B8',
-    marginTop: 2,
+    lineHeight: 13,
+    includeFontPadding: false,
   },
   holidaysCard: {
     backgroundColor: '#FFFFFF',
@@ -848,20 +904,44 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     overflow: 'hidden',
+    elevation: 1,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
   },
   holidaysCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
     backgroundColor: '#FAFAFA',
   },
   holidaysCardTitle: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.2,
+    includeFontPadding: false,
+  },
+  holidayCountBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  holidayCountBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E63F0',
+    includeFontPadding: false,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -874,48 +954,63 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#334155',
     marginTop: 10,
+    includeFontPadding: false,
   },
   emptySub: {
     fontSize: 12,
     color: '#94A3B8',
     textAlign: 'center',
     marginTop: 4,
+    lineHeight: 17,
+    includeFontPadding: false,
   },
   holidayRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   dateBlock: {
     width: 52,
+    height: 54,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#F8FAFC',
     borderRadius: 8,
-    paddingVertical: 6,
+    paddingVertical: 3,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   dateDayText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '900',
     color: '#0F172A',
+    lineHeight: 20,
+    includeFontPadding: false,
   },
   dateMonthText: {
     fontSize: 9,
     fontWeight: '800',
     color: '#1E63F0',
+    letterSpacing: 0.5,
+    marginTop: 1,
+    includeFontPadding: false,
   },
   dateWeekdayText: {
-    fontSize: 9,
+    fontSize: 8.5,
+    fontWeight: '600',
     color: '#64748B',
+    textTransform: 'uppercase',
     marginTop: 1,
+    includeFontPadding: false,
   },
   holidayInfoCol: {
     flex: 1,
     marginLeft: 12,
+    marginRight: 8,
+    justifyContent: 'center',
   },
   holidayTitleRow: {
     flexDirection: 'row',
@@ -923,46 +1018,78 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   holidayNameText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#0F172A',
+    flexShrink: 1,
+    includeFontPadding: false,
   },
   phBadge: {
     backgroundColor: '#F3E8FF',
     borderRadius: 4,
     paddingHorizontal: 5,
-    paddingVertical: 2,
+    paddingVertical: 1.5,
     borderWidth: 1,
     borderColor: '#E9D5FF',
+    alignSelf: 'center',
   },
   phBadgeText: {
     fontSize: 9,
     fontWeight: '900',
     color: '#6B21A8',
+    includeFontPadding: false,
   },
   holidayMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 3,
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  typeTag: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   holidayTypeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+    includeFontPadding: false,
   },
   holidayDescText: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginLeft: 4,
+    fontSize: 10.5,
+    color: '#64748B',
+    flexShrink: 1,
+    includeFontPadding: false,
   },
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
   },
   actionIconBtn: {
-    padding: 7,
+    width: 32,
+    height: 32,
     borderRadius: 6,
     backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionDeleteBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -977,26 +1104,43 @@ const styles = StyleSheet.create({
     maxHeight: '90%',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 20,
+    padding: 18,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
   },
   modalHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   modalTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.2,
+    includeFontPadding: false,
   },
   modalSub: {
     fontSize: 11,
+    fontWeight: '500',
     color: '#64748B',
     marginTop: 2,
+    includeFontPadding: false,
   },
   modalCloseBtn: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
   },
   modalScroll: {
     maxHeight: 460,
@@ -1009,35 +1153,39 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#334155',
     marginBottom: 6,
+    includeFontPadding: false,
   },
   textInput: {
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#CBD5E1',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
+    paddingVertical: 9,
+    fontSize: 13.5,
     color: '#0F172A',
+    includeFontPadding: false,
   },
   dateInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#CBD5E1',
     borderRadius: 8,
     paddingRight: 4,
   },
   dateTextInput: {
     flex: 1,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
+    paddingVertical: 9,
+    fontSize: 13.5,
     color: '#0F172A',
+    includeFontPadding: false,
   },
   dateCalendarIconBtn: {
-    padding: 7,
+    width: 34,
+    height: 34,
     borderRadius: 6,
     backgroundColor: '#EFF6FF',
     justifyContent: 'center',
@@ -1068,14 +1216,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   calNavBtn: {
-    padding: 6,
+    width: 30,
+    height: 30,
     borderRadius: 6,
     backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   calMonthYearTitle: {
     fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
+    includeFontPadding: false,
   },
   calWeekdaysRow: {
     flexDirection: 'row',
@@ -1084,12 +1236,14 @@ const styles = StyleSheet.create({
   calWeekdayCell: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 2,
+    justifyContent: 'center',
+    paddingVertical: 3,
   },
   calWeekdayText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#64748B',
+    includeFontPadding: false,
   },
   calWeekendText: {
     color: '#EF4444',
@@ -1104,7 +1258,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 8,
-    marginVertical: 2,
+    marginVertical: 1,
   },
   calDayCellSelected: {
     backgroundColor: '#1E63F0',
@@ -1113,6 +1267,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#334155',
+    includeFontPadding: false,
   },
   calDaySundayText: {
     color: '#EF4444',
@@ -1135,20 +1290,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 6,
     backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   calTodayBtnText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#1E63F0',
+    includeFontPadding: false,
   },
   calCloseBtn: {
     paddingVertical: 5,
     paddingHorizontal: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   calCloseBtnText: {
     fontSize: 11,
     fontWeight: '600',
     color: '#64748B',
+    includeFontPadding: false,
   },
   typeSelectorRow: {
     flexDirection: 'row',
@@ -1162,6 +1323,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   typePillActive: {
     backgroundColor: '#6B21A8',
@@ -1171,6 +1334,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#64748B',
+    includeFontPadding: false,
   },
   typePillTextActive: {
     color: '#FFFFFF',
@@ -1185,11 +1349,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalCancelBtnText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#475569',
+    includeFontPadding: false,
   },
   modalSaveBtn: {
     paddingVertical: 10,
@@ -1197,12 +1364,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#1E63F0',
     minWidth: 110,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   modalSaveBtnText: {
     fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
+    includeFontPadding: false,
   },
 });
 
