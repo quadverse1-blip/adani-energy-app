@@ -181,29 +181,12 @@ async def cron_cleanup_photos():
     result = storage_service.cleanup_previous_days_photos(force=True)
     return result
 
-@app.api_route("/debug/info", methods=["GET", "POST"])
-async def debug_info(request: Request):
-    return {
-        "headers": dict(request.headers),
-        "scope_path": request.scope.get("path"),
-        "url_path": request.url.path,
-        "method": request.method
-    }
-
 @app.get("/")
-async def root(request: Request):
+async def root():
     return {
         "status": "online",
         "service": "Adani Smart Meter Workforce API",
-        "version": "1.0.0",
-        "debug_headers": dict(request.headers),
-        "debug_scope": {
-            "path": request.scope.get("path"),
-            "raw_path": request.scope.get("raw_path", b"").decode("utf-8", errors="ignore"),
-            "query_string": request.scope.get("query_string", b"").decode("utf-8", errors="ignore"),
-            "root_path": request.scope.get("root_path"),
-            "server": request.scope.get("server")
-        }
+        "version": "1.0.0"
     }
 
 if __name__ == "__main__":
