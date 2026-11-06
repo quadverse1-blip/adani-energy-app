@@ -51,23 +51,26 @@ except Exception as e:
 # Vercel Serverless Path Normalization Middleware
 @app.middleware("http")
 async def vercel_path_normalizer(request: Request, call_next):
-    matched = request.headers.get("x-matched-path")
-    if matched:
-        request.scope["path"] = matched
-    else:
-        path = request.scope.get("path", "")
-        prefixes = (
-            "/backend/api/index.py",
-            "/backend/api/index",
-            "/backend/api",
-            "/api/index.py",
-            "/api/index"
-        )
-        for p in prefixes:
-            if path.startswith(p):
-                rem = path[len(p):]
-                request.scope["path"] = rem if rem.startswith("/") else ("/" + rem)
-                break
+    # Prioritize actual request URI (x-forwarded-uri) or scope path
+    raw_path = request.headers.get("x-forwarded-uri") or request.scope.get("path", "")
+    if "?" in raw_path:
+        raw_path = raw_path.split("?")[0]
+    
+    prefixes = (
+        "/backend/api/index.py",
+        "/backend/api/index",
+        "/backend/api",
+        "/api/index.py",
+        "/api/index"
+    )
+    for p in prefixes:
+        if raw_path.startswith(p):
+            rem = raw_path[len(p):]
+            raw_path = rem if rem.startswith("/") else ("/" + rem)
+            break
+            
+    if raw_path:
+        request.scope["path"] = raw_path
     return await call_next(request)
 
 # Include Routers under API_V1_STR

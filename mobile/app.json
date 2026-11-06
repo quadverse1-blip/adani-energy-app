@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Adani Workforce",
-    "slug": "adani-workforce-app",
+    "name": "Adani Smart Meter Workforce",
+    "slug": "adani-smart-meter-workforce",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,14 +12,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.adani.workforce.smartmeter",
+      "bundleIdentifier": "com.adani.energyworkforce",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Allow Adani Workforce app to access high-accuracy GPS coordinates for substation geofence verification.",
-        "NSCameraUsageDescription": "Allow Adani Workforce app to capture mandatory biometric verification selfies during shift punch-in."
+        "NSLocationWhenInUseUsageDescription": "Allow Adani Smart Meter Workforce app to access high-accuracy GPS coordinates for substation geofence verification.",
+        "NSCameraUsageDescription": "Allow Adani Smart Meter Workforce app to capture mandatory biometric verification selfies during shift punch-in."
       }
     },
     "android": {
-      "package": "com.adani.workforce.smartmeter",
+      "package": "com.adani.energyworkforce",
       "adaptiveIcon": {
         "backgroundColor": "#1E63F0",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -29,10 +29,20 @@
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
+        "ACCESS_NETWORK_STATE",
+        "INTERNET",
         "CAMERA",
+        "POST_NOTIFICATIONS",
+        "VIBRATE",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.INTERNET",
         "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE",
         "android.permission.RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false
@@ -44,13 +54,13 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow Adani Workforce to verify your presence within the substation geofence."
+          "locationWhenInUsePermission": "Allow Adani Smart Meter Workforce to verify your presence within the substation geofence."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Adani Workforce to capture biometric verification photos."
+          "cameraPermission": "Allow Adani Smart Meter Workforce to capture biometric verification photos."
         }
       ],
       "expo-secure-store",

@@ -64,7 +64,7 @@ export const salaryService = {
   },
 
   getDownloadUrl(employeeId: string, month: number = 10, year: number = 2026, token?: string): string {
-    let base = apiClient.defaults.baseURL || CONFIG.API_BASE_URL || 'http://192.168.0.115:8000';
+    let base = apiClient.defaults.baseURL || CONFIG.API_BASE_URL || 'https://adani-energy-app.vercel.app';
     if (base.startsWith('/')) {
       base = `${CONFIG.API_BASE_URL}${base}`;
     }

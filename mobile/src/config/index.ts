@@ -1,35 +1,26 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-// Automatically detect the host machine's IP address from Expo bundler connection
-const getDevApiUrl = () => {
+// Production Backend deployed on Vercel
+export const PRODUCTION_API_URL = 'https://adani-energy-app.vercel.app';
+
+// Automatically resolve API Base URL (Production Vercel URL by default)
+const getApiUrl = () => {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  if (Platform.OS === 'web') {
-    return 'http://127.0.0.1:8000';
+  // Standalone production APK and non-dev builds strictly use Vercel backend
+  if (!__DEV__) {
+    return PRODUCTION_API_URL;
   }
 
-  // In Expo Go on physical device or simulator, hostUri contains "192.168.x.x:8081"
-  const hostUri =
-    Constants.expoConfig?.hostUri ||
-    (Constants as any).manifest?.debuggerHost ||
-    (Constants as any).manifest2?.extra?.expoClient?.hostUri;
-
-  if (hostUri) {
-    const host = hostUri.split(':')[0];
-    if (host && host !== 'localhost' && host !== '127.0.0.1') {
-      return `http://${host}:8000`;
-    }
-  }
-
-  // Local LAN IP fallback matching active Wi-Fi interface (192.168.0.115)
-  return 'http://192.168.0.115:8000';
+  // In development, default to Production Vercel backend so APKs and physical devices connect reliably
+  return PRODUCTION_API_URL;
 };
 
 export const CONFIG = {
-  API_BASE_URL: getDevApiUrl(),
+  API_BASE_URL: getApiUrl(),
   DEFAULT_GEOFENCE_RADIUS_METERS: 500,
   MAX_GPS_ACCURACY_THRESHOLD_METERS: 50,
   SHIFT_START: '09:00',
