@@ -188,25 +188,19 @@ async def debug_info(request: Request):
     }
 
 @app.get("/")
-async def root():
+async def root(request: Request):
     return {
         "status": "online",
         "service": "Adani Smart Meter Workforce API",
         "version": "1.0.0",
-        "docs": "/docs",
-        "endpoints": [
-            "/auth/login",
-            "/attendance/check-in",
-            "/attendance/check-out",
-            "/attendance/today",
-            "/attendance/history",
-            "/sites",
-            "/employees",
-            "/salary/slip/{employeeId}",
-            "/dashboard/stats",
-            "/locations/live",
-            "/reports/export"
-        ]
+        "debug_headers": dict(request.headers),
+        "debug_scope": {
+            "path": request.scope.get("path"),
+            "raw_path": request.scope.get("raw_path", b"").decode("utf-8", errors="ignore"),
+            "query_string": request.scope.get("query_string", b"").decode("utf-8", errors="ignore"),
+            "root_path": request.scope.get("root_path"),
+            "server": request.scope.get("server")
+        }
     }
 
 if __name__ == "__main__":
