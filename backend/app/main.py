@@ -178,6 +178,15 @@ async def cron_cleanup_photos():
     result = storage_service.cleanup_previous_days_photos(force=True)
     return result
 
+@app.api_route("/debug/info", methods=["GET", "POST"])
+async def debug_info(request: Request):
+    return {
+        "headers": dict(request.headers),
+        "scope_path": request.scope.get("path"),
+        "url_path": request.url.path,
+        "method": request.method
+    }
+
 @app.get("/")
 async def root():
     return {
