@@ -51,26 +51,29 @@ except Exception as e:
 # Vercel Serverless Path Normalization Middleware
 @app.middleware("http")
 async def vercel_path_normalizer(request: Request, call_next):
-    # Prioritize actual request URI (x-forwarded-uri) or scope path
-    raw_path = request.headers.get("x-forwarded-uri") or request.scope.get("path", "")
-    if "?" in raw_path:
-        raw_path = raw_path.split("?")[0]
-    
-    prefixes = (
-        "/backend/api/index.py",
-        "/backend/api/index",
-        "/backend/api",
-        "/api/index.py",
-        "/api/index"
-    )
-    for p in prefixes:
-        if raw_path.startswith(p):
-            rem = raw_path[len(p):]
-            raw_path = rem if rem.startswith("/") else ("/" + rem)
-            break
-            
-    if raw_path:
-        request.scope["path"] = raw_path
+    # Check if path was passed via Vercel rewrite (?path=$1)
+    path_param = request.query_params.get("path")
+    if path_param:
+        clean_path = path_param if path_param.startswith("/") else f"/{path_param}"
+        request.scope["path"] = clean_path
+    else:
+        raw_path = request.headers.get("x-forwarded-uri") or request.scope.get("path", "")
+        if "?" in raw_path:
+            raw_path = raw_path.split("?")[0]
+        prefixes = (
+            "/backend/api/index.py",
+            "/backend/api/index",
+            "/backend/api",
+            "/api/index.py",
+            "/api/index"
+        )
+        for p in prefixes:
+            if raw_path.startswith(p):
+                rem = raw_path[len(p):]
+                raw_path = rem if rem.startswith("/") else ("/" + rem)
+                break
+        if raw_path:
+            request.scope["path"] = raw_path
     return await call_next(request)
 
 # Include Routers under API_V1_STR
