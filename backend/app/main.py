@@ -21,7 +21,9 @@ from app.routers import (
     dashboard,
     tracking,
     reports,
-    holidays
+    holidays,
+    routing,
+    places
 )
 
 app = FastAPI(
@@ -86,6 +88,8 @@ app.include_router(dashboard.router, prefix=settings.API_V1_STR)
 app.include_router(tracking.router, prefix=settings.API_V1_STR)
 app.include_router(reports.router, prefix=settings.API_V1_STR)
 app.include_router(holidays.router, prefix=settings.API_V1_STR)
+app.include_router(routing.router, prefix=settings.API_V1_STR)
+app.include_router(places.router, prefix=settings.API_V1_STR)
 
 # Also mount directly under root without prefix as requested by prompt endpoints
 app.include_router(auth.router)
@@ -97,13 +101,15 @@ app.include_router(dashboard.router)
 app.include_router(tracking.router)
 app.include_router(reports.router)
 app.include_router(holidays.router)
+app.include_router(routing.router)
+app.include_router(places.router)
 
-# Middleware to ensure 8:00 AM - 9:00 AM IST photo deletion and 6:00 PM IST auto-checkout run reliably on request activity
+# Middleware to ensure 12:00 AM IST (midnight) photo deletion and 6:00 PM IST auto-checkout run reliably on request activity
 @app.middleware("http")
 async def check_scheduled_cleanup_middleware(request: Request, call_next):
     try:
         from app.services.storage_service import storage_service
-        storage_service.check_and_run_scheduled_8am_cleanup()
+        storage_service.check_and_run_midnight_cleanup()
     except Exception:
         pass
     try:
@@ -114,32 +120,34 @@ async def check_scheduled_cleanup_middleware(request: Request, call_next):
     return await call_next(request)
 
 # Automatic Schedulers:
-# 1. 8:00 AM - 9:00 AM IST Check-in Photo Deletion Scheduler
+# 1. 12:00 AM IST (Midnight) Check-in Photo Deletion Scheduler
 # 2. 6:00 PM IST Automatic Check-Out Scheduler for open shifts
 @app.on_event("startup")
 async def start_auto_cleanup_scheduler():
     is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
     if is_serverless:
         # In Vercel serverless functions, background loops cause FUNCTION_INVOCATION_FAILED.
-        # Scheduled tasks are handled cleanly by Vercel Cron and middleware.
+        # Scheduled tasks are handled cleanly by Vercel Cron (schedule: 30 18 * * *) and middleware.
         return
 
     import asyncio
     from app.services.storage_service import storage_service
     from app.services.attendance_service import attendance_service
+    from app.utils.datetime_utils import get_seconds_until_next_midnight_ist
 
-    async def _cleanup_loop():
+    async def _midnight_cleanup_loop():
         # Immediate check on server boot
         try:
-            storage_service.check_and_run_scheduled_8am_cleanup()
+            storage_service.check_and_run_midnight_cleanup()
         except Exception:
             pass
 
-        # Continuously monitor every 60 seconds
+        # Continuously monitor: sleep until next 12:00 AM IST, then run
         while True:
-            await asyncio.sleep(60)
+            sleep_secs = min(get_seconds_until_next_midnight_ist(), 60.0)
+            await asyncio.sleep(sleep_secs)
             try:
-                storage_service.check_and_run_scheduled_8am_cleanup()
+                storage_service.check_and_run_midnight_cleanup()
             except Exception:
                 pass
 
@@ -158,7 +166,7 @@ async def start_auto_cleanup_scheduler():
             except Exception:
                 pass
 
-    asyncio.create_task(_cleanup_loop())
+    asyncio.create_task(_midnight_cleanup_loop())
     asyncio.create_task(_auto_checkout_6pm_loop())
 
 @app.api_route("/api/v1/attendance/auto-checkout-6pm", methods=["GET", "POST"])
@@ -173,10 +181,16 @@ async def trigger_6pm_auto_checkout(force: bool = False):
     result = attendance_service.perform_auto_checkout_all_open_shifts(force=force)
     return result
 
-@app.get("/api/cron/cleanup-photos")
-@app.get("/cron/cleanup-photos")
-async def cron_cleanup_photos():
-    """Vercel Cron endpoint scheduled daily between 8:00 AM - 9:00 AM IST."""
+@app.api_route("/api/cron/cleanup-photos", methods=["GET", "POST"])
+@app.api_route("/cron/cleanup-photos", methods=["GET", "POST"])
+@app.api_route("/attendance/cleanup-photos", methods=["GET", "POST"])
+@app.api_route("/api/v1/attendance/cleanup-photos", methods=["GET", "POST"])
+async def cron_cleanup_photos(force: bool = False):
+    """
+    Vercel Cron & Backend Scheduler endpoint:
+    Automatically deletes previous days' check-in photos from Firebase Cloud Storage and local storage
+    at 12:00 AM IST (midnight) every day.
+    """
     from app.services.storage_service import storage_service
     result = storage_service.cleanup_previous_days_photos(force=True)
     return result
