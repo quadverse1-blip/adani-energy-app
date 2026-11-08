@@ -75,26 +75,26 @@ def normalize_dict_keys(d: dict) -> dict:
             continue
         lk = str(k).strip().lower().replace("_", " ").replace("-", " ")
         val_str = str(v).strip()
-        if lk in ["employee id", "employeeid", "emp id", "empid", "id", "code"]:
+        if lk in ["employee name", "name", "emp name", "fullname", "full name"]:
+            normalized["name"] = val_str
+        elif lk in ["employee id", "employeeid", "emp id", "empid", "id", "code"]:
             normalized["employeeId"] = val_str
         elif lk in ["mobile number", "mobile no", "mobile", "phone number", "phonenumber", "phone", "contact", "contact no"]:
             normalized["phone"] = val_str
         elif lk in ["password", "pass", "pwd"]:
             normalized["password"] = val_str
-        elif lk in ["name", "emp name", "employee name", "fullname", "full name"]:
-            normalized["name"] = val_str
+        elif lk in ["designation", "job title", "role title", "title"]:
+            normalized["designation"] = val_str
+        elif lk in ["circle", "zone"]:
+            normalized["circle"] = val_str
+        elif lk in ["division", "subdivision"]:
+            normalized["division"] = val_str
         elif lk in ["role", "user role"]:
             normalized["role"] = val_str
-        elif lk in ["designation", "job title"]:
-            normalized["designation"] = val_str
         elif lk in ["assigned sites", "assigned site", "site id", "site", "assignedsiteids", "assignedsiteid"]:
             normalized["assignedSiteIds"] = val_str
         elif lk in ["email", "email address"]:
             normalized["email"] = val_str
-        elif lk in ["circle"]:
-            normalized["circle"] = val_str
-        elif lk in ["division"]:
-            normalized["division"] = val_str
         elif lk in ["department"]:
             normalized["department"] = val_str
     return normalized
@@ -108,14 +108,24 @@ def process_bulk_employee_records(
     errors = []
     processed_emps = []
 
+    seen_ids = set()
+    seen_phones = set()
+
     for idx, r in enumerate(records, start=2):
+        raw_name = str(r.get("name") or "").strip()
         raw_emp_id = str(r.get("employeeId") or "").strip()
         raw_phone = str(r.get("phone") or "").strip()
         raw_pwd = str(r.get("password") or "").strip()
+        raw_desig = str(r.get("designation") or "").strip()
+        raw_circle = str(r.get("circle") or "").strip()
+        raw_div = str(r.get("division") or "").strip()
 
-        if not raw_emp_id and not raw_phone:
+        if not raw_name and not raw_emp_id and not raw_phone:
             continue
 
+        if not raw_name:
+            errors.append(f"Row {idx}: Employee Name is required.")
+            continue
         if not raw_emp_id:
             errors.append(f"Row {idx}: Employee ID is required.")
             continue
@@ -126,6 +136,13 @@ def process_bulk_employee_records(
             errors.append(f"Row {idx} ({raw_emp_id}): Password is required.")
             continue
 
+        # In-file duplicate validation
+        norm_emp_id = raw_emp_id.upper()
+        if norm_emp_id in seen_ids:
+            errors.append(f"Row {idx}: Duplicate Employee ID '{raw_emp_id}' in uploaded file.")
+            continue
+        seen_ids.add(norm_emp_id)
+
         # Clean phone
         phone_clean = raw_phone.replace(" ", "").replace("-", "")
         if phone_clean.startswith("+91"):
@@ -133,17 +150,28 @@ def process_bulk_employee_records(
         elif phone_clean.startswith("91") and len(phone_clean) > 10:
             phone_clean = phone_clean[2:]
 
-        role = str(r.get("role") or "technician").strip().lower()
-        if role not in ["technician", "supervisor", "admin"]:
-            role = "technician"
+        if phone_clean in seen_phones:
+            errors.append(f"Row {idx}: Duplicate Mobile Number '{raw_phone}' in uploaded file.")
+            continue
+        seen_phones.add(phone_clean)
 
-        name = str(r.get("name") or "").strip()
-        if not name:
-            name = f"Employee {raw_emp_id}"
+        # Inferred Role from Designation or explicit Role
+        explicit_role = str(r.get("role") or "").strip().lower()
+        if explicit_role in ["supervisor", "admin", "technician"]:
+            role = explicit_role
+        else:
+            desig_lower = raw_desig.lower()
+            if any(k in desig_lower for k in ["supervisor", "manager", "lead", "in-charge"]):
+                role = "supervisor"
+            elif "admin" in desig_lower:
+                role = "admin"
+            else:
+                role = "technician"
 
-        designation = str(r.get("designation") or "").strip()
-        if not designation:
-            designation = "Zonal Workforce Supervisor" if role == "supervisor" else ("Operations Admin" if role == "admin" else "Field Smart Meter Technician")
+        designation = raw_desig or (
+            "Zonal Workforce Supervisor" if role == "supervisor"
+            else ("Operations Admin" if role == "admin" else "Field Smart Meter Technician")
+        )
 
         assigned_site_ids = []
         raw_sites = r.get("assignedSiteIds")
@@ -166,14 +194,15 @@ def process_bulk_employee_records(
         if existing:
             emp_id = existing["_id"]
             existing["employeeId"] = raw_emp_id
+            existing["name"] = raw_name
             existing["phone"] = phone_clean
             existing["password"] = hashed_pwd
-            if r.get("name"):
-                existing["name"] = name
-            if r.get("role"):
-                existing["role"] = role
-            if r.get("designation"):
-                existing["designation"] = designation
+            existing["role"] = role
+            existing["designation"] = designation
+            if raw_circle:
+                existing["circle"] = raw_circle
+            if raw_div:
+                existing["division"] = raw_div
             if assigned_site_ids:
                 existing["assignedSiteIds"] = assigned_site_ids
                 existing["assignedSiteId"] = primary_site
@@ -187,9 +216,9 @@ def process_bulk_employee_records(
             processed_emps.append({
                 "id": emp_id,
                 "employeeId": raw_emp_id,
-                "name": existing.get("name", name),
+                "name": raw_name,
                 "phone": phone_clean,
-                "role": existing.get("role", role),
+                "role": role,
                 "status": "updated"
             })
         else:
@@ -197,19 +226,19 @@ def process_bulk_employee_records(
             new_emp = {
                 "_id": new_id,
                 "employeeId": raw_emp_id,
-                "name": name,
+                "name": raw_name,
                 "phone": phone_clean,
                 "password": hashed_pwd,
                 "role": role,
                 "designation": designation,
+                "circle": raw_circle or None,
+                "division": raw_div or None,
                 "assignedSiteIds": assigned_site_ids,
                 "assignedSiteId": primary_site,
                 "status": "active",
                 "email": r.get("email") or None,
                 "department": r.get("department") or None,
                 "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-                "circle": r.get("circle") or None,
-                "division": r.get("division") or None,
                 "shiftStatus": "present"
             }
             db.employees[new_id] = new_emp
@@ -220,7 +249,7 @@ def process_bulk_employee_records(
             processed_emps.append({
                 "id": new_id,
                 "employeeId": raw_emp_id,
-                "name": name,
+                "name": raw_name,
                 "phone": phone_clean,
                 "role": role,
                 "status": "added"
@@ -252,20 +281,20 @@ async def download_bulk_template(
     ws.title = "Employees"
 
     headers = [
+        "Employee Name",
         "Employee ID",
         "Mobile Number",
         "Password",
-        "Name",
-        "Role",
         "Designation",
-        "Assigned Sites"
+        "Circle",
+        "Division"
     ]
     ws.append(headers)
 
     # 3 standard sample rows representing Adani workforce
-    ws.append(["ADN-TECH-01", "9876543211", "Adani@123", "Amit Verma", "technician", "Field Smart Meter Technician", "site_surat_01"])
-    ws.append(["ADN-TECH-02", "9876543212", "Pass@2026", "Priya Patel", "technician", "Field Smart Meter Technician", "site_pune_01"])
-    ws.append(["ADN-SUP-01", "9876543213", "Super@2026", "Suresh Patil", "supervisor", "Zonal Workforce Supervisor", "site_st_joseph"])
+    ws.append(["Amit Verma", "ADN-TECH-01", "9876543211", "Adani@123", "Field Smart Meter Technician", "Ahmedabad", "North Division"])
+    ws.append(["Priya Patel", "ADN-TECH-02", "9876543212", "Pass@2026", "Senior Field Technician", "Surat", "City Division"])
+    ws.append(["Suresh Patil", "ADN-SUP-01", "9876543213", "Super@2026", "Zonal Workforce Supervisor", "Ahmedabad", "North Division"])
 
     # Header styling (Adani Deep Navy Blue fill with bold white text)
     header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")

@@ -88,13 +88,22 @@ def get_today_ist_str() -> str:
     """Returns today's date formatted as YYYY-MM-DD in IST."""
     return get_now_ist().strftime("%Y-%m-%d")
 
+def get_seconds_until_next_midnight_ist(dt: Optional[datetime] = None) -> float:
+    """
+    Computes seconds remaining until the next 12:00:00 AM IST (midnight).
+    """
+    now_ist = dt or get_now_ist()
+    tomorrow_ist = (now_ist + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    secs = (tomorrow_ist - now_ist).total_seconds()
+    return max(1.0, secs)
+
 def is_in_photo_cleanup_window_ist(
     dt: Optional[datetime] = None,
-    start_hour: int = 8,
-    end_hour: int = 9
+    start_hour: int = 0,
+    end_hour: int = 1
 ) -> bool:
     """
-    Returns True if current IST time is between 8:00 AM and 9:00 AM (08:00 to 09:00).
+    Returns True if current IST time is in the midnight window (default 00:00 to 01:00 AM IST).
     """
     ist_dt = (dt or datetime.utcnow()) + timedelta(hours=5, minutes=30)
     current_time = ist_dt.time()

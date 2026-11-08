@@ -86,9 +86,9 @@ async def trigger_photos_cleanup(
     token_data: dict = Depends(get_current_user_token)
 ):
     """
-    Manually triggers deletion of previous days' check-in photos from
+    Triggers deletion of previous days' check-in photos from
     Firebase Cloud Storage (gs://adani-energy-2f5e0.firebasestorage.app)
-    matching the scheduled 8:00 AM - 9:00 AM IST cleanup behavior.
+    matching the scheduled 12:00 AM IST (midnight) cleanup behavior.
     """
     result = storage_service.cleanup_previous_days_photos(force=True)
     return result
@@ -317,20 +317,18 @@ async def get_all_attendance_logs(
                 month = now_dt.month
             if year is None:
                 year = now_dt.year
-        elif str(period).lower() == "all":
-            month = None
-            year = None
+        elif str(period).lower() in ("all", "daily", "weekly"):
+            # When period is daily or weekly or all, do not restrict month/year strictly unless explicitly passed
+            pass
 
         all_records = list(db.attendance.values())
         
-        # Filter by employee if requested or if caller is a supervisor querying own records
+        # Filter by employee if requested
         target_filter = employeeId
-        if not target_filter and token_data.get("role") == "supervisor":
-            target_filter = token_data.get("id")
 
-        if target_filter and target_filter != "all":
+        if target_filter and str(target_filter).lower() != "all":
             valid_ids = {str(target_filter)}
-            emp_user = db.get_user_by_id(target_filter) or db.get_user_by_employee_id(target_filter)
+            emp_user = db.get_user_by_id(target_filter) or db.find_employee_by_identifier(target_filter)
             if emp_user:
                 if emp_user.get("id"):
                     valid_ids.add(str(emp_user["id"]))

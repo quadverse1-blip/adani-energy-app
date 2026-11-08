@@ -1,3 +1,4 @@
+import io
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, Header
@@ -35,6 +36,37 @@ async def get_muster_roll(
     y = year if year is not None else now.year
     data = report_service.get_muster_roll_data(month=m, year=y, site_id=siteId)
     return JSONResponse(content=data)
+
+@router.get("/export-pdf")
+async def export_muster_roll_pdf(
+    month: Optional[int] = Query(None, description="Month (1-12)"),
+    year: Optional[int] = Query(None, description="Year (e.g. 2026)"),
+    siteId: Optional[str] = None,
+    token_user: Optional[dict] = Depends(optional_auth_checker)
+):
+    """
+    Generates and streams the official PDF attendance muster roll report.
+    """
+    from app.services.pdf_service import generate_muster_roll_pdf
+    import calendar
+
+    now = datetime.now()
+    m = month if month is not None else now.month
+    y = year if year is not None else now.year
+
+    pdf_bytes = generate_muster_roll_pdf(month=m, year=y, site_id=siteId)
+    month_name = calendar.month_name[m]
+    filename = f"Adani_Muster_Roll_{month_name}_{y}.pdf"
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+            "Content-Type": "application/pdf"
+        }
+    )
 
 @router.get("/export")
 async def export_attendance_report(

@@ -40,8 +40,9 @@ class Settings(BaseSettings):
     )
     AUTO_DELETE_PHOTOS_AFTER_24H: bool = os.getenv("AUTO_DELETE_PHOTOS_AFTER_24H", "true").lower() == "true"
     PHOTO_RETENTION_HOURS: int = _clean_int(os.getenv("PHOTO_RETENTION_HOURS", ""), 24)
-    AUTO_DELETE_PHOTOS_WINDOW_START_HOUR: int = _clean_int(os.getenv("AUTO_DELETE_PHOTOS_WINDOW_START_HOUR", ""), 8)
-    AUTO_DELETE_PHOTOS_WINDOW_END_HOUR: int = _clean_int(os.getenv("AUTO_DELETE_PHOTOS_WINDOW_END_HOUR", ""), 9)
+    AUTO_DELETE_PHOTOS_WINDOW_START_HOUR: int = _clean_int(os.getenv("AUTO_DELETE_PHOTOS_WINDOW_START_HOUR", ""), 0)
+    AUTO_DELETE_PHOTOS_WINDOW_END_HOUR: int = _clean_int(os.getenv("AUTO_DELETE_PHOTOS_WINDOW_END_HOUR", ""), 1)
+    AUTO_DELETE_PHOTOS_SCHEDULE: str = "12:00 AM IST (Midnight)"
     
     # Shift parameters
     SHIFT_START_TIME: str = "09:30"

@@ -13,7 +13,7 @@ async def list_sites(token_data: dict = Depends(get_current_user_token)):
     raw_sites = db.get_all_sites()
     
     # Requirement: Employees should only see the sites assigned to them.
-    # Employees must not see other employees' assigned sites.
+    # If explicit sites are assigned, strictly filter to them. If none assigned yet, allow operational sites.
     if user_role == "technician":
         emp_id = token_data.get("id")
         emp = db.get_employee(emp_id) or db.find_employee_by_identifier(emp_id)
@@ -23,9 +23,8 @@ async def list_sites(token_data: dict = Depends(get_current_user_token)):
                 assigned_ids.add(str(emp["assignedSiteId"]))
             for s_id in emp.get("assignedSiteIds", []):
                 assigned_ids.add(str(s_id))
-            raw_sites = [s for s in raw_sites if str(s.get("_id")) in assigned_ids or str(s.get("id")) in assigned_ids]
-        else:
-            raw_sites = []
+            if assigned_ids:
+                raw_sites = [s for s in raw_sites if str(s.get("_id")) in assigned_ids or str(s.get("id")) in assigned_ids]
 
     response = []
     emp = None
@@ -168,7 +167,12 @@ async def delete_site(
     siteId: str,
     token_data: dict = Depends(require_roles(["admin"]))
 ):
-    if siteId in db.sites:
-        del db.sites[siteId]
+    s = db.get_site(siteId)
+    if s:
+        doc_id = s.get("_id") or siteId
+        if doc_id in db.sites:
+            del db.sites[doc_id]
+        if hasattr(db, "delete_firestore_document_async"):
+            db.delete_firestore_document_async("sites", doc_id)
         return {"message": "Substation deleted successfully"}
     raise HTTPException(status_code=404, detail="Substation not found")

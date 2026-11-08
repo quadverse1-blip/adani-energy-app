@@ -10,7 +10,84 @@ from app.core.config import settings
 logger = logging.getLogger("database")
 
 # Seed initial dataset representing Adani Smart Meter Infrastructure
-SEED_SITES: List[Dict[str, Any]] = []
+SEED_SITES: List[Dict[str, Any]] = [
+    {
+        "_id": "site_shantigram_01",
+        "name": "Adani Shantigram Substation",
+        "code": "ADN-SNT-01",
+        "address": "Near SG Highway, Shantigram Township, Ahmedabad, Gujarat 382421",
+        "latitude": 23.1412,
+        "longitude": 72.5489,
+        "radiusMeters": 500.0,
+        "voltageClass": "66/11 kV Smart Feeder Hub",
+        "status": "active",
+        "manager": {
+            "name": "Rajesh Varma",
+            "phone": "9876543201",
+            "email": "rajesh.varma@adani.com",
+            "designation": "Executive Grid In-Charge"
+        },
+        "workingHours": "09:00 AM - 06:00 PM IST",
+        "activeEngineersCount": 6
+    },
+    {
+        "_id": "site_mundra_01",
+        "name": "Mundra Ultra Feeder Grid Station",
+        "code": "ADN-MND-01",
+        "address": "Adani Port & SEZ Infrastructure Zone, Mundra, Kutch, Gujarat 370421",
+        "latitude": 22.8394,
+        "longitude": 69.7111,
+        "radiusMeters": 600.0,
+        "voltageClass": "220/66 kV Grid Substation",
+        "status": "active",
+        "manager": {
+            "name": "Vikram Desai",
+            "phone": "9876543202",
+            "email": "vikram.desai@adani.com",
+            "designation": "Zonal Superintending Engineer"
+        },
+        "workingHours": "09:00 AM - 06:00 PM IST",
+        "activeEngineersCount": 8
+    },
+    {
+        "_id": "site_navimumbai_01",
+        "name": "Navi Mumbai Smart Meter Distribution Station",
+        "code": "ADN-NVM-01",
+        "address": "MIDC Industrial Area, Mahape, Navi Mumbai, Maharashtra 400710",
+        "latitude": 19.1136,
+        "longitude": 73.0169,
+        "radiusMeters": 500.0,
+        "voltageClass": "33/11 kV Urban Distribution Hub",
+        "status": "active",
+        "manager": {
+            "name": "Sanjay Shinde",
+            "phone": "9876543203",
+            "email": "sanjay.shinde@adani.com",
+            "designation": "Divisional Operations Lead"
+        },
+        "workingHours": "09:00 AM - 06:00 PM IST",
+        "activeEngineersCount": 5
+    },
+    {
+        "_id": "site_bkc_01",
+        "name": "BKC Commercial Smart Meter Substation",
+        "code": "ADN-BKC-01",
+        "address": "G Block, Bandra Kurla Complex, Bandra East, Mumbai, Maharashtra 400051",
+        "latitude": 19.0657,
+        "longitude": 72.8687,
+        "radiusMeters": 400.0,
+        "voltageClass": "33/11 kV Metro Grid Substation",
+        "status": "active",
+        "manager": {
+            "name": "Mahesh Joshi",
+            "phone": "9876543204",
+            "email": "mahesh.joshi@adani.com",
+            "designation": "Senior Project Manager"
+        },
+        "workingHours": "09:00 AM - 06:00 PM IST",
+        "activeEngineersCount": 4
+    }
+]
 
 SEED_EMPLOYEES = [
     {
@@ -21,13 +98,13 @@ SEED_EMPLOYEES = [
         "password": "password",
         "role": "admin",
         "designation": "Chief Operations Admin",
-        "assignedSiteIds": [],
-        "assignedSiteId": None,
+        "assignedSiteIds": ["site_shantigram_01", "site_mundra_01", "site_navimumbai_01", "site_bkc_01"],
+        "assignedSiteId": "site_shantigram_01",
         "avatar": "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=400&q=80",
         "status": "active",
         "email": "anita.sharma@adani.com",
-        "circle": None,
-        "division": None,
+        "circle": "Ahmedabad",
+        "division": "Headquarters",
         "department": "Executive Management",
         "shiftStatus": "present",
         "createdAt": "2023-01-01T09:00:00Z"
@@ -40,20 +117,150 @@ SEED_EMPLOYEES = [
         "password": "password",
         "role": "admin",
         "designation": "Operations Administrator",
-        "assignedSiteIds": [],
-        "assignedSiteId": None,
+        "assignedSiteIds": ["site_shantigram_01", "site_mundra_01", "site_navimumbai_01", "site_bkc_01"],
+        "assignedSiteId": "site_shantigram_01",
         "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
         "status": "active",
         "email": "admin@adani.com",
-        "circle": None,
-        "division": None,
+        "circle": "Ahmedabad",
+        "division": "Operations Central",
         "department": "Operations Administration",
         "shiftStatus": "present",
+        "createdAt": "2026-01-01T09:00:00Z"
+    },
+    {
+        "_id": "emp_demo_supervisor",
+        "employeeId": "SUPER001",
+        "name": "Demo Supervisor",
+        "phone": "9876543210",
+        "password": "password",
+        "role": "supervisor",
+        "designation": "Area Operations Supervisor",
+        "assignedSiteIds": ["site_shantigram_01", "site_mundra_01"],
+        "assignedSiteId": "site_shantigram_01",
+        "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
+        "status": "active",
+        "email": "supervisor@adani.com",
+        "circle": "Ahmedabad",
+        "division": "North Division",
+        "department": "Smart Meter Operations",
+        "shiftStatus": "present",
+        "latitude": 23.1415,
+        "longitude": 72.5492,
+        "createdAt": "2026-01-01T09:00:00Z"
+    },
+    {
+        "_id": "emp_demo_technician",
+        "employeeId": "TECH001",
+        "name": "Demo Technician",
+        "phone": "9876543211",
+        "password": "password",
+        "role": "technician",
+        "designation": "Senior Field Technician",
+        "assignedSiteIds": ["site_shantigram_01"],
+        "assignedSiteId": "site_shantigram_01",
+        "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
+        "status": "active",
+        "email": "technician@adani.com",
+        "circle": "Ahmedabad",
+        "division": "North Division",
+        "department": "Field Installation",
+        "shiftStatus": "present",
+        "latitude": 23.1418,
+        "longitude": 72.5485,
         "createdAt": "2026-01-01T09:00:00Z"
     }
 ]
 
-SEED_ATTENDANCE: List[Dict[str, Any]] = []
+SEED_ATTENDANCE: List[Dict[str, Any]] = [
+    {
+        "_id": "att_seed_01",
+        "date": "2026-11-06",
+        "employeeId": "emp_demo_technician",
+        "technicianCode": "TECH001",
+        "technicianName": "Demo Technician",
+        "siteId": "site_shantigram_01",
+        "siteName": "Adani Shantigram Substation",
+        "status": "present",
+        "checkIn": {
+            "time": "2026-11-06T09:05:00Z",
+            "timeIST": "09:05 AM IST",
+            "latitude": 23.1412,
+            "longitude": 72.5489,
+            "siteName": "Adani Shantigram Substation"
+        },
+        "checkOut": {
+            "time": "2026-11-06T18:02:00Z",
+            "timeIST": "06:02 PM IST",
+            "latitude": 23.1414,
+            "longitude": 72.5488,
+            "siteName": "Adani Shantigram Substation"
+        },
+        "workingMinutes": 537,
+        "distanceTraveledKm": 0.05,
+        "distanceTraveledFormatted": "50 m",
+        "isHalfDay": False,
+        "adminRemarks": "Full day shift completed"
+    },
+    {
+        "_id": "att_seed_02",
+        "date": "2026-11-05",
+        "employeeId": "emp_demo_technician",
+        "technicianCode": "TECH001",
+        "technicianName": "Demo Technician",
+        "siteId": "site_shantigram_01",
+        "siteName": "Adani Shantigram Substation",
+        "status": "present",
+        "checkIn": {
+            "time": "2026-11-05T09:12:00Z",
+            "timeIST": "09:12 AM IST",
+            "latitude": 23.1412,
+            "longitude": 72.5489,
+            "siteName": "Adani Shantigram Substation"
+        },
+        "checkOut": {
+            "time": "2026-11-05T18:00:00Z",
+            "timeIST": "06:00 PM IST",
+            "latitude": 23.1413,
+            "longitude": 72.5490,
+            "siteName": "Adani Shantigram Substation"
+        },
+        "workingMinutes": 528,
+        "distanceTraveledKm": 0.02,
+        "distanceTraveledFormatted": "20 m",
+        "isHalfDay": False,
+        "adminRemarks": "Shift completed"
+    },
+    {
+        "_id": "att_seed_03",
+        "date": "2026-11-04",
+        "employeeId": "emp_demo_supervisor",
+        "technicianCode": "SUPER001",
+        "technicianName": "Demo Supervisor",
+        "siteId": "site_shantigram_01",
+        "siteName": "Adani Shantigram Substation",
+        "status": "present",
+        "checkIn": {
+            "time": "2026-11-04T08:55:00Z",
+            "timeIST": "08:55 AM IST",
+            "latitude": 23.1412,
+            "longitude": 72.5489,
+            "siteName": "Adani Shantigram Substation"
+        },
+        "checkOut": {
+            "time": "2026-11-04T18:15:00Z",
+            "timeIST": "06:15 PM IST",
+            "latitude": 23.1412,
+            "longitude": 72.5489,
+            "siteName": "Adani Shantigram Substation"
+        },
+        "workingMinutes": 560,
+        "distanceTraveledKm": 0.1,
+        "distanceTraveledFormatted": "100 m",
+        "isHalfDay": False,
+        "adminRemarks": "Supervisor site inspection completed"
+    }
+]
 
 
 # -------------------------------------------------------------
@@ -347,6 +554,7 @@ class DatabaseManager:
         # Seed initial salary configurations
         self._raw_salary_configs: Dict[str, dict] = {}
         self._raw_salary_statements: Dict[str, dict] = {}
+        self._raw_location_history: Dict[str, dict] = {}
 
         # Optional firebase-admin client
         self.admin_db: Optional[Any] = None
@@ -358,6 +566,7 @@ class DatabaseManager:
         self.holidays = FirestoreCollectionDictWrapper(self, "holidays", self._raw_holidays)
         self.salary_configs = FirestoreCollectionDictWrapper(self, "salary_configs", self._raw_salary_configs)
         self.salary_statements = FirestoreCollectionDictWrapper(self, "salary_statements", self._raw_salary_statements)
+        self.location_history = FirestoreCollectionDictWrapper(self, "location_history", self._raw_location_history)
 
         # Initialize connection
         self.connect_to_firebase()
@@ -550,6 +759,10 @@ class DatabaseManager:
         """Lookup employee/user by document _id or employeeId identifier"""
         return self.get_employee(emp_id) or self.find_employee_by_identifier(emp_id)
 
+    def get_user_by_employee_id(self, emp_id: str) -> Optional[dict]:
+        """Alias lookup employee/user by document _id or employeeId identifier"""
+        return self.get_user_by_id(emp_id)
+
     def find_employee_by_identifier(self, identifier: str) -> Optional[dict]:
         clean_id = (identifier or "").strip().lower()
         if not clean_id:
@@ -565,12 +778,18 @@ class DatabaseManager:
                     return emp
 
         # Direct alias support for supervisor
-        if clean_id in ["supervisor", "super01", "suresh", "suresh.patil", "suresh.patil@b4s.in", "b4s/adani/04"]:
+        if clean_id in ["supervisor", "super001", "super01", "suresh", "suresh.patil", "suresh.patil@b4s.in", "b4s/adani/04", "supervisor@adani.com", "9876543210"]:
             for emp in self._raw_employees.values():
-                if emp.get("employeeId") == "SUPER01" or (emp.get("role") == "supervisor" and "suresh" in emp.get("name", "").lower()):
+                if str(emp.get("employeeId", "")).upper() in ["SUPER001", "SUPER01"] or (emp.get("role") == "supervisor" and "supervisor" in emp.get("name", "").lower()):
                     return emp
             for emp in self._raw_employees.values():
                 if emp.get("role") == "supervisor":
+                    return emp
+
+        # Direct alias support for technician
+        if clean_id in ["tech001", "technician", "demo_technician", "technician@adani.com", "9876543211"]:
+            for emp in self._raw_employees.values():
+                if str(emp.get("employeeId", "")).upper() == "TECH001":
                     return emp
 
         # Check phone digits normalization (e.g. 9876543210 vs +91 98765 43210)
@@ -705,6 +924,42 @@ class DatabaseManager:
         self._raw_attendance[record["_id"]] = record
         self.set_firestore_document_async("attendance", record["_id"], record)
         return record
+
+    def save_location_ping(self, ping: dict) -> dict:
+        ping_id = ping.get("_id") or f"loc_{ping.get('employeeId', 'emp')}_{int(datetime.utcnow().timestamp() * 1000)}"
+        ping["_id"] = ping_id
+        self._raw_location_history[ping_id] = ping
+        self.set_firestore_document_async("location_history", ping_id, ping)
+        return ping
+
+    def get_location_history(
+        self,
+        emp_id: str,
+        date_str: Optional[str] = None,
+        limit: int = 500
+    ) -> List[dict]:
+        valid_ids = {str(emp_id).lower().strip()}
+        emp = self.get_employee(emp_id) or self.find_employee_by_identifier(emp_id)
+        if emp:
+            for k in ["_id", "id", "employeeId", "code", "phone"]:
+                if emp.get(k):
+                    valid_ids.add(str(emp[k]).lower().strip())
+
+        all_pings = list(self.location_history.values())
+        results = []
+        for p in all_pings:
+            p_emp = str(p.get("employeeId") or "").lower().strip()
+            if p_emp not in valid_ids:
+                continue
+            if date_str:
+                p_date = str(p.get("dateIST") or p.get("date") or "")
+                if p_date and p_date != date_str:
+                    continue
+            results.append(p)
+
+        # Sort chronologically (oldest to newest)
+        results.sort(key=lambda x: str(x.get("timestamp") or x.get("time") or ""))
+        return results[:limit]
 
 
     def get_all_holidays(self, year: Optional[int] = None) -> List[dict]:

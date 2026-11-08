@@ -43,6 +43,7 @@ except Exception as e:
         "detail": str(e),
         "traceback": tb.splitlines()
     }
+    @app.api_route("/", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
     @app.api_route("/{path_name:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
     async def vercel_init_fallback(path_name: str = ""):
         return JSONResponse(status_code=500, content=err_detail)

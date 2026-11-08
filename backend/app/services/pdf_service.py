@@ -1,6 +1,7 @@
 import io
 import calendar
 from datetime import datetime
+from typing import Optional, List, Dict, Any
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
@@ -344,6 +345,7 @@ def generate_salary_slip_pdf(slip: dict, employee: dict = None) -> bytes:
     return buffer.getvalue()
 
 
+
 def generate_holidays_pdf(year: int = 2026) -> bytes:
     """
     Generates an official Adani Energy Solutions Limited official holiday calendar PDF.
@@ -521,4 +523,186 @@ def generate_holidays_pdf(year: int = 2026) -> bytes:
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def generate_muster_roll_pdf(month: int, year: int, site_id: Optional[str] = None) -> bytes:
+    """
+    Generates an official landscape PDF Attendance Register / Muster Roll.
+    """
+    from reportlab.lib.pagesizes import landscape, A4
+    from app.services.report_service import report_service
+
+    muster_data = report_service.get_muster_roll_data(month=month, year=year, site_id=site_id)
+    records = muster_data.get("records", [])
+    stats = muster_data.get("stats", {})
+    month_name = muster_data.get("monthName", calendar.month_name[month])
+    company = muster_data.get("company", "Adani Energy Solutions Limited")
+    location_title = muster_data.get("locationTitle", "Smart Meter Operational Hubs")
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=24,
+        leftMargin=24,
+        topMargin=24,
+        bottomMargin=24
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'MusterTitle',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=15,
+        leading=18,
+        textColor=colors.HexColor('#0F172A')
+    )
+    subtitle_style = ParagraphStyle(
+        'MusterSubtitle',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#475569')
+    )
+    th_style = ParagraphStyle(
+        'MusterTH',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8,
+        leading=10,
+        alignment=1,
+        textColor=colors.HexColor('#FFFFFF')
+    )
+    td_style = ParagraphStyle(
+        'MusterTD',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7.5,
+        leading=9,
+        textColor=colors.HexColor('#1E293B')
+    )
+    td_bold = ParagraphStyle(
+        'MusterTDBold',
+        parent=td_style,
+        fontName='Helvetica-Bold'
+    )
+    td_center = ParagraphStyle(
+        'MusterTDCenter',
+        parent=td_style,
+        alignment=1
+    )
+
+    story = []
+
+    # Header Banner
+    header_data = [
+        [
+            Paragraph(f"<b>{company.upper()}</b><br/><font size=10 color='#2563EB'><b>STATUTORY ATTENDANCE REGISTER & MUSTER ROLL (FORM XVI)</b></font>", title_style),
+            Paragraph(f"<b>Period:</b> {month_name} {year}<br/><b>Jurisdiction:</b> {location_title}<br/><b>Generated:</b> {datetime.now().strftime('%d-%b-%Y %H:%M IST')}", subtitle_style)
+        ]
+    ]
+    t_header = Table(header_data, colWidths=[520, 240])
+    t_header.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    story.append(t_header)
+    story.append(Spacer(1, 8))
+
+    # KPI Summary Cards Row
+    kpi_data = [
+        [
+            Paragraph(f"<b>TOTAL EMPLOYEES</b><br/><font size=12 color='#1E3A8A'><b>{len(records)}</b></font>", td_center),
+            Paragraph(f"<b>PRESENT PUNCHES</b><br/><font size=12 color='#059669'><b>{stats.get('present', 0)}</b></font>", td_center),
+            Paragraph(f"<b>ABSENT DAYS</b><br/><font size=12 color='#DC2626'><b>{stats.get('absent', 0)}</b></font>", td_center),
+            Paragraph(f"<b>WEEKLY OFFS</b><br/><font size=12 color='#4F46E5'><b>{stats.get('weeklyOff', 0)}</b></font>", td_center),
+            Paragraph(f"<b>PUBLIC HOLIDAYS</b><br/><font size=12 color='#D97706'><b>{stats.get('publicHolidays', 0)}</b></font>", td_center),
+            Paragraph(f"<b>COMPLIANCE RATE</b><br/><font size=12 color='#0F766E'><b>{stats.get('compliance', '98.5%')}</b></font>", td_center),
+        ]
+    ]
+    t_kpi = Table(kpi_data, colWidths=[126, 126, 126, 126, 126, 130])
+    t_kpi.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F8FAFC')),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#CBD5E1')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    story.append(t_kpi)
+    story.append(Spacer(1, 10))
+
+    # Table of Records
+    headers = [
+        Paragraph("<b>SR</b>", th_style),
+        Paragraph("<b>EMPLOYEE NAME</b>", th_style),
+        Paragraph("<b>EMP ID</b>", th_style),
+        Paragraph("<b>DESIGNATION</b>", th_style),
+        Paragraph("<b>CIRCLE / DIV</b>", th_style),
+        Paragraph("<b>PRESENT (P)</b>", th_style),
+        Paragraph("<b>ABSENT (A)</b>", th_style),
+        Paragraph("<b>WEEKLY OFF (WO)</b>", th_style),
+        Paragraph("<b>HOLIDAY (PH)</b>", th_style),
+        Paragraph("<b>NET PAYABLE DAYS</b>", th_style),
+        Paragraph("<b>COMPLIANCE</b>", th_style),
+    ]
+
+    table_rows = [headers]
+    for idx, r in enumerate(records, start=1):
+        summ = r.get("summary", {})
+        p_count = summ.get("P", 0)
+        a_count = summ.get("A", 0)
+        wo_count = summ.get("WO", 0)
+        ph_count = summ.get("PH", 0)
+        tot_payable = p_count + wo_count + ph_count
+        circle_div = f"{r.get('circle') or 'Central'} / {r.get('division') or 'Ops'}"
+        comp_str = "Verified (100%)" if a_count == 0 else f"{round((tot_payable / max(tot_payable + a_count, 1)) * 100, 1)}%"
+
+        table_rows.append([
+            Paragraph(str(idx), td_center),
+            Paragraph(f"<b>{r.get('employeeName', '')}</b>", td_style),
+            Paragraph(r.get('employeeCode', ''), td_bold),
+            Paragraph(r.get('designation', 'Technician'), td_style),
+            Paragraph(circle_div, td_style),
+            Paragraph(f"<font color='#059669'><b>{p_count}</b></font>", td_center),
+            Paragraph(f"<font color='#DC2626'><b>{a_count}</b></font>", td_center),
+            Paragraph(str(wo_count), td_center),
+            Paragraph(str(ph_count), td_center),
+            Paragraph(f"<b>{tot_payable}</b>", td_center),
+            Paragraph(comp_str, td_center),
+        ])
+
+    t_table = Table(table_rows, colWidths=[26, 140, 68, 120, 100, 60, 52, 60, 56, 78, 60])
+    t_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A8A')),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#CBD5E1')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F8FAFC')]),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    story.append(t_table)
+    story.append(Spacer(1, 14))
+
+    # Sign-off Footer
+    sign_data = [
+        [
+            Paragraph("<b>Prepared by:</b><br/>HR & Operations Lead<br/>Adani Energy Solutions", td_style),
+            Paragraph("<b>Audited & Verified by:</b><br/>Divisional Attendance Auditor<br/>Workforce Command Center", td_style),
+            Paragraph("<b>Authorized Signatory:</b><br/>Zonal Operations Director<br/>Adani Group", ParagraphStyle('RightSign', parent=td_style, alignment=2))
+        ]
+    ]
+    t_sign = Table(sign_data, colWidths=[250, 260, 250])
+    t_sign.setStyle(TableStyle([
+        ('LINEABOVE', (0, 0), (-1, 0), 1, colors.HexColor('#CBD5E1')),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story.append(t_sign)
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
 

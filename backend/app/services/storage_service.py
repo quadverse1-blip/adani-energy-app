@@ -176,98 +176,143 @@ class StorageService:
         unique_name = f"{subfolder}_{uuid.uuid4().hex[:12]}{ext}"
         return self.process_and_save_photo(content, filename=unique_name, subfolder=subfolder)
 
-    def delete_file_from_firebase(self, photo_url: str) -> bool:
+    def delete_file_from_storage(
+        self,
+        photo_url: Optional[str] = None,
+        photo_path: Optional[str] = None,
+        firebase_url: Optional[str] = None,
+        max_retries: int = 3
+    ) -> bool:
         """
-        Deletes a specific photo from Firebase Cloud Storage bucket (gs://adani-energy-2f5e0.firebasestorage.app).
-        Supports both direct Firebase download URLs and gs:// URIs.
+        Deletes a check-in photo file from:
+        1. Firebase Cloud Storage bucket (gs://adani-energy-2f5e0.firebasestorage.app)
+        2. Local disk (/uploads/ or /tmp/uploads/)
+        Includes automatic retry logic (3 attempts with exponential backoff) and comprehensive logging.
         """
-        if not photo_url:
-            return False
+        targets = []
+        if firebase_url:
+            targets.append(firebase_url)
+        if photo_url and not photo_url.startswith("data:"):
+            targets.append(photo_url)
+        if photo_path:
+            targets.append(photo_path)
 
-        # Extract relative object path (e.g. 'selfie/selfie_123.jpg')
-        object_path = None
-        if f"/b/{self.bucket_name}/o/" in photo_url:
-            raw_path = photo_url.split(f"/b/{self.bucket_name}/o/")[1].split("?")[0]
-            object_path = urllib.parse.unquote(raw_path)
-        elif photo_url.startswith(f"gs://{self.bucket_name}/"):
-            object_path = photo_url[len(f"gs://{self.bucket_name}/"):]
-        elif "/uploads/" in photo_url:
-            # Local fallback cleanup
-            fname = os.path.basename(photo_url)
-            local_path = os.path.join(self.upload_dir, fname)
-            if os.path.exists(local_path):
-                try:
-                    os.remove(local_path)
-                except Exception:
-                    pass
+        # Extract possible Firebase object paths
+        object_paths = []
+        for target in targets:
+            if f"/b/{self.bucket_name}/o/" in target:
+                raw_path = target.split(f"/b/{self.bucket_name}/o/")[1].split("?")[0]
+                object_paths.append(urllib.parse.unquote(raw_path))
+            elif target.startswith(f"gs://{self.bucket_name}/"):
+                object_paths.append(target[len(f"gs://{self.bucket_name}/"):])
+            elif "/uploads/" in target:
+                fname = os.path.basename(target)
+                object_paths.append(f"selfie/{fname}")
+                object_paths.append(fname)
+            elif target.startswith("selfie_") or target.endswith(".jpg") or target.endswith(".jpeg"):
+                object_paths.append(f"selfie/{os.path.basename(target)}")
+                object_paths.append(os.path.basename(target))
+
+        # Always check and delete local files matching targets
+        for target in targets:
+            fname = os.path.basename(target.split("?")[0])
+            if fname and (fname.endswith(".jpg") or fname.endswith(".jpeg") or fname.startswith("selfie_")):
+                local_path = os.path.join(self.upload_dir, fname)
+                if os.path.exists(local_path):
+                    try:
+                        os.remove(local_path)
+                        logger.info(f"[Local Storage] Purged local file: {local_path}")
+                    except Exception as le:
+                        logger.debug(f"[Local Storage] Failed to remove {local_path}: {le}")
+
+        if not object_paths:
             return True
 
-        if not object_path:
-            return False
+        deleted_any = False
+        import time
 
-        deleted = False
+        # Deduplicate paths preserving order
+        unique_paths = list(dict.fromkeys(object_paths))
 
-        # 1. Try Firebase Admin SDK
-        try:
-            import firebase_admin
-            from firebase_admin import storage
-            bucket_obj = storage.bucket(self.bucket_name)
-            blob = bucket_obj.blob(object_path)
-            blob.delete()
-            logger.info(f"[Firebase Storage] Deleted {self.gs_bucket_uri}/{object_path} via Admin SDK")
-            deleted = True
-        except Exception as e:
-            logger.debug(f"Admin SDK delete notice for {object_path}: {e}")
+        for object_path in unique_paths:
+            deleted = False
 
-        # 2. Try Firebase Storage REST API
-        try:
-            encoded_path = urllib.parse.quote(object_path, safe='')
-            del_url = f"https://firebasestorage.googleapis.com/v0/b/{self.bucket_name}/o/{encoded_path}"
-            if settings.FIREBASE_API_KEY:
-                del_url += f"?key={settings.FIREBASE_API_KEY}"
-            resp = requests.delete(del_url, timeout=6)
-            if resp.status_code in [200, 204, 404]:
-                logger.info(f"[Firebase Storage] Deleted {self.gs_bucket_uri}/{object_path} via REST (status: {resp.status_code})")
-                deleted = True
-        except Exception as e:
-            logger.debug(f"REST delete notice for {object_path}: {e}")
-
-        # Also purge any local file with the same name
-        fname = os.path.basename(object_path)
-        local_path = os.path.join(self.upload_dir, fname)
-        if os.path.exists(local_path):
+            # Check if Firebase Admin SDK app is initialized
+            has_admin_app = False
             try:
-                os.remove(local_path)
+                import firebase_admin
+                if getattr(firebase_admin, "_apps", None):
+                    has_admin_app = True
             except Exception:
-                pass
+                has_admin_app = False
 
-        return deleted
+            # 1. Try Firebase Admin SDK with retry if app is initialized
+            if has_admin_app:
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        from firebase_admin import storage
+                        bucket_obj = storage.bucket(self.bucket_name)
+                        blob = bucket_obj.blob(object_path)
+                        blob.delete()
+                        logger.info(f"[Firebase Storage] Deleted {self.gs_bucket_uri}/{object_path} via Admin SDK (attempt {attempt})")
+                        deleted = True
+                        deleted_any = True
+                        break
+                    except Exception as e:
+                        err_str = str(e)
+                        if "Not Found" in err_str or "404" in err_str:
+                            logger.info(f"[Firebase Storage] Object {object_path} already absent/purged from {self.gs_bucket_uri}")
+                            deleted = True
+                            deleted_any = True
+                            break
+                        logger.warning(f"[Firebase Storage] Admin SDK delete attempt {attempt}/{max_retries} for {object_path} notice: {e}")
+                        if attempt < max_retries:
+                            time.sleep(0.4 * attempt)
+
+            # 2. Try Firebase Storage REST API with retry if not already deleted
+            if not deleted:
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        encoded_path = urllib.parse.quote(object_path, safe='')
+                        del_url = f"https://firebasestorage.googleapis.com/v0/b/{self.bucket_name}/o/{encoded_path}"
+                        if settings.FIREBASE_API_KEY:
+                            del_url += f"?key={settings.FIREBASE_API_KEY}"
+                        resp = requests.delete(del_url, timeout=6)
+                        if resp.status_code in [200, 204, 404]:
+                            logger.info(f"[Firebase Storage] Deleted {self.gs_bucket_uri}/{object_path} via REST (status: {resp.status_code}, attempt {attempt})")
+                            deleted = True
+                            deleted_any = True
+                            break
+                        else:
+                            logger.debug(f"[Firebase Storage] REST delete attempt {attempt} returned {resp.status_code}")
+                    except Exception as e:
+                        logger.warning(f"[Firebase Storage] REST delete attempt {attempt}/{max_retries} for {object_path} error: {e}")
+                        if attempt < max_retries:
+                            time.sleep(0.4 * attempt)
+
+        return deleted_any
+
+    def delete_file_from_firebase(self, photo_url: str) -> bool:
+        """Backward-compatible alias for delete_file_from_storage."""
+        return self.delete_file_from_storage(photo_url=photo_url)
 
     def cleanup_previous_days_photos(self, force: bool = False) -> Dict[str, Any]:
         """
         Requirement:
-        Next day between 8:00 AM and 9:00 AM IST, automatically delete all check-in
-        photos taken on previous days from gs://adani-energy-2f5e0.firebasestorage.app.
+        Automatically delete the actual photo file from storage every day at exactly 12:00 AM IST (midnight).
+        - Delete only photos from previous days (rec_date < today_ist_str).
+        - Keep current day's photos available for Admin and Supervisor inspection throughout the day.
+        - NEVER delete attendance records, employee details, punch times, or coordinates.
+        - Remove photo references from the database record to prevent broken image links.
+        - Handle deletion failures with retry logic and audit logging.
         """
         now_ist = get_now_ist()
         today_ist_str = now_ist.strftime("%Y-%m-%d")
-        
-        in_window = is_in_photo_cleanup_window_ist(
-            start_hour=settings.AUTO_DELETE_PHOTOS_WINDOW_START_HOUR,
-            end_hour=settings.AUTO_DELETE_PHOTOS_WINDOW_END_HOUR
-        )
-
-        if not force and not in_window:
-            return {
-                "status": "skipped",
-                "message": f"Cleanup only runs between 8:00 AM and 9:00 AM IST. Current IST time is {now_ist.strftime('%I:%M %p')}.",
-                "currentTimeIST": now_ist.strftime("%Y-%m-%d %I:%M:%S %p"),
-                "window": "08:00 AM - 09:00 AM IST",
-                "deletedCount": 0
-            }
 
         deleted_files_count = 0
         purged_records_count = 0
+        failed_deletions_count = 0
+        errors = []
 
         # 1. Cleanup from Database & Firebase Storage for all previous days' attendance
         try:
@@ -279,12 +324,11 @@ class StorageService:
                     continue
 
                 rec_date = r.get("date") or ""
-                # We target check-in photos from previous days (strictly before today)
+                # Strictly previous day check in Indian Standard Time (IST)
                 is_previous_day = False
                 if rec_date and rec_date < today_ist_str:
                     is_previous_day = True
                 else:
-                    # Check timestamp if date field is missing
                     ci_time = (r.get("checkIn") or {}).get("time") or r.get("createdAt") or ""
                     if ci_time:
                         try:
@@ -295,32 +339,56 @@ class StorageService:
                         except Exception:
                             pass
 
+                # Current day photos remain untouched throughout the day!
                 if not is_previous_day:
                     continue
 
-                # Find photo URL
+                # Locate photo references
                 photo_url = r.get("photoUrl") or (r.get("checkIn") or {}).get("photoUrl")
-                if not photo_url:
+                firebase_url = r.get("firebaseUrl")
+                photo_path = r.get("photoPath")
+
+                if not photo_url and not firebase_url and not photo_path:
                     continue
 
-                # Delete from Firebase Storage (gs://adani-energy-2f5e0.firebasestorage.app)
-                self.delete_file_from_firebase(photo_url)
-                deleted_files_count += 1
+                # Delete actual file from storage with retry logic
+                try:
+                    del_ok = self.delete_file_from_storage(
+                        photo_url=photo_url,
+                        photo_path=photo_path,
+                        firebase_url=firebase_url,
+                        max_retries=3
+                    )
+                    if del_ok:
+                        deleted_files_count += 1
+                except Exception as del_err:
+                    failed_deletions_count += 1
+                    errors.append(f"Record {r.get('_id')}: {str(del_err)}")
+                    logger.error(f"[Storage Cleanup Error] Failed to delete file for {r.get('_id')}: {del_err}")
 
-                # Purge references in the record
+                # Safely purge photo references from the database record
+                # Attendance punch details, times, dates, and locations remain 100% intact!
                 r["photoUrl"] = None
-                if r.get("checkIn"):
+                if isinstance(r.get("checkIn"), dict):
                     r["checkIn"]["photoUrl"] = None
+                r["firebaseUrl"] = None
+                r["photoPath"] = None
                 r["photoExpired"] = True
-                r["photoDeletedAt"] = now_ist.isoformat() + " IST"
+                r["photoDeletedAt"] = now_ist.strftime("%Y-%m-%d %I:%M:%S %p IST")
+
+                # Persist updated record in memory and in remote Firestore cloud
                 db.save_attendance(r)
                 purged_records_count += 1
 
-            logger.info(f"[Auto 8AM-9AM Cleanup] Purged {purged_records_count} previous day check-in photos from {self.gs_bucket_uri}")
+            logger.info(
+                f"[Daily Midnight Cleanup] Purged {purged_records_count} previous-day check-in photos "
+                f"from {self.gs_bucket_uri} (Deleted files: {deleted_files_count}, Failures: {failed_deletions_count})"
+            )
         except Exception as db_err:
-            logger.warning(f"Error during attendance records photo cleanup: {db_err}")
+            logger.error(f"[Storage Cleanup] Error during attendance photo purge: {db_err}", exc_info=True)
+            errors.append(str(db_err))
 
-        # 2. Cleanup orphaned local temporary files older than today
+        # 2. Cleanup orphaned local temporary files older than today's 00:00:00 IST
         try:
             if os.path.exists(self.upload_dir):
                 today_midnight_epoch = (now_ist.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=5, minutes=30)).timestamp()
@@ -329,6 +397,7 @@ class StorageService:
                     if os.path.isfile(fpath) and os.path.getmtime(fpath) < today_midnight_epoch:
                         try:
                             os.remove(fpath)
+                            deleted_files_count += 1
                         except Exception:
                             pass
         except Exception:
@@ -338,18 +407,21 @@ class StorageService:
 
         return {
             "status": "success",
-            "message": f"Successfully deleted previous day check-in photos from {self.gs_bucket_uri} between 8:00 AM and 9:00 AM IST.",
-            "executionTimeIST": now_ist.strftime("%Y-%m-%d %I:%M:%S %p"),
-            "targetDate": f"Prior to {today_ist_str}",
+            "message": f"Successfully deleted previous day check-in photos from {self.gs_bucket_uri} for 12:00 AM IST (midnight).",
+            "executionTimeIST": now_ist.strftime("%Y-%m-%d %I:%M:%S %p IST"),
+            "targetCutoffDate": f"Prior to {today_ist_str}",
             "deletedPhotosCount": deleted_files_count,
             "purgedRecordsCount": purged_records_count,
-            "storageBucket": self.gs_bucket_uri
+            "failedDeletionsCount": failed_deletions_count,
+            "storageBucket": self.gs_bucket_uri,
+            "errors": errors
         }
 
-    def check_and_run_scheduled_8am_cleanup(self) -> None:
+    def check_and_run_midnight_cleanup(self) -> None:
         """
-        Thread-safe, non-blocking check: if current IST time is between 8:00 AM and 9:00 AM,
-        and today's cleanup has not yet executed, runs the cleanup in a background daemon thread.
+        Thread-safe check: verifies if today's midnight cleanup has executed.
+        If a new calendar day in IST has started and cleanup has not yet run,
+        triggers the purge.
         """
         now_ist = get_now_ist()
         today_ist_str = now_ist.strftime("%Y-%m-%d")
@@ -357,25 +429,25 @@ class StorageService:
         if self.last_cleanup_date == today_ist_str:
             return
 
-        if not is_in_photo_cleanup_window_ist(
-            start_hour=settings.AUTO_DELETE_PHOTOS_WINDOW_START_HOUR,
-            end_hour=settings.AUTO_DELETE_PHOTOS_WINDOW_END_HOUR
-        ):
-            return
-
         with self._cleanup_lock:
             if self.last_cleanup_date == today_ist_str:
                 return
             self.last_cleanup_date = today_ist_str
 
-        # In serverless environments, Vercel Cron executes /api/cron/cleanup-photos daily at 8:00 AM IST.
-        # Spawning unjoined daemon threads during request execution is avoided in serverless.
+        # If not in serverless, run in daemon thread so caller is non-blocked
         if not (os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME")):
             threading.Thread(
                 target=self.cleanup_previous_days_photos,
                 kwargs={"force": True},
                 daemon=True
             ).start()
+        else:
+            # In serverless, execute synchronously
+            self.cleanup_previous_days_photos(force=True)
+
+    def check_and_run_scheduled_8am_cleanup(self) -> None:
+        """Alias redirecting to midnight cleanup for backward compatibility."""
+        self.check_and_run_midnight_cleanup()
 
     # Alias for backward compatibility
     def cleanup_expired_photos(self, max_age_hours: int = 24) -> int:

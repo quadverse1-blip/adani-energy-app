@@ -124,7 +124,12 @@ async def check_scheduled_cleanup_middleware(request: Request, call_next):
 # 2. 6:00 PM IST Automatic Check-Out Scheduler for open shifts
 @app.on_event("startup")
 async def start_auto_cleanup_scheduler():
-    is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
+    is_serverless = bool(
+        os.getenv("VERCEL")
+        or os.getenv("VERCEL_ENV")
+        or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+        or os.getenv("NOW_REGION")
+    )
     if is_serverless:
         # In Vercel serverless functions, background loops cause FUNCTION_INVOCATION_FAILED.
         # Scheduled tasks are handled cleanly by Vercel Cron (schedule: 30 18 * * *) and middleware.
