@@ -523,7 +523,14 @@ class FirestoreCollectionDictWrapper:
         if not force_refresh and (now_ts - self._last_sync_time) < self._sync_ttl and len(self.fallback_dict) > 0:
             return [
                 v for v in self.fallback_dict.values()
-                if not (self.collection_name == "sites" and (v.get("status") == "deleted" or (hasattr(self.db_manager, "_deleted_site_ids") and str(v.get("_id")) in self.db_manager._deleted_site_ids)))
+                if not (self.collection_name == "sites" and (
+                    v.get("status") == "deleted" or
+                    (hasattr(self.db_manager, "_deleted_site_ids") and (
+                        str(v.get("_id") or "") in self.db_manager._deleted_site_ids or
+                        str(v.get("id") or "") in self.db_manager._deleted_site_ids or
+                        str(v.get("code") or "").lower() in self.db_manager._deleted_site_ids
+                    ))
+                ))
             ]
 
         # Merge local in-memory operational records with remote Firestore documents
@@ -534,7 +541,18 @@ class FirestoreCollectionDictWrapper:
                 doc_id = doc.get("_id") or doc.get("id")
                 if doc_id:
                     # Permanently skip deleted sites
-                    if self.collection_name == "sites" and (doc.get("status") == "deleted" or (hasattr(self.db_manager, "_deleted_site_ids") and str(doc_id) in self.db_manager._deleted_site_ids)):
+                    is_deleted = (
+                        self.collection_name == "sites" and (
+                            doc.get("status") == "deleted" or
+                            (hasattr(self.db_manager, "_deleted_site_ids") and (
+                                str(doc_id) in self.db_manager._deleted_site_ids or
+                                str(doc.get("id") or "") in self.db_manager._deleted_site_ids or
+                                str(doc.get("_id") or "") in self.db_manager._deleted_site_ids or
+                                str(doc.get("code") or "").lower() in self.db_manager._deleted_site_ids
+                            ))
+                        )
+                    )
+                    if is_deleted:
                         merged.pop(doc_id, None)
                         self.fallback_dict.pop(doc_id, None)
                         continue
@@ -551,7 +569,14 @@ class FirestoreCollectionDictWrapper:
         self._last_sync_time = now_ts
         return [
             v for v in merged.values()
-            if not (self.collection_name == "sites" and (v.get("status") == "deleted" or (hasattr(self.db_manager, "_deleted_site_ids") and str(v.get("_id")) in self.db_manager._deleted_site_ids)))
+            if not (self.collection_name == "sites" and (
+                v.get("status") == "deleted" or
+                (hasattr(self.db_manager, "_deleted_site_ids") and (
+                    str(v.get("_id") or "") in self.db_manager._deleted_site_ids or
+                    str(v.get("id") or "") in self.db_manager._deleted_site_ids or
+                    str(v.get("code") or "").lower() in self.db_manager._deleted_site_ids
+                ))
+            ))
         ]
 
     def keys(self):
@@ -727,13 +752,16 @@ class DatabaseManager:
         if self.admin_db:
             try:
                 self.admin_db.collection(collection).document(doc_id).delete()
-                return
             except Exception as e:
                 logger.warning(f"Admin SDK delete error on {collection}/{doc_id}: {e}")
 
         try:
-            url = f"{self.firestore_base_url}/{collection}/{doc_id}?key={self.api_key}"
-            requests.delete(url, timeout=2.0)
+            # First mark as deleted in Firestore so subsequent queries ignore it even if delete fails
+            patch_url = f"{self.firestore_base_url}/{collection}/{doc_id}?key={self.api_key}"
+            requests.patch(patch_url, json=dict_to_firestore_doc({"_id": doc_id, "id": doc_id, "status": "deleted"}), timeout=2.5)
+            # Then delete the document
+            del_url = f"{self.firestore_base_url}/{collection}/{doc_id}?key={self.api_key}"
+            requests.delete(del_url, timeout=2.0)
         except Exception as e:
             logger.debug(f"Firebase REST delete error on {collection}/{doc_id}: {e}")
 
@@ -867,10 +895,21 @@ class DatabaseManager:
             return
         clean_id = str(site_id).strip()
         self._deleted_site_ids.add(clean_id)
-        if clean_id in self._raw_sites:
-            del self._raw_sites[clean_id]
-        if hasattr(self, "sites") and clean_id in self.sites.fallback_dict:
-            del self.sites.fallback_dict[clean_id]
+        
+        # Track and purge any associated identifiers (_id, id, code)
+        related_ids = {clean_id}
+        for s in list(self._raw_sites.values()):
+            if s and (str(s.get("_id") or "") == clean_id or str(s.get("id") or "") == clean_id or str(s.get("code") or "").lower() == clean_id.lower()):
+                if s.get("_id"): related_ids.add(str(s["_id"]))
+                if s.get("id"): related_ids.add(str(s["id"]))
+                if s.get("code"): related_ids.add(str(s["code"]).lower())
+                s["status"] = "deleted"
+                
+        for rid in related_ids:
+            self._deleted_site_ids.add(rid)
+            self._raw_sites.pop(rid, None)
+            if hasattr(self, "sites") and rid in self.sites.fallback_dict:
+                self.sites.fallback_dict.pop(rid, None)
 
     def get_site(self, site_id: str) -> Optional[dict]:
         clean_id = (site_id or "").strip()
@@ -897,7 +936,18 @@ class DatabaseManager:
         return None
 
     def get_all_sites(self) -> List[dict]:
-        return list(self.sites.values())
+        all_sites = list(self.sites.values())
+        filtered = []
+        for s in all_sites:
+            if not s or s.get("status") == "deleted":
+                continue
+            s_id = str(s.get("_id") or "")
+            s_alt = str(s.get("id") or "")
+            s_code = str(s.get("code") or "").lower()
+            if s_id in self._deleted_site_ids or s_alt in self._deleted_site_ids or s_code in self._deleted_site_ids:
+                continue
+            filtered.append(s)
+        return filtered
 
     def get_all_employees(self) -> List[dict]:
         return list(self.employees.values())

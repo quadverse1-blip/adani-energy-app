@@ -709,7 +709,10 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
         'osm-raster-tiles': {
           type: 'raster',
           tiles: [
-            'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+            'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+            'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+            'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+            'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'
           ],
           tileSize: 256,
           attribution: ''
@@ -721,7 +724,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
           type: 'raster',
           source: 'osm-raster-tiles',
           minzoom: 0,
-          maxzoom: 19
+          maxzoom: 20
         }
       ]
     };
@@ -748,7 +751,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       isVectorStyleLoaded = true;
     });
 
-    // 2.5s watchdog fallback to guarantee map is NEVER blank or grey
+    // 1.5s watchdog fallback to guarantee map is NEVER blank or grey
     setTimeout(function() {
       if (!isVectorStyleLoaded) {
         console.warn('[AppMapView] Switching to reliable raster tile fallback...');
@@ -756,7 +759,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
           map.setStyle(rasterFallbackStyle);
         } catch(e) {}
       }
-    }, 2500);
+    }, 1500);
 
     map.on('error', function(e) {
       if (!isVectorStyleLoaded && e && e.error) {
@@ -1066,7 +1069,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       <View style={[styles.container, style]}>
         <WebViewComponent
           ref={webViewRef}
-          source={{ html, baseUrl: 'https://maps.mappls.com' }}
+          source={{ html }}
           style={StyleSheet.absoluteFill}
           javaScriptEnabled={true}
           domStorageEnabled={true}

@@ -10,7 +10,13 @@ router = APIRouter(prefix="/sites", tags=["Substations"])
 @router.get("", response_model=List[SiteResponse])
 async def list_sites(token_data: dict = Depends(get_current_user_token)):
     user_role = str(token_data.get("role", "technician")).lower()
-    raw_sites = [s for s in db.get_all_sites() if s and s.get("status", "active") != "deleted"]
+    raw_sites = [
+        s for s in db.get_all_sites()
+        if s and s.get("status", "active") != "deleted"
+        and str(s.get("_id") or "") not in db._deleted_site_ids
+        and str(s.get("id") or "") not in db._deleted_site_ids
+        and str(s.get("code") or "").lower() not in db._deleted_site_ids
+    ]
     
     # Requirement: Employees should only see the sites assigned to them.
     # If no sites are assigned (or assigned site was removed), employee must see 0 sites.

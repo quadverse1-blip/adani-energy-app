@@ -152,7 +152,8 @@ export const SitesScreen: React.FC = () => {
     setLoading(true);
     try {
       const data = await siteService.getSites();
-      setSites(data);
+      const activeSites = (data || []).filter((s: Substation) => s && (s as any).status !== 'deleted');
+      setSites(activeSites);
     } catch (e) {
       console.warn('Sites fetch error:', e);
     } finally {
@@ -651,8 +652,7 @@ export const SitesScreen: React.FC = () => {
       </View>
 
       {/* Substations Cards List */}
-        /* Substations Cards List (Matching Background of User Photo) */
-        <FlatList
+      <FlatList
           data={sites}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[
