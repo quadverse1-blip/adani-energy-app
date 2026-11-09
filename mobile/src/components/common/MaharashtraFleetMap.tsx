@@ -418,8 +418,14 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=10.0, minimum-scale=1.0, user-scalable=yes" />
   <title>Adani Maharashtra Workforce Mappls Radar</title>
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    if (!window.L) {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\\/script>');
+    }
+  </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #map {
@@ -702,401 +708,148 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
 
     notifyNative('MAP_LIFECYCLE', { stage: 'MAP_INITIALIZED', center: [${MAHARASHTRA_CENTER.longitude}, ${MAHARASHTRA_CENTER.latitude}], zoom: ${MAHARASHTRA_CENTER.zoom} });
 
-    // Permanently stub out AttributionControl to ensure 100% elimination of MapLibre/OpenStreetMap attributions
-    if (window.maplibregl && window.maplibregl.AttributionControl) {
-      window.maplibregl.AttributionControl = function() {
-        return {
-          onAdd: function() {
-            var el = document.createElement('div');
-            el.style.display = 'none';
-            return el;
-          },
-          onRemove: function() {}
-        };
-      };
-    }
+    // Leaflet High-Performance Map Engine for 100% Android & Web Stability
 
-    var mapplsRasterStyle = {
-      version: 8,
-      sources: {
-        'mappls-voyager': {
-          type: 'raster',
-          tiles: [
-            'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-            'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-            'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-            'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'
-          ],
-          tileSize: 256,
-          attribution: ''
-        }
-      },
-      layers: [
-        {
-          id: 'mappls-voyager-layer',
-          type: 'raster',
-          source: 'mappls-voyager',
-          minzoom: 0,
-          maxzoom: 20
-        }
-      ]
-    };
-
-    var map = new maplibregl.Map({
-      container: 'map',
-      style: mapplsRasterStyle,
-      center: [${MAHARASHTRA_CENTER.longitude}, ${MAHARASHTRA_CENTER.latitude}],
+    var map = L.map('map', {
+      center: [${MAHARASHTRA_CENTER.latitude}, ${MAHARASHTRA_CENTER.longitude}],
       zoom: ${MAHARASHTRA_CENTER.zoom},
-      minZoom: 4,
+      zoomControl: false,
+      attributionControl: false
+    });
+
+    var cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
       maxZoom: 20,
-      attributionControl: false,
-      customAttribution: [],
-      doubleClickZoom: true,
-      dragPan: true,
-      scrollZoom: true,
-      touchZoomRotate: true,
-      touchPitch: true,
-      cooperativeGestures: false
-    });
+      detectRetina: true
+    }).addTo(map);
 
-    map.on('style.load', function() {
-      notifyNative('MAP_LIFECYCLE', { stage: 'STYLE_LOADED' });
-    });
-
-    map.on('render', function() {
-      if (map.isStyleLoaded()) {
-        notifyNative('MAP_LIFECYCLE', { stage: 'RENDER_STARTED' });
+    var hasOsm = false;
+    cartoLayer.on('tileerror', function() {
+      if (!hasOsm) {
+        hasOsm = true;
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
       }
     });
 
-    map.on('idle', function() {
-      notifyNative('MAP_LIFECYCLE', { stage: 'RENDER_COMPLETE' });
-    });
+    var substationsLayer = L.layerGroup().addTo(map);
+    var techniciansLayer = L.layerGroup().addTo(map);
+    var placesLayer = L.layerGroup().addTo(map);
+    var roadRouteLayer = L.polyline([], { color: '#2563EB', weight: 5, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }).addTo(map);
+    var historyTrailLayer = L.polyline([], { color: '#8B5CF6', weight: 4, opacity: 0.85, dashArray: '6, 6' }).addTo(map);
 
-    map.on('error', function(e) {
-      notifyNative('MAP_ERROR', {
-        stage: 'MAP_LOAD_ERROR',
-        error: e.error ? (e.error.message || String(e.error)) : String(e)
-      });
-    });
-
-    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
-
-    // Handle interactive map click: dispatch coordinates to load verified nearby places
     map.on('click', function(e) {
-      if (e && e.lngLat) {
-        notifyNative('MAP_CLICK', { lat: e.lngLat.lat, lon: e.lngLat.lng });
-      }
+      notifyNative('MAP_CLICK', { lat: e.latlng.lat, lon: e.latlng.lng });
     });
 
-    window.__onPlaceDirections = function(id) {
-      var found = window.__lastPlaces.find(function(p) { return p.id === id; });
-      if (found) {
-        notifyNative('GET_PLACE_DIRECTIONS', found);
-      }
-    };
+    function renderSubstations(sites) {
+      substationsLayer.clearLayers();
+      sites.forEach(function(s) {
+        if (!s.lat || !s.lon) return;
 
-    function createGeoJSONCircle(center, radiusInMeters, points) {
-      if (!points) points = 64;
-      var coords = { latitude: center[1], longitude: center[0] };
-      var km = radiusInMeters / 1000;
-      var ret = [];
-      var distanceX = km / (111.320 * Math.cos(coords.latitude * Math.PI / 180));
-      var distanceY = km / 110.574;
-      var theta, x, y;
-      for (var i = 0; i < points; i++) {
-        theta = (i / points) * (2 * Math.PI);
-        x = distanceX * Math.cos(theta);
-        y = distanceY * Math.sin(theta);
-        ret.push([coords.longitude + x, coords.latitude + y]);
-      }
-      ret.push(ret[0]);
-      return {
-        type: 'Feature',
-        geometry: { type: 'Polygon', coordinates: [ret] }
-      };
-    }
+        L.circle([s.lat, s.lon], {
+          radius: s.radius || 500,
+          color: '#DC2626',
+          fillColor: '#DC2626',
+          fillOpacity: 0.12,
+          weight: 1.5,
+          dashArray: '4, 4'
+        }).addTo(substationsLayer);
 
-    function purgeAllAttributionNodes() {
-      try {
-        var selectors = [
-          '.maplibregl-ctrl-attrib',
-          '.mapboxgl-ctrl-attrib',
-          '.maplibregl-ctrl-bottom-right',
-          '.maplibregl-ctrl-bottom-left',
-          '.maplibregl-ctrl-attrib-inner',
-          '.maplibregl-ctrl-attrib-summary',
-          '.maplibregl-compact',
-          '.maplibregl-compact-show',
-          'details.maplibregl-ctrl-attrib',
-          'summary.maplibregl-ctrl-attrib-button',
-          'div[class*="attrib"]',
-          'details[class*="attrib"]',
-          'summary[class*="attrib"]',
-          'a[href*="maplibre"]',
-          'a[href*="openfreemap"]',
-          'a[href*="openstreetmap"]',
-          'a[href*="openmaptiles"]'
-        ];
-        selectors.forEach(function(s) {
-          var nodes = document.querySelectorAll(s);
-          for (var i = 0; i < nodes.length; i++) {
-            var n = nodes[i];
-            if (n && n.parentNode) {
-              n.parentNode.removeChild(n);
-            }
-          }
+        var subHtml = '<div class="substation-pin"><span>⚡</span><span>' + s.name + '</span></div>';
+        var subIcon = L.divIcon({
+          className: 'sub-pin-wrap',
+          html: subHtml,
+          iconSize: [110, 24],
+          iconAnchor: [55, 24],
+          popupAnchor: [0, -24]
         });
 
-        // Deep text scanner: destroy any element containing forbidden attribution strings
-        var allElements = document.querySelectorAll('#map *');
-        for (var i = 0; i < allElements.length; i++) {
-          var el = allElements[i];
-          if (el.className && typeof el.className === 'string' && el.className.indexOf('mappls') !== -1) {
-            continue; // Preserve official Mappls badge
-          }
-          var txt = (el.innerText || el.textContent || '').toLowerCase();
-          if (
-            txt.indexOf('maplibre') !== -1 ||
-            txt.indexOf('openfreemap') !== -1 ||
-            txt.indexOf('openmaptiles') !== -1 ||
-            txt.indexOf('openstreetmap') !== -1
-          ) {
-            if (el.parentNode) {
-              el.parentNode.removeChild(el);
-            }
-          }
-        }
-      } catch (err) {}
-    }
+        var popupHtml = '<div style="padding:10px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;color:#0F172A;min-width:210px;">' +
+          '<div style="font-size:9px;font-weight:800;color:#DC2626;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">⚡ Substation Facility</div>' +
+          '<div style="font-weight:800;font-size:14px;color:#0F172A;margin-bottom:2px;">' + s.name + '</div>' +
+          '<div style="font-size:11px;color:#64748B;margin-bottom:6px;">' + (s.code || '') + ' • ' + (s.radius || 500) + 'm Geofence Perimeter</div>' +
+          '<div style="background:#FEF2F2;border:1px solid #FCA5A5;padding:6px;border-radius:6px;font-size:10px;color:#991B1B;">' +
+          '<div>📍 <strong>Coordinates:</strong> ' + Number(s.lat).toFixed(5) + ', ' + Number(s.lon).toFixed(5) + '</div>' +
+          (s.manager ? '<div>👤 <strong>In-Charge:</strong> ' + s.manager + '</div>' : '') +
+          (s.phone ? '<div>📞 <strong>Contact:</strong> ' + s.phone + '</div>' : '') +
+          '</div></div>';
 
-    purgeAllAttributionNodes();
-    try {
-      var observer = new MutationObserver(purgeAllAttributionNodes);
-      observer.observe(document.body, { childList: true, subtree: true });
-    } catch (e) {}
-
-    map.on('load', purgeAllAttributionNodes);
-    map.on('render', purgeAllAttributionNodes);
-    map.on('styledata', purgeAllAttributionNodes);
-    map.on('style.load', function() {
-      try {
-        var style = map.getStyle();
-        if (style && style.sources) {
-          Object.keys(style.sources).forEach(function(k) {
-            if (style.sources[k]) {
-              delete style.sources[k].attribution;
-            }
-          });
-        }
-      } catch (e) {}
-      purgeAllAttributionNodes();
-    });
-    setInterval(purgeAllAttributionNodes, 200);
-
-    map.on('load', function() {
-      purgeAllAttributionNodes();
-
-      // 2. Real Maharashtra roads & POI layers
-      try {
-        if (map.getLayer('highway-name-major')) {
-          map.setLayerZoomRange('highway-name-major', 8, 24);
-          map.setPaintProperty('highway-name-major', 'text-halo-color', '#FFFFFF');
-          map.setPaintProperty('highway-name-major', 'text-halo-width', 2.5);
-        }
-        if (map.getLayer('highway-name-minor')) {
-          map.setLayerZoomRange('highway-name-minor', 11, 24);
-          map.setPaintProperty('highway-name-minor', 'text-halo-color', '#FFFFFF');
-          map.setPaintProperty('highway-name-minor', 'text-halo-width', 2.0);
-        }
-        if (map.getLayer('label_other')) {
-          map.setLayerZoomRange('label_other', 8, 24);
-          map.setPaintProperty('label_other', 'text-halo-color', '#FFFFFF');
-          map.setPaintProperty('label_other', 'text-halo-width', 2.5);
-        }
-        if (map.getLayer('poi_r1')) map.setLayerZoomRange('poi_r1', 11, 24);
-        if (map.getLayer('poi_r7')) map.setLayerZoomRange('poi_r7', 12, 24);
-        if (map.getLayer('poi_r20')) map.setLayerZoomRange('poi_r20', 13, 24);
-        if (map.getLayer('building')) map.setLayerZoomRange('building', 13, 24);
-        if (map.getLayer('building-3d')) map.setLayerZoomRange('building-3d', 13.5, 24);
-        if (map.getLayer('highway-name-minor')) {
-          map.setLayerZoomRange('highway-name-minor', 13.5, 24);
-          map.setPaintProperty('highway-name-minor', 'text-halo-color', '#FFFFFF');
-          map.setPaintProperty('highway-name-minor', 'text-halo-width', 2);
-          map.setPaintProperty('highway-name-minor', 'text-color', '#475569');
-        }
-      } catch (e) {}
-
-      sitesData.forEach(function(site) {
-        if (!site.lat || !site.lon) return;
-
-        var sourceId = 'source-site-' + site.id;
-        var layerFillId = 'fill-site-' + site.id;
-        var layerLineId = 'line-site-' + site.id;
-
-        var circleGeoJSON = createGeoJSONCircle([site.lon, site.lat], site.radius || 500);
-
-        map.addSource(sourceId, {
-          type: 'geojson',
-          data: circleGeoJSON
-        });
-
-        map.addLayer({
-          id: layerFillId,
-          type: 'fill',
-          source: sourceId,
-          paint: {
-            'fill-color': '#1E63F0',
-            'fill-opacity': 0.12
-          }
-        });
-
-        map.addLayer({
-          id: layerLineId,
-          type: 'line',
-          source: sourceId,
-          paint: {
-            'line-color': '#1E63F0',
-            'line-width': 2,
-            'line-dasharray': [2, 2]
-          }
-        });
-
-        var el = document.createElement('div');
-        el.className = 'substation-marker';
-        el.innerHTML = '⚡';
-        el.title = site.name;
-
-        var popupHtml = '<div style="font-family: inherit;">' +
-          '<div style="font-size: 9px; font-weight: 800; color: #1E63F0; text-transform: uppercase;">Substation Facility</div>' +
-          '<div class="popup-title">' + site.name + '</div>' +
-          '<div class="popup-sub">' + site.code + ' • ' + site.voltage + '</div>' +
-          '<div class="popup-row"><span>Perimeter:</span><strong>' + (site.radius || 500) + 'm Geofence</strong></div>' +
-          '<div class="popup-row"><span>In-Charge:</span><strong>' + site.manager + '</strong></div>' +
-          (site.phone ? '<div class="popup-row"><span>Contact:</span><strong>' + site.phone + '</strong></div>' : '') +
-          '</div>';
-
-        var popup = new maplibregl.Popup({ offset: 15 }).setHTML(popupHtml);
-
-        new maplibregl.Marker({ element: el })
-          .setLngLat([site.lon, site.lat])
-          .setPopup(popup)
-          .addTo(map);
+        L.marker([s.lat, s.lon], { icon: subIcon })
+          .bindPopup(popupHtml)
+          .addTo(substationsLayer);
       });
+    }
 
-      techsData.forEach(function(tech) {
-        if (!tech.lat || !tech.lon) return;
+    function renderTechnicians(techs) {
+      techniciansLayer.clearLayers();
+      techs.forEach(function(t) {
+        if (!t.lat || !t.lon) return;
 
-        var el = document.createElement('div');
-        el.className = 'live-marker-wrap';
+        var isLive = Boolean(t.isLive);
+        var isSel = Boolean(t.isSelected);
+        var initials = (t.name || 'T').split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
 
-        if (tech.isLive) {
-          var pulse = document.createElement('div');
-          pulse.className = 'pulse-ring';
-          el.appendChild(pulse);
-
-          var dot = document.createElement('div');
-          dot.className = 'marker-dot-live';
-          dot.innerText = tech.name.charAt(0);
-          el.appendChild(dot);
+        var markerHtml = '';
+        if (isLive) {
+          markerHtml = '<div class="live-pulse-container">' +
+            (isSel ? '<div class="selected-halo"></div>' : '') +
+            '<div class="live-pulse-ring"></div>' +
+            '<div class="live-marker-circle">' + initials + '</div>' +
+            '</div>';
         } else {
-          var dot = document.createElement('div');
-          dot.className = 'marker-dot-lastknown';
-          dot.innerText = tech.name.charAt(0);
-          el.appendChild(dot);
+          markerHtml = '<div class="lastknown-container">' +
+            (isSel ? '<div class="selected-halo"></div>' : '') +
+            '<div class="lastknown-marker-circle">' + initials + '</div>' +
+            '</div>';
         }
 
-        var badgeClass = tech.isLive ? 'popup-badge-live' : 'popup-badge-lastknown';
-        var statusBadge = tech.isLive ? '🟢 ONLINE (LIVE GPS)' : '🕒 OFFLINE (LAST KNOWN)';
-        var popupHtml = '<div style="line-height: 1.4; min-width: 210px;">' +
-          '<div style="margin-bottom: 4px;"><span class="' + badgeClass + '">' + statusBadge + '</span></div>' +
-          '<div class="popup-title">' + tech.name + '</div>' +
-          '<div class="popup-sub">' + tech.empId + ' • ' + (tech.siteName || 'Field Operations') + '</div>' +
-          '<div class="popup-row"><span>Mobile:</span><strong>' + (tech.phone || 'N/A') + '</strong></div>' +
-          '<div class="popup-row"><span>Status:</span><strong>' + (tech.isLive ? 'Online / Live' : 'Offline / Retained') + '</strong></div>' +
-          '<div class="popup-row"><span>Last Known:</span><strong>' + (tech.siteName ? 'Near ' + tech.siteName : Number(tech.lat).toFixed(4) + ', ' + Number(tech.lon).toFixed(4)) + '</strong></div>' +
-          '<div class="popup-row"><span>Updated:</span><strong>' + tech.timeAgo + '</strong></div>' +
-          (tech.speed ? '<div class="popup-row"><span>Speed:</span><strong>' + tech.speed + '</strong></div>' : '') +
-          '</div>';
-
-        var popup = new maplibregl.Popup({ offset: 15 }).setHTML(popupHtml);
-
-        el.addEventListener('click', function() {
-          notifyNative('SELECT_TECH', tech);
+        var icon = L.divIcon({
+          className: 'tech-marker-wrapper',
+          html: markerHtml,
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+          popupAnchor: [0, -18]
         });
 
-        var marker = new maplibregl.Marker({ element: el })
-          .setLngLat([tech.lon, tech.lat])
-          .setPopup(popup)
-          .addTo(map);
+        var badgeBg = isLive ? '#059669' : '#D97706';
+        var badgeText = isLive ? '🟢 ONLINE (LIVE GPS)' : '🕒 OFFLINE (LAST KNOWN)';
 
-        activeMarkers.push(marker);
-      });
+        var popupHtml = '<div style="padding:10px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;color:#0F172A;min-width:230px;line-height:1.4;">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+            '<span style="font-size:9px;font-weight:800;color:#FFF;background:' + badgeBg + ';padding:2px 8px;border-radius:10px;letter-spacing:0.4px;">' + badgeText + '</span>' +
+            '<span style="font-size:10px;font-weight:700;color:#64748B;">' + (t.empId || t.id) + '</span>' +
+          '</div>' +
+          '<div style="font-weight:800;font-size:14px;color:#0F172A;margin-bottom:2px;">' + t.name + '</div>' +
+          '<div style="background:#F8FAFC;border:1px solid #E2E8F0;padding:8px;border-radius:8px;font-size:11px;color:#334155;display:flex;flex-direction:column;gap:4px;">' +
+            (t.phone ? '<div>📞 <strong>Mobile:</strong> <a href="tel:' + t.phone + '" style="color:#2563EB;text-decoration:none;font-weight:700;">' + t.phone + '</a></div>' : '') +
+            '<div>🕒 <strong>Last Recorded:</strong> <span style="font-weight:600;color:#0F172A;">' + (t.timeAgo || 'Recent check-in') + '</span></div>' +
+            '<div>⚡ <strong>Assigned Site:</strong> <span style="font-weight:600;color:#0F172A;">' + (t.siteName || 'Field Operations') + '</span></div>' +
+            '<div>🎯 <strong>Coordinates:</strong> <span style="font-family:monospace;font-size:10px;">' + Number(t.lat).toFixed(5) + ', ' + Number(t.lon).toFixed(5) + '</span></div>' +
+          '</div>' +
+        '</div>';
 
-      map.addSource('road-route-source', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] }
-      });
+        var marker = L.marker([t.lat, t.lon], { icon: icon })
+          .bindPopup(popupHtml)
+          .addTo(techniciansLayer);
 
-      map.addLayer({
-        id: 'road-route-casing',
-        type: 'line',
-        source: 'road-route-source',
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: {
-          'line-color': '#1E3A8A',
-          'line-width': 7,
-          'line-opacity': 0.7
+        marker.on('click', function() {
+          notifyNative('SELECT_TECH', t);
+        });
+
+        if (isSel) {
+          setTimeout(function() { marker.openPopup(); }, 200);
         }
       });
-
-      map.addLayer({
-        id: 'road-route-layer',
-        type: 'line',
-        source: 'road-route-source',
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: {
-          'line-color': '#3B82F6',
-          'line-width': 4
-        }
-      });
-
-      map.addSource('history-trail-source', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] }
-      });
-
-      map.addLayer({
-        id: 'history-trail-layer',
-        type: 'line',
-        source: 'history-trail-source',
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: {
-          'line-color': '#8B5CF6',
-          'line-width': 4,
-          'line-dasharray': [2, 1]
-        }
-      });
-    });
+    }
 
     function renderNearbyPoiMarkers(places) {
-      nearbyMarkers.forEach(function(m) { m.remove(); });
-      nearbyMarkers = [];
+      placesLayer.clearLayers();
       window.__lastPlaces = places || [];
-
-      if (!places || places.length === 0) return;
-
-      var bounds = new maplibregl.LngLatBounds();
+      if (!Array.isArray(places)) return;
 
       places.forEach(function(p) {
         if (!p.latitude || !p.longitude) return;
 
-        var el = document.createElement('div');
-        el.className = 'poi-marker-wrap';
-        el.style.backgroundColor = p.category_color || '#0284C7';
-
-        var iconSpan = document.createElement('span');
-        iconSpan.className = 'poi-marker-icon';
         var glyph = '📍';
         if (p.category === 'healthcare') glyph = '🏥';
         else if (p.category === 'fuel') glyph = '⛽';
@@ -1106,34 +859,47 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
         else if (p.category === 'transit') glyph = '🚆';
         else if (p.category === 'civic') glyph = '🏛️';
         else if (p.category === 'education') glyph = '🎓';
-        iconSpan.innerText = glyph;
-        el.appendChild(iconSpan);
 
-        var popupHtml = '<div style="font-family: inherit;">' +
-          '<div style="background: ' + (p.category_color || '#0284C7') + '15; color: ' + (p.category_color || '#0284C7') + '; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px; text-transform: uppercase;">' + p.category_label + '</div>' +
-          '<div class="popup-title">' + p.name + '</div>' +
-          (p.name_mr ? '<div class="popup-sub">' + p.name_mr + '</div>' : '') +
-          '<div class="popup-row"><span>Straight-Line Dist:</span><strong>' + p.formatted_distance + '</strong></div>' +
-          '<div style="font-size: 11px; color: #475569; margin-top: 4px; line-height: 1.3;">' + p.address + '</div>' +
-          (p.phone ? '<div style="font-size: 11px; color: #1E63F0; margin-top: 3px;">📞 ' + p.phone + '</div>' : '') +
-          '<button onclick="window.__onPlaceDirections(\'' + p.id + '\')" style="margin-top: 8px; width: 100%; background: #1E63F0; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 10px; font-size: 11px; font-weight: 700; cursor: pointer;">🚗 Road Directions</button>' +
-          '</div>';
-
-        var popup = new maplibregl.Popup({ offset: 15 }).setHTML(popupHtml);
-
-        el.addEventListener('click', function() {
-          notifyNative('SELECT_PLACE', p);
+        var poiHtml = '<div class="poi-pin-badge" style="background:' + (p.category_color || '#0284C7') + ';"><span>' + glyph + '</span><span>' + p.name + '</span></div>';
+        var poiIcon = L.divIcon({
+          className: 'poi-wrap',
+          html: poiHtml,
+          iconSize: [120, 22],
+          iconAnchor: [60, 22],
+          popupAnchor: [0, -22]
         });
 
-        var marker = new maplibregl.Marker({ element: el })
-          .setLngLat([p.longitude, p.latitude])
-          .setPopup(popup)
-          .addTo(map);
+        var popupHtml = '<div style="padding:10px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;color:#0F172A;min-width:210px;">' +
+          '<div style="font-size:9px;font-weight:800;color:' + (p.category_color || '#0284C7') + ';text-transform:uppercase;margin-bottom:2px;">' + (p.category_label || p.category) + '</div>' +
+          '<div style="font-weight:800;font-size:13px;color:#0F172A;margin-bottom:2px;">' + p.name + '</div>' +
+          '<div style="font-size:11px;color:#475569;margin-bottom:4px;">📍 ' + (p.formatted_distance || '') + ' • ' + (p.address || '') + '</div>' +
+          '<button onclick="window.__onPlaceDirections(\'' + p.id + '\')" style="margin-top:6px;width:100%;background:#1E63F0;color:#FFF;border:none;border-radius:6px;padding:6px;font-size:11px;font-weight:700;cursor:pointer;">🚗 Road Directions</button>' +
+        '</div>';
 
-        nearbyMarkers.push(marker);
-        bounds.extend([p.longitude, p.latitude]);
+        var marker = L.marker([p.latitude, p.longitude], { icon: poiIcon })
+          .bindPopup(popupHtml)
+          .addTo(placesLayer);
+
+        marker.on('click', function() {
+          notifyNative('SELECT_PLACE', p);
+        });
       });
     }
+
+    window.__onPlaceDirections = function(id) {
+      var found = window.__lastPlaces.find(function(p) { return p.id === id; });
+      if (found) {
+        notifyNative('GET_PLACE_DIRECTIONS', found);
+      }
+    };
+
+    renderSubstations(sitesData);
+    renderTechnicians(techsData);
+
+    setTimeout(function() { map.invalidateSize(); }, 100);
+    setTimeout(function() { map.invalidateSize(); }, 300);
+    setTimeout(function() { map.invalidateSize(); }, 800);
+    window.addEventListener('resize', function() { map.invalidateSize(); });
 
     function handleIncomingMessage(event) {
       try {
@@ -1141,53 +907,25 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
         if (!msg || !msg.type) return;
 
         if (msg.type === 'FLY_TO') {
-          map.flyTo({
-            center: [msg.payload.lon, msg.payload.lat],
-            zoom: msg.payload.zoom || 13,
-            essential: true
-          });
+          map.flyTo([msg.payload.lat, msg.payload.lon], msg.payload.zoom || 14, { duration: 0.8 });
         } else if (msg.type === 'SET_NEARBY_PLACES') {
           renderNearbyPoiMarkers(msg.payload.places);
         } else if (msg.type === 'CLEAR_NEARBY_PLACES') {
           renderNearbyPoiMarkers([]);
         } else if (msg.type === 'SET_ROAD_ROUTE') {
-          var source = map.getSource('road-route-source');
-          if (source && msg.payload.geojson) {
-            source.setData(msg.payload.geojson);
-            var coords = msg.payload.coordinates || [];
-            if (coords.length > 1) {
-              var bounds = new maplibregl.LngLatBounds();
-              coords.forEach(function(c) { bounds.extend([c[1], c[0]]); });
-              map.fitBounds(bounds, { padding: 40, maxZoom: 15 });
-            }
+          if (Array.isArray(msg.payload.coordinates) && msg.payload.coordinates.length > 0) {
+            roadRouteLayer.setLatLngs(msg.payload.coordinates);
+            map.fitBounds(msg.payload.coordinates, { padding: [40, 40], maxZoom: 16 });
           }
         } else if (msg.type === 'CLEAR_ROUTE') {
-          var source = map.getSource('road-route-source');
-          if (source) {
-            source.setData({ type: 'FeatureCollection', features: [] });
-          }
+          roadRouteLayer.setLatLngs([]);
         } else if (msg.type === 'SET_HISTORY_TRAIL') {
-          var source = map.getSource('history-trail-source');
-          if (source && msg.payload.coordinates) {
-            var lineGeo = {
-              type: 'Feature',
-              geometry: {
-                type: 'LineString',
-                coordinates: msg.payload.coordinates.map(function(c) { return [c[1], c[0]]; })
-              }
-            };
-            source.setData(lineGeo);
-            if (msg.payload.coordinates.length > 1) {
-              var bounds = new maplibregl.LngLatBounds();
-              msg.payload.coordinates.forEach(function(c) { bounds.extend([c[1], c[0]]); });
-              map.fitBounds(bounds, { padding: 40, maxZoom: 15 });
-            }
+          if (Array.isArray(msg.payload.coordinates) && msg.payload.coordinates.length > 0) {
+            historyTrailLayer.setLatLngs(msg.payload.coordinates);
+            map.fitBounds(msg.payload.coordinates, { padding: [40, 40], maxZoom: 16 });
           }
         } else if (msg.type === 'CLEAR_HISTORY') {
-          var source = map.getSource('history-trail-source');
-          if (source) {
-            source.setData({ type: 'FeatureCollection', features: [] });
-          }
+          historyTrailLayer.setLatLngs([]);
         }
       } catch (err) {}
     }
