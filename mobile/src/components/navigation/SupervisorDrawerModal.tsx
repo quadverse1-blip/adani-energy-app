@@ -51,6 +51,15 @@ const SUPERVISOR_MENU_ITEMS: NavMenuItem[] = [
     icon: LayoutDashboard,
   },
   {
+    key: 'Tracking',
+    label: 'Location Tracking',
+    subLabel: 'Real-time GPS telemetry & roster',
+    screenName: 'Tracking',
+    icon: MapPin,
+    badge: 'LIVE',
+    badgeColor: '#10B981',
+  },
+  {
     key: 'AttendanceLogs',
     label: 'Attendance History',
     subLabel: 'Shift history, duration & punctuality',

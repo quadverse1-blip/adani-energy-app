@@ -805,14 +805,25 @@ export const SupervisorDashboardScreen: React.FC = () => {
               </Text>
             </View>
 
-            <TouchableOpacity delayPressIn={0}
-              style={styles.refreshListBtn}
-              onPress={fetchDashboardData}
-              activeOpacity={0.7}
-            >
-              <RefreshCw size={13} color="#475569" />
-              <Text style={styles.refreshListBtnText}>Refresh List</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TouchableOpacity delayPressIn={0}
+                style={[styles.refreshListBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
+                onPress={() => navigation.navigate('Tracking')}
+                activeOpacity={0.7}
+              >
+                <MapPin size={13} color="#2563EB" />
+                <Text style={[styles.refreshListBtnText, { color: '#2563EB', fontWeight: '700' }]}>Live Map</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity delayPressIn={0}
+                style={styles.refreshListBtn}
+                onPress={fetchDashboardData}
+                activeOpacity={0.7}
+              >
+                <RefreshCw size={13} color="#475569" />
+                <Text style={styles.refreshListBtnText}>Refresh</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Staff Content */}

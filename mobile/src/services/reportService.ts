@@ -135,6 +135,9 @@ export const reportService = {
       if (siteId && siteId !== 'all') downloadUrl += `&siteId=${encodeURIComponent(siteId)}`;
 
       const destination = new ExpoFile(Paths.document, filename);
+      if (destination.exists) {
+        await destination.delete();
+      }
 
       const downloadedFile = await ExpoFile.downloadFileAsync(downloadUrl, destination, {
         headers: {
@@ -192,6 +195,12 @@ export const reportService = {
     try {
       let downloadUrl = `${apiClient.defaults.baseURL}/reports/export-logs`;
       const destination = new ExpoFile(Paths.document, filename);
+      if (destination.exists) {
+        await destination.delete();
+      }
+      if (destination.exists) {
+        await destination.delete();
+      }
 
       const downloadedFile = await ExpoFile.downloadFileAsync(downloadUrl, destination, {
         headers: {
@@ -209,6 +218,77 @@ export const reportService = {
       }
     } catch (error: any) {
       console.error('Detailed logs export error:', error);
+      throw error;
+    }
+  },
+
+  async downloadMusterRollPdf(month?: number, year?: number, siteId?: string): Promise<void> {
+    const now = new Date();
+    const m = month !== undefined ? month : now.getMonth() + 1;
+    const y = year !== undefined ? year : now.getFullYear();
+
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const monthName = monthNames[(m - 1) % 12];
+    const filename = `Adani_Muster_Roll_${monthName}_${y}_${Date.now()}.pdf`;
+    const token = await getStoredToken();
+
+    if (Platform.OS === 'web') {
+      try {
+        const response = await apiClient.get('/reports/export-pdf', {
+          params: { month: m, year: y, siteId: siteId && siteId !== 'all' ? siteId : undefined },
+          responseType: 'blob',
+        });
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+        return;
+      } catch (err) {
+        let fallbackUrl = `${apiClient.defaults.baseURL}/reports/export-pdf?month=${m}&year=${y}`;
+        if (siteId && siteId !== 'all') fallbackUrl += `&siteId=${encodeURIComponent(siteId)}`;
+        if (token) fallbackUrl += `&token=${encodeURIComponent(token)}`;
+        window.open(fallbackUrl, '_blank');
+        return;
+      }
+    }
+
+    try {
+      let downloadUrl = `${apiClient.defaults.baseURL}/reports/export-pdf?month=${m}&year=${y}`;
+      if (siteId && siteId !== 'all') downloadUrl += `&siteId=${encodeURIComponent(siteId)}`;
+      if (token) downloadUrl += `&token=${encodeURIComponent(token)}`;
+
+      const destination = new ExpoFile(Paths.document, filename);
+      if (destination.exists) {
+        await destination.delete();
+      }
+      if (destination.exists) {
+        await destination.delete();
+      }
+
+      const downloadedFile = await ExpoFile.downloadFileAsync(downloadUrl, destination, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+      });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(downloadedFile.uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `Export Adani Attendance Register (${monthName} ${y})`,
+          UTI: 'com.adobe.pdf',
+        });
+      }
+    } catch (error: any) {
+      console.error('Muster roll PDF export error:', error);
       throw error;
     }
   },

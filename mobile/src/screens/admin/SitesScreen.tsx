@@ -139,7 +139,7 @@ export const SitesScreen: React.FC = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Map state
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
   const [region, setRegion] = useState({
     latitude: 21.1926,
     longitude: 72.7997,
@@ -553,6 +553,13 @@ export const SitesScreen: React.FC = () => {
       return;
     }
 
+    const latNum = parseFloat(latitude);
+    const lngNum = parseFloat(longitude);
+    if (isNaN(latNum) || isNaN(lngNum) || latNum < -90 || latNum > 90 || lngNum < -180 || lngNum > 180) {
+      Alert.alert('Invalid Coordinates', 'Please enter valid GPS coordinates (Latitude between -90 and 90, Longitude between -180 and 180).');
+      return;
+    }
+
     setSaving(true);
     try {
       const hasManager = managerName.trim().length > 0 || managerPhone.trim().length > 0;
@@ -560,8 +567,8 @@ export const SitesScreen: React.FC = () => {
         name: name.trim(),
         code: code.trim().toUpperCase(),
         address: address.trim() || undefined,
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
+        latitude: latNum,
+        longitude: lngNum,
         radiusMeters: rad,
         voltageClass: editingSite?.voltageClass || undefined,
         manager: hasManager ? {
@@ -736,13 +743,13 @@ export const SitesScreen: React.FC = () => {
                 style={styles.gpsLinkRow}
                 onPress={() =>
                   Linking.openURL(
-                    `https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`
+                    `https://maps.mappls.com/?point=${item.latitude},${item.longitude}`
                   )
                 }
               >
                 <Zap size={13} color="#2563EB" style={{ marginRight: 5 }} />
                 <Text style={styles.gpsLinkText}>
-                  GPS Tag: {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
+                  GPS Tag: {typeof item.latitude === 'number' ? item.latitude.toFixed(4) : (item.latitude || '--')}, {typeof item.longitude === 'number' ? item.longitude.toFixed(4) : (item.longitude || '--')}
                 </Text>
                 <ExternalLink size={12} color="#2563EB" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
@@ -968,7 +975,7 @@ export const SitesScreen: React.FC = () => {
                 <View style={styles.mapEngineBadge}>
                   <View style={styles.engineDot} />
                   <Text style={styles.mapEngineText}>
-                    Map Engine: Leaflet + OpenStreetMap & Mappls GIS API
+                    Map Engine: Mappls Enterprise GIS Engine
                   </Text>
                 </View>
 

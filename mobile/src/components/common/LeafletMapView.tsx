@@ -19,9 +19,9 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
   technicians,
   selectedTech,
   onSelectTech,
-  center = { latitude: 12.9626, longitude: 77.5936 },
+  center = { latitude: 19.7515, longitude: 75.7139 },
 }) => {
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
 
   useEffect(() => {
     if (selectedTech?.latitude && selectedTech?.longitude && mapRef.current) {

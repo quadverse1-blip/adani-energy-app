@@ -18,3 +18,5 @@ backend/venv/
 *.sqlite
 *.sqlite3
 backend/verify_site_assignment.py
+*.apk
+*.txt

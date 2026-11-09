@@ -41,6 +41,7 @@ import {
   PhoneCall,
 } from 'lucide-react-native';
 import MapView, { Marker, Circle } from '../../components/common/AppMapView';
+import { MaharashtraFleetMap } from '../../components/common/MaharashtraFleetMap';
 import { dashboardService, FleetRadarData } from '../../services/dashboardService';
 import { FleetTechnician, Substation } from '../../types';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
@@ -48,6 +49,8 @@ import { useAdminDrawerStore } from '../../store/useAdminDrawerStore';
 import { AdminDrawerModal } from '../../components/navigation/AdminDrawerModal';
 import { useSupervisorDrawerStore } from '../../store/useSupervisorDrawerStore';
 import { SupervisorDrawerModal } from '../../components/navigation/SupervisorDrawerModal';
+import { useTechnicianDrawerStore } from '../../store/useTechnicianDrawerStore';
+import { TechnicianDrawerModal } from '../../components/navigation/TechnicianDrawerModal';
 import { useAuthStore } from '../../store/useAuthStore';
 import { AppBackButton } from '../../components/common/AppBackButton';
 
@@ -59,12 +62,15 @@ export const TrackingScreen: React.FC = () => {
   const { user } = useAuthStore();
   const { openDrawer: openAdminDrawer } = useAdminDrawerStore();
   const { openDrawer: openSupervisorDrawer } = useSupervisorDrawerStore();
+  const { openDrawer: openTechnicianDrawer } = useTechnicianDrawerStore();
 
   const handleBack = () => {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else if (user?.role === 'supervisor') {
       navigation.navigate('SupervisorDashboard');
+    } else if (user?.role === 'technician') {
+      navigation.navigate('Dashboard');
     } else {
       navigation.navigate('AdminDashboard');
     }
@@ -73,18 +79,20 @@ export const TrackingScreen: React.FC = () => {
   const handleMenuPress = () => {
     if (user?.role === 'supervisor') {
       openSupervisorDrawer('Tracking');
+    } else if (user?.role === 'technician') {
+      openTechnicianDrawer('Tracking');
     } else {
       openAdminDrawer('Tracking');
     }
   };
 
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
 
   const [data, setData] = useState<FleetRadarData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
-  const [filterTab, setFilterTab] = useState<'all' | 'active' | 'offline'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'live' | 'last_known' | 'no_location'>('all');
   const [selectedTech, setSelectedTech] = useState<FleetTechnician | null>(null);
   const [viewMode, setViewMode] = useState<'single' | 'all'>('single');
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -153,10 +161,19 @@ export const TrackingScreen: React.FC = () => {
 
       const currentSelectedId = selectedTechIdRef.current;
       if (!currentSelectedId && res.technicians && res.technicians.length > 0) {
-        // Only on initial mount: select first active technician
-        const firstActive = res.technicians.find((t) => t.hasGps) || res.technicians[0];
-        setSelectedTech(firstActive);
-        selectedTechIdRef.current = firstActive.id;
+        // If technician user, highlight their own location first; otherwise select first active
+        let targetTech: FleetTechnician | undefined;
+        if (user?.employeeId) {
+          const empCode = user.employeeId.toUpperCase();
+          targetTech = res.technicians.find(
+            (t) => (t.employeeId && t.employeeId.toUpperCase() === empCode) || t.id === user.id
+          );
+        }
+        if (!targetTech) {
+          targetTech = res.technicians.find((t) => t.hasGps) || res.technicians[0];
+        }
+        setSelectedTech(targetTech);
+        selectedTechIdRef.current = targetTech.id;
       } else if (currentSelectedId && res.technicians) {
         // Keep currently selected technician's data live without resetting back to Rohit!
         const updated = res.technicians.find((t) => t.id === currentSelectedId);
@@ -181,21 +198,36 @@ export const TrackingScreen: React.FC = () => {
   const technicians = data?.technicians || [];
   const substations = data?.substations || [];
 
-  const activeCount = useMemo(
-    () => technicians.filter((t) => t.isOnline || t.status === 'online' || t.status === 'on_duty_inside' || t.status === 'on_duty_outside').length,
+  const liveCount = useMemo(
+    () => technicians.filter((t) => t.isLive || t.isOnline || t.status === 'online' || t.status === 'on_duty_inside' || t.status === 'on_duty_outside').length,
     [technicians]
   );
-  const offlineCount = useMemo(() => technicians.length - activeCount, [technicians, activeCount]);
+  const lastKnownCount = useMemo(
+    () => technicians.filter((t) => t.isLastKnown || (t.hasGps && !t.isOnline && t.status !== 'online' && t.status !== 'on_duty_inside' && t.status !== 'on_duty_outside')).length,
+    [technicians]
+  );
+  const noLocationCount = useMemo(
+    () => technicians.filter((t) => !t.hasGps || t.latitude === null || t.longitude === null).length,
+    [technicians]
+  );
 
   // Display all employees with recorded GPS coordinates on the map (retains offline employee markers)
   const displayedTechnicians = useMemo(() => {
     return technicians.filter((t) => {
-      if (t.latitude === null || t.latitude === undefined || t.longitude === null || t.longitude === undefined) {
+      if (t.latitude === null || t.latitude === undefined || t.longitude === null || t.longitude === undefined || !t.hasGps) {
         return false;
       }
-      const isOnline = Boolean(t.isOnline || t.status === 'online' || t.status === 'on_duty_inside' || t.status === 'on_duty_outside');
-      if (filterTab === 'active') return isOnline;
-      if (filterTab === 'offline') return !isOnline;
+      const isLive = Boolean(
+        t.isLive ||
+        t.isOnline ||
+        t.status === 'online' ||
+        t.status === 'live_online' ||
+        t.status === 'on_duty_inside' ||
+        t.status === 'on_duty_outside'
+      );
+      if (filterTab === 'live') return isLive;
+      if (filterTab === 'last_known') return !isLive;
+      if (filterTab === 'no_location') return false;
       return true;
     });
   }, [technicians, filterTab]);
@@ -218,47 +250,38 @@ export const TrackingScreen: React.FC = () => {
 
       if (!matchSearch) return false;
 
-      const isOnline = Boolean(t.isOnline || t.status === 'online' || t.status === 'on_duty_inside' || t.status === 'on_duty_outside');
-      if (filterTab === 'active') return isOnline;
-      if (filterTab === 'offline') return !isOnline;
+      const isLive = Boolean(
+        t.isLive ||
+        t.isOnline ||
+        t.status === 'online' ||
+        t.status === 'live_online' ||
+        t.status === 'on_duty_inside' ||
+        t.status === 'on_duty_outside'
+      );
+      const isLastKnown = Boolean(t.isLastKnown || (t.hasGps && !isLive));
+      const hasNoLocation = Boolean(!t.hasGps || t.latitude === null || t.longitude === null);
+
+      if (filterTab === 'live') return isLive;
+      if (filterTab === 'last_known') return isLastKnown;
+      if (filterTab === 'no_location') return hasNoLocation;
       return true;
     });
   }, [technicians, search, filterTab]);
 
-  // Smooth animate map camera when selected technician changes
+  // Smooth animate map camera when selected technician changes (ONLY if technician has genuine GPS)
   useEffect(() => {
-    if (selectedTech && mapRef.current) {
-      const targetLat =
-        selectedTech.latitude !== null && selectedTech.latitude !== undefined
-          ? selectedTech.latitude
-          : substations.find(
-              (s) =>
-                s.name.toLowerCase() === (selectedTech.assignedSiteName || '').toLowerCase() ||
-                s.id === selectedTech.assignedSiteId
-            )?.latitude;
-
-      const targetLon =
-        selectedTech.longitude !== null && selectedTech.longitude !== undefined
-          ? selectedTech.longitude
-          : substations.find(
-              (s) =>
-                s.name.toLowerCase() === (selectedTech.assignedSiteName || '').toLowerCase() ||
-                s.id === selectedTech.assignedSiteId
-            )?.longitude;
-
-      if (targetLat && targetLon) {
-        mapRef.current.animateToRegion(
-          {
-            latitude: targetLat,
-            longitude: targetLon,
-            latitudeDelta: 0.008,
-            longitudeDelta: 0.008,
-          },
-          500
-        );
-      }
+    if (selectedTech?.hasGps && selectedTech?.latitude !== null && selectedTech?.latitude !== undefined && selectedTech?.longitude !== null && selectedTech?.longitude !== undefined && mapRef.current) {
+      mapRef.current.animateToRegion(
+        {
+          latitude: selectedTech.latitude,
+          longitude: selectedTech.longitude,
+          latitudeDelta: 0.015,
+          longitudeDelta: 0.015,
+        },
+        500
+      );
     }
-  }, [selectedTech?.id, selectedTech?.latitude, selectedTech?.longitude, substations]);
+  }, [selectedTech?.id, selectedTech?.latitude, selectedTech?.longitude]);
 
   const handleCopyGPS = () => {
     const lat = selectedTech?.latitude ?? userLocation?.latitude ?? 12.96259;
@@ -338,31 +361,13 @@ export const TrackingScreen: React.FC = () => {
     setSelectedTech(tech);
     setViewMode('single');
 
-    const targetLat =
-      tech.latitude !== null && tech.latitude !== undefined
-        ? tech.latitude
-        : substations.find(
-            (s) =>
-              s.name.toLowerCase() === (tech.assignedSiteName || '').toLowerCase() ||
-              s.id === tech.assignedSiteId
-          )?.latitude;
-
-    const targetLon =
-      tech.longitude !== null && tech.longitude !== undefined
-        ? tech.longitude
-        : substations.find(
-            (s) =>
-              s.name.toLowerCase() === (tech.assignedSiteName || '').toLowerCase() ||
-              s.id === tech.assignedSiteId
-          )?.longitude;
-
-    if (targetLat && targetLon && mapRef.current) {
+    if (tech.hasGps && tech.latitude !== null && tech.latitude !== undefined && tech.longitude !== null && tech.longitude !== undefined && mapRef.current) {
       mapRef.current.animateToRegion(
         {
-          latitude: targetLat,
-          longitude: targetLon,
-          latitudeDelta: 0.008,
-          longitudeDelta: 0.008,
+          latitude: tech.latitude,
+          longitude: tech.longitude,
+          latitudeDelta: 0.012,
+          longitudeDelta: 0.012,
         },
         500
       );
@@ -376,17 +381,20 @@ export const TrackingScreen: React.FC = () => {
     return <LoadingSpinner message="Connecting to Live Telemetry Radar..." />;
   }
 
-  const activeLat = selectedTech?.latitude !== null && selectedTech?.latitude !== undefined
-    ? Number(selectedTech.latitude).toFixed(6)
-    : userLocation?.latitude ? Number(userLocation.latitude).toFixed(6) : '12.962600';
-  const activeLon = selectedTech?.longitude !== null && selectedTech?.longitude !== undefined
-    ? Number(selectedTech.longitude).toFixed(6)
-    : userLocation?.longitude ? Number(userLocation.longitude).toFixed(6) : '77.593617';
+  const hasSelectedGps = Boolean(
+    selectedTech?.hasGps &&
+    selectedTech?.latitude !== null &&
+    selectedTech?.latitude !== undefined &&
+    selectedTech?.longitude !== null &&
+    selectedTech?.longitude !== undefined
+  );
+  const activeLat = hasSelectedGps ? Number(selectedTech!.latitude).toFixed(6) : 'Not Available';
+  const activeLon = hasSelectedGps ? Number(selectedTech!.longitude).toFixed(6) : 'Not Available';
   const activeSiteName = selectedTech?.assignedSiteName || 'Assigned Site';
   const activeTime = selectedTech?.checkInTime && selectedTech.checkInTime !== '--'
     ? selectedTech.checkInTime
-    : '10:14 AM';
-  const activeAccuracy = selectedTech?.accuracy || '±8m - 124m Lock';
+    : selectedTech?.lastLocationTime || '--';
+  const activeAccuracy = selectedTech?.accuracy || (hasSelectedGps ? '±8m - 25m Lock' : 'No GPS Signal');
 
   // Roster Component
   const renderRoster = () => (
@@ -440,30 +448,44 @@ export const TrackingScreen: React.FC = () => {
         </TouchableOpacity>
 
         <TouchableOpacity delayPressIn={0}
-          style={[styles.filterTab, filterTab === 'active' && styles.filterTabActive]}
-          onPress={() => setFilterTab('active')}
+          style={[styles.filterTab, filterTab === 'live' && styles.filterTabActive]}
+          onPress={() => setFilterTab('live')}
         >
           <Text
             style={[
               styles.filterTabText,
-              filterTab === 'active' && styles.filterTabTextActive,
+              filterTab === 'live' && styles.filterTabTextActive,
             ]}
           >
-            Active/Online ({activeCount})
+            Active / Online ({liveCount})
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity delayPressIn={0}
-          style={[styles.filterTab, filterTab === 'offline' && styles.filterTabActive]}
-          onPress={() => setFilterTab('offline')}
+          style={[styles.filterTab, filterTab === 'last_known' && styles.filterTabActive]}
+          onPress={() => setFilterTab('last_known')}
         >
           <Text
             style={[
               styles.filterTabText,
-              filterTab === 'offline' && styles.filterTabTextActive,
+              filterTab === 'last_known' && styles.filterTabTextActive,
             ]}
           >
-            Offline ({offlineCount})
+            Offline ({lastKnownCount})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity delayPressIn={0}
+          style={[styles.filterTab, filterTab === 'no_location' && styles.filterTabActive]}
+          onPress={() => setFilterTab('no_location')}
+        >
+          <Text
+            style={[
+              styles.filterTabText,
+              filterTab === 'no_location' && styles.filterTabTextActive,
+            ]}
+          >
+            No GPS ({noLocationCount})
           </Text>
         </TouchableOpacity>
       </View>
@@ -591,23 +613,6 @@ export const TrackingScreen: React.FC = () => {
     <View style={styles.rightColumn}>
       {/* Interactive Map Container */}
       <View style={styles.mapFrame}>
-        {/* Floating Top Overview Pill */}
-        <View style={styles.mapFloatingTopBadge}>
-          <View style={selectedTech?.isOnline ? styles.greenMiniDot : styles.greyMiniDot} />
-          <Text style={styles.mapFloatingTopText} numberOfLines={1}>
-            {selectedTech
-              ? `${selectedTech.name} (${selectedTech.isOnline ? 'Online' : 'Offline'}) • ${selectedTech.lastLocationUpdate || selectedTech.lastSeen || 'Last Known'}`
-              : `Fleet Overview: ${activeCount} Online • ${offlineCount} Offline`}
-          </Text>
-          <TouchableOpacity delayPressIn={0}
-            style={styles.floatingShowAllBtn}
-            onPress={handleViewAllOnMap}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.floatingShowAllText}>Show All</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Floating Warning Pill if Selected Tech has No GPS */}
         {selectedTech && !selectedTech.hasGps && (
           <View style={styles.noGpsFloatingBanner}>
@@ -618,79 +623,15 @@ export const TrackingScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Pure Native React Native MapView */}
-        <MapView
-          ref={mapRef}
+        {/* Mappls Map Maharashtra Fleet Radar */}
+        <MaharashtraFleetMap
+          substations={substations}
+          technicians={displayedTechnicians}
+          selectedTech={selectedTech}
+          onSelectTech={(tech: any) => handleSelectTechnician(tech)}
           style={styles.mapView}
-          initialRegion={{
-            latitude: selectedTech?.latitude || userLocation?.latitude || 12.9626,
-            longitude: selectedTech?.longitude || userLocation?.longitude || 77.5936,
-            latitudeDelta: 0.012,
-            longitudeDelta: 0.012,
-          }}
-          showsUserLocation={false}
-          showsMyLocationButton={false}
-        >
-          {/* 1. Substation Sites & Geofence Circles */}
-          {substations.map((s) => (
-            <React.Fragment key={s.id}>
-              <Circle
-                center={{ latitude: s.latitude, longitude: s.longitude }}
-                radius={s.radiusMeters || 500}
-                fillColor="rgba(220, 38, 38, 0.15)"
-                strokeColor="#DC2626"
-                strokeWidth={2}
-              />
-              <Marker
-                coordinate={{ latitude: s.latitude, longitude: s.longitude }}
-                title={`${s.name} (Substation)`}
-                description={`${s.code} • 500m Geofence`}
-                pinColor="#DC2626"
-              />
-            </React.Fragment>
-          ))}
-
-          {/* 2. All Employees Last Known / Live GPS Locations (Distinct styling for Online vs Offline) */}
-          {displayedTechnicians.map((tech) => {
-            const isSelected = selectedTech?.id === tech.id;
-            const isOnline = Boolean(tech.isOnline || tech.status === 'online' || tech.status === 'on_duty_inside' || tech.status === 'on_duty_outside');
-            // Online = Vibrant Green (#10B981), Offline = Slate Grey (#64748B), Selected = Vibrant Blue (#2563EB)
-            const pinColor = isSelected ? '#2563EB' : isOnline ? '#10B981' : '#64748B';
-            const markerTitle = isOnline
-              ? `🟢 LIVE: ${tech.name} (${tech.employeeId})`
-              : `⚪ LAST KNOWN: ${tech.name} (${tech.employeeId})`;
-            const markerDesc = `${tech.designation || 'Field Staff'} • ${isOnline ? 'Online (Real-Time)' : 'Offline (Last Known)'} • ${tech.lastLocationUpdate || tech.lastSeen || ''}`;
-
-            return (
-              <Marker
-                key={tech.id}
-                coordinate={{ latitude: tech.latitude!, longitude: tech.longitude! }}
-                title={markerTitle}
-                description={markerDesc}
-                pinColor={pinColor}
-                onPress={() => handleSelectTechnician(tech)}
-              />
-            );
-          })}
-
-          {/* 3. User's Own Device Last Known Location Marker (Admin) */}
-          {userLocation ? (
-            <Marker
-              coordinate={{ latitude: userLocation.latitude, longitude: userLocation.longitude }}
-              title="My Device Location (Admin)"
-              description={`GPS: ${userLocation.latitude.toFixed(6)}, ${userLocation.longitude.toFixed(6)}`}
-              pinColor="#2563EB"
-            />
-          ) : null}
-        </MapView>
-
-        {/* Floating Bottom Info Pill */}
-        <View style={styles.mapFloatingBottomBadge} pointerEvents="none">
-          <View style={styles.greenMiniDot} />
-          <Text style={styles.mapFloatingBottomText} numberOfLines={1}>
-            Real-Time GPS Tracking • React Native Maps
-          </Text>
-        </View>
+          showDistrictSelector={true}
+        />
       </View>
 
       {/* Quick Active Personnel Chips on Mobile */}
@@ -789,7 +730,12 @@ export const TrackingScreen: React.FC = () => {
             <View style={styles.inspectionHeader}>
               <View style={styles.inspectionAvatarWrap}>
                 <Text style={styles.inspectionAvatarText}>
-                  {selectedTech.name.split(' ').map((w) => w[0]).join('').substring(0, 2).toUpperCase()}
+                  {(selectedTech.name || 'Technician')
+                    .split(' ')
+                    .map((w) => w[0])
+                    .join('')
+                    .substring(0, 2)
+                    .toUpperCase()}
                 </Text>
               </View>
 
@@ -866,27 +812,31 @@ export const TrackingScreen: React.FC = () => {
               {/* 3. Last Known Location */}
               <View style={styles.inspectionDetailRow}>
                 <View style={styles.inspectionIconCircle}>
-                  <MapPin size={13} color="#D97706" />
+                  <MapPin size={13} color={hasSelectedGps ? '#D97706' : '#94A3B8'} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.inspectionFieldLabel}>LAST KNOWN LOCATION</Text>
-                  <Text style={styles.inspectionFieldValue} numberOfLines={2}>
-                    {selectedTech.locationName || selectedTech.assignedSiteName || 'Site Location'}
+                  <Text style={[styles.inspectionFieldValue, !hasSelectedGps && { color: '#64748B' }]} numberOfLines={2}>
+                    {hasSelectedGps
+                      ? (selectedTech.locationName || selectedTech.assignedSiteName || 'Site Location')
+                      : 'LOCATION NOT AVAILABLE - No GPS telemetry logged yet'}
                   </Text>
                   <Text style={styles.inspectionCoordsSub}>
-                    GPS: {activeLat}, {activeLon}
+                    GPS: {hasSelectedGps ? `${activeLat}, ${activeLon}` : 'Coordinates Not Available'}
                   </Text>
                 </View>
-                <TouchableOpacity delayPressIn={0}
-                  style={[styles.copyGpsInlineBtn, copyFeedback && styles.copyGpsInlineSuccess]}
-                  onPress={handleCopyGPS}
-                  activeOpacity={0.8}
-                >
-                  {copyFeedback ? <Check size={11} color="#15803D" /> : <Copy size={11} color="#475569" />}
-                  <Text style={[styles.copyGpsInlineText, copyFeedback && { color: '#15803D' }]}>
-                    {copyFeedback ? 'Copied' : 'Copy'}
-                  </Text>
-                </TouchableOpacity>
+                {hasSelectedGps && (
+                  <TouchableOpacity delayPressIn={0}
+                    style={[styles.copyGpsInlineBtn, copyFeedback && styles.copyGpsInlineSuccess]}
+                    onPress={handleCopyGPS}
+                    activeOpacity={0.8}
+                  >
+                    {copyFeedback ? <Check size={11} color="#15803D" /> : <Copy size={11} color="#475569" />}
+                    <Text style={[styles.copyGpsInlineText, copyFeedback && { color: '#15803D' }]}>
+                      {copyFeedback ? 'Copied' : 'Copy'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* 4. Last Location Update Date and Time */}
@@ -897,7 +847,9 @@ export const TrackingScreen: React.FC = () => {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.inspectionFieldLabel}>LAST LOCATION UPDATE DATE & TIME</Text>
                   <Text style={styles.inspectionFieldValue}>
-                    {selectedTech.lastLocationUpdate || `${selectedTech.lastLocationDate || 'Today'} at ${selectedTech.lastLocationTime || selectedTech.lastSeen || '--'}`}
+                    {hasSelectedGps
+                      ? (selectedTech.lastLocationUpdate || `${selectedTech.lastLocationDate || 'Today'} at ${selectedTech.lastLocationTime || selectedTech.lastSeen || '--'}`)
+                      : 'No updates recorded'}
                   </Text>
                 </View>
               </View>
@@ -910,13 +862,13 @@ export const TrackingScreen: React.FC = () => {
           {/* Metric 1 */}
           <View style={styles.metricBox}>
             <Text style={styles.metricLabel}>LAST KNOWN GPS COORDINATES</Text>
-            <Text style={styles.metricCoords} numberOfLines={1}>
-              {activeLat}, {activeLon}
+            <Text style={[styles.metricCoords, !hasSelectedGps && { fontSize: 11, color: '#64748B' }]} numberOfLines={1}>
+              {hasSelectedGps ? `${activeLat}, ${activeLon}` : 'LOCATION NOT AVAILABLE'}
             </Text>
             <View style={styles.metricSubRow}>
-              <View style={styles.greenMiniDot} />
+              <View style={[styles.greenMiniDot, !hasSelectedGps && { backgroundColor: '#94A3B8' }]} />
               <Text style={styles.metricSubText} numberOfLines={1}>
-                Accuracy: {activeAccuracy}
+                {hasSelectedGps ? `Accuracy: ${activeAccuracy}` : 'No GPS telemetry logged yet'}
               </Text>
             </View>
           </View>
@@ -978,11 +930,16 @@ export const TrackingScreen: React.FC = () => {
           <View style={styles.desktopHeaderRight}>
             <View style={styles.onDutyPill}>
               <View style={styles.greenMiniDot} />
-              <Text style={styles.onDutyText}>{activeCount} On Duty</Text>
+              <Text style={styles.onDutyText}>{liveCount} Live GPS</Text>
+            </View>
+
+            <View style={[styles.onDutyPill, { backgroundColor: '#F1F5F9', borderColor: '#CBD5E1' }]}>
+              <View style={[styles.greenMiniDot, { backgroundColor: '#3B82F6' }]} />
+              <Text style={[styles.onDutyText, { color: '#1E293B' }]}>{lastKnownCount} Last Known</Text>
             </View>
 
             <View style={styles.standbyPill}>
-              <Text style={styles.standbyText}>{offlineCount} Standby</Text>
+              <Text style={styles.standbyText}>{noLocationCount} No GPS</Text>
             </View>
 
             <TouchableOpacity delayPressIn={0}
@@ -1055,20 +1012,20 @@ export const TrackingScreen: React.FC = () => {
             <View style={styles.liveBadge}>
               <View style={styles.livePulseDot} />
               <Text style={styles.liveBadgeText} numberOfLines={1}>
-                LIVE 10s RADAR
+                {liveCount} LIVE GPS
               </Text>
             </View>
 
-            <View style={styles.onDutyPill}>
-              <View style={styles.greenMiniDot} />
-              <Text style={styles.onDutyText} numberOfLines={1}>
-                {activeCount} On Duty
+            <View style={[styles.onDutyPill, { backgroundColor: '#F1F5F9', borderColor: '#CBD5E1' }]}>
+              <View style={[styles.greenMiniDot, { backgroundColor: '#3B82F6' }]} />
+              <Text style={[styles.onDutyText, { color: '#1E293B' }]} numberOfLines={1}>
+                {lastKnownCount} Last Known
               </Text>
             </View>
 
             <View style={styles.standbyPill}>
               <Text style={styles.standbyText} numberOfLines={1}>
-                {offlineCount} Standby
+                {noLocationCount} No GPS
               </Text>
             </View>
           </ScrollView>
@@ -1086,7 +1043,7 @@ export const TrackingScreen: React.FC = () => {
                   mobileTab === 'map' && styles.mobileTabBtnTextActive,
                 ]}
               >
-                Live Map ({activeCount})
+                Live Map ({liveCount})
               </Text>
             </TouchableOpacity>
 
@@ -1130,7 +1087,13 @@ export const TrackingScreen: React.FC = () => {
       )}
 
       {/* Navigation Drawer Modal */}
-      {user?.role === 'supervisor' ? <SupervisorDrawerModal /> : <AdminDrawerModal />}
+      {user?.role === 'supervisor' ? (
+        <SupervisorDrawerModal />
+      ) : user?.role === 'technician' ? (
+        <TechnicianDrawerModal />
+      ) : (
+        <AdminDrawerModal />
+      )}
     </View>
   );
 };
@@ -1847,10 +1810,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mapFrame: {
-    height: 380,
+    height: 560,
+    minHeight: 520,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#CBD5E1',
+    overflow: 'hidden',
     position: 'relative',
     backgroundColor: '#F1F5F9',
   },

@@ -1087,13 +1087,16 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
                     <TouchableOpacity delayPressIn={0}
                       style={styles.openNativeMapsBtn}
                       onPress={() => {
-                        const url = `https://www.google.com/maps/search/?api=1&query=${mapLat},${mapLng}`;
-                        Linking.openURL(url).catch((err) => console.warn('Cannot open maps url', err));
+                        const url = `https://maps.mappls.com/?point=${mapLat},${mapLng}`;
+                        Linking.openURL(url).catch(() => {
+                          const fallbackUrl = `https://www.google.com/maps/search/?api=1&query=${mapLat},${mapLng}`;
+                          Linking.openURL(fallbackUrl).catch((err) => console.warn('Cannot open maps url', err));
+                        });
                       }}
                       activeOpacity={0.8}
                     >
                       <Navigation size={14} color="#FFFFFF" />
-                      <Text style={styles.openNativeMapsText}>Open in Google Maps</Text>
+                      <Text style={styles.openNativeMapsText}>Open in Mappls</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity delayPressIn={0}

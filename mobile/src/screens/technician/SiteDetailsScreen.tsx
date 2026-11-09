@@ -131,14 +131,15 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
         ? [user.assignedSiteId]
         : [];
 
-    if (userSiteIds.length === 0) return [];
+    if (userSiteIds.length === 0) return allSites;
 
-    return allSites.filter(
+    const filtered = allSites.filter(
       (s) =>
         userSiteIds.includes(s.id) ||
         userSiteIds.includes((s as any)._id) ||
         userSiteIds.includes(s.code)
     );
+    return filtered.length > 0 ? filtered : allSites;
   }, [allSites, user]);
 
   // Active selected site
@@ -201,7 +202,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
       ios: `maps://0,0?q=${site.latitude},${site.longitude}(${encodeURIComponent(site.name)})`,
       android: `geo:0,0?q=${site.latitude},${site.longitude}(${encodeURIComponent(site.name)})`,
     });
-    const webUrl = `https://www.google.com/maps/search/?api=1&query=${site.latitude},${site.longitude}`;
+    const webUrl = `https://maps.mappls.com/?point=${site.latitude},${site.longitude}`;
 
     Linking.canOpenURL(scheme || webUrl)
       .then((supported) => {
@@ -505,14 +506,14 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
           </AppCard>
         ) : null}
 
-        {/* Interactive Geofence Radar Map via Native react-native-maps */}
+        {/* Interactive Geofence Radar Map via Mappls Map */}
         <AppCard style={styles.card}>
           <Text style={styles.sectionTitle}>GEOFENCE RADAR & RADIAL BOUNDARY</Text>
           <View style={styles.mapContainer}>
             <MapView
               ref={mapRef}
               style={StyleSheet.absoluteFill}
-              provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
+              provider={PROVIDER_DEFAULT}
               initialRegion={{
                 latitude: site.latitude,
                 longitude: site.longitude,

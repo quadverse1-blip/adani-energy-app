@@ -17,7 +17,7 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
   technicians,
   selectedTech,
   onSelectTech,
-  center = { latitude: 12.9626, longitude: 77.5936, zoom: 16 },
+  center = { latitude: 19.7515, longitude: 75.7139, zoom: 6 },
 }) => {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
@@ -173,36 +173,71 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
       background: #F8FAFC !important;
       color: #1E63F0 !important;
     }
-    .leaflet-control-attribution {
-      background: rgba(255, 255, 255, 0.85) !important;
-      backdrop-filter: blur(4px);
-      padding: 3px 8px !important;
-      font-size: 10px !important;
-      color: #64748B !important;
-      border-top-left-radius: 6px;
+    .leaflet-control-attribution,
+    .leaflet-control-attribution a,
+    div[class*="attrib"] {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      width: 0 !important;
+      height: 0 !important;
     }
-    .leaflet-control-attribution a {
-      color: #2563EB !important;
-      text-decoration: none !important;
+    .mappls-brand-badge {
+      position: absolute !important;
+      bottom: 8px !important;
+      left: 8px !important;
+      z-index: 99999 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      background: #FFFFFF !important;
+      padding: 3px 8px !important;
+      border-radius: 4px !important;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.22) !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      color: #0F172A !important;
+      pointer-events: none !important;
+      border: 1px solid #E2E8F0 !important;
+    }
+    .mappls-brand-badge .logo-accent {
+      color: #1E40AF;
+      font-weight: 800;
+      margin-right: 2px;
+    }
+    .mappls-brand-badge .dot-accent {
+      color: #DC2626;
+      margin-right: 4px;
+    }
+    .mappls-brand-badge .sub-accent {
+      color: #64748B;
+      font-size: 10px;
+      font-weight: 600;
+      border-left: 1px solid #CBD5E1;
+      padding-left: 4px;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div class="mappls-brand-badge">
+    <span class="logo-accent">Mappls</span><span class="dot-accent">●</span>
+    <span class="sub-accent">MapmyIndia</span>
+  </div>
 
   <script>
     var map = L.map('map', {
       center: [${centerLat}, ${centerLon}],
       zoom: ${centerZoom},
       zoomControl: true,
-      attributionControl: true
+      attributionControl: false
     });
 
-    // OpenStreetMap high-speed distributed tile mirror with Esri auto-fallback
     var osmTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       subdomains: ['a', 'b', 'c'],
-      attribution: '<a href="https://leafletjs.com" target="_blank">Leaflet</a> | &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors | MapmyIndia (Mappls) GIS'
+      attribution: ''
     }).addTo(map);
 
     osmTile.on('tileerror', function(error, tile) {

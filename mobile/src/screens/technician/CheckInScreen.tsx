@@ -12,6 +12,7 @@ import {
   Modal,
   Platform,
   Linking,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -45,12 +46,14 @@ import {
   Mail,
   UserCheck,
   Image as ImageIcon,
+  Search,
 } from 'lucide-react-native';
 import MapView, { Marker, Circle, Polyline, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from '../../components/common/AppMapView';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useAttendanceStore } from '../../store/useAttendanceStore';
 import { siteService } from '../../services/siteService';
 import { attendanceService } from '../../services/attendanceService';
+import { placesService, NearbyPlace } from '../../services/placesService';
 import { calculateHaversineDistance } from '../../utils/haversine';
 import { triggerHaptic } from '../../utils/haptics';
 import { Substation } from '../../types';
@@ -122,6 +125,16 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
   const cameraRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
   const watchSubRef = useRef<Location.LocationSubscription | null>(null);
+
+  // Map Gesture State (Prevents outer ScrollView from stealing touches while pinching or panning)
+  const [isMapInteracting, setIsMapInteracting] = useState(false);
+  const hasInitiallyFittedRef = useRef(false);
+
+  // Real Nearby Places & Business Search State
+  const [nearbyCategory, setNearbyCategory] = useState<string>('all');
+  const [nearbyQuery, setNearbyQuery] = useState<string>('');
+  const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
+  const [loadingPlaces, setLoadingPlaces] = useState<boolean>(false);
 
   useEffect(() => {
     return () => {
@@ -410,9 +423,18 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     }
   }, [selectedSite, latitude, longitude]);
 
+  // Reset fit flag when selected substation changes
   useEffect(() => {
-    fitMapToBoth();
-  }, [fitMapToBoth]);
+    hasInitiallyFittedRef.current = false;
+  }, [selectedSite?.id]);
+
+  // Only auto-fit ONCE when site or live coordinates are first loaded, preventing snap-backs when user zooms/pans
+  useEffect(() => {
+    if (!hasInitiallyFittedRef.current && selectedSite && latitude !== 0 && longitude !== 0) {
+      hasInitiallyFittedRef.current = true;
+      fitMapToBoth();
+    }
+  }, [selectedSite, latitude, longitude, fitMapToBoth]);
 
   // Turn-by-Turn Navigation from My Device to Site
   const handleOpenDirections = () => {
@@ -425,12 +447,20 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     });
   };
 
-  // Zoom Map In/Out
+  // Zoom Map In/Out (Directly zooms Map without snapping or resetting position)
   const handleZoom = (zoomIn: boolean) => {
-    if (mapRef.current && selectedSite) {
+    if (mapRef.current) {
+      if (zoomIn && typeof mapRef.current.zoomIn === 'function') {
+        mapRef.current.zoomIn();
+        return;
+      }
+      if (!zoomIn && typeof mapRef.current.zoomOut === 'function') {
+        mapRef.current.zoomOut();
+        return;
+      }
       const factor = zoomIn ? 0.5 : 2.0;
-      const targetLat = latitude !== 0 ? (latitude + selectedSite.latitude) / 2 : selectedSite.latitude;
-      const targetLon = longitude !== 0 ? (longitude + selectedSite.longitude) / 2 : selectedSite.longitude;
+      const targetLat = latitude !== 0 && selectedSite ? (latitude + selectedSite.latitude) / 2 : selectedSite?.latitude || 19.7515;
+      const targetLon = longitude !== 0 && selectedSite ? (longitude + selectedSite.longitude) / 2 : selectedSite?.longitude || 75.7139;
       mapRef.current.animateToRegion(
         {
           latitude: targetLat,
@@ -442,6 +472,39 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
       );
     }
   };
+
+  // Fetch Real Maharashtra Nearby Places & POIs around Employee Coordinates
+  const fetchNearby = useCallback(async (cat: string = nearbyCategory, queryText?: string) => {
+    const searchLat = latitude !== 0 ? latitude : selectedSite?.latitude;
+    const searchLon = longitude !== 0 ? longitude : selectedSite?.longitude;
+    if (!searchLat || !searchLon) return;
+
+    try {
+      setLoadingPlaces(true);
+      const res = await placesService.getNearbyPlaces(
+        searchLat,
+        searchLon,
+        2500,
+        cat === 'all' ? undefined : cat,
+        queryText || (nearbyQuery.trim().length > 0 ? nearbyQuery.trim() : undefined),
+        30
+      );
+      if (res && res.places) {
+        setNearbyPlaces(res.places);
+      }
+    } catch (err) {
+      console.warn('[CheckInScreen] fetchNearby error:', err);
+    } finally {
+      setLoadingPlaces(false);
+    }
+  }, [latitude, longitude, selectedSite, nearbyCategory, nearbyQuery]);
+
+  // Trigger nearby search whenever category changes or initial GPS is obtained
+  useEffect(() => {
+    if ((latitude !== 0 || selectedSite) && nearbyCategory !== 'all') {
+      fetchNearby(nearbyCategory);
+    }
+  }, [nearbyCategory, latitude, selectedSite?.id]);
 
   // Open Camera Flow when user is Inside Geofence (Photo is optional)
   const handleOpenCheckIn = () => {
@@ -520,20 +583,15 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
         let photo: any;
         try {
           photo = await cameraRef.current.takePictureAsync({
-            quality: 0.7,
-            skipProcessing: true,
-            base64: true,
+            quality: 0.5,
+            skipProcessing: false,
           });
         } catch {
           photo = await cameraRef.current.takePictureAsync({
-            quality: 0.7,
-            skipProcessing: false,
-            base64: true,
+            quality: 0.5,
           });
         }
-        const photoData = photo.base64
-          ? (photo.base64.startsWith('data:') ? photo.base64 : `data:image/jpeg;base64,${photo.base64}`)
-          : photo.uri;
+        const photoData = photo.uri || (photo.base64 ? `data:image/jpeg;base64,${photo.base64}` : null);
         setCapturedPhotoUri(photoData);
         triggerHaptic('success');
       } catch (e: any) {
@@ -670,6 +728,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
       </View>
 
       <ScrollView
+        scrollEnabled={!isMapInteracting}
         style={styles.mainScroll}
         contentContainerStyle={[
           styles.content,
@@ -898,12 +957,17 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
             ) : null}
 
             {/* Radar Map Container Showing Device Location to Site Location */}
-            <View style={styles.mapContainer}>
+            <View
+              style={styles.mapContainer}
+              onTouchStart={() => setIsMapInteracting(true)}
+              onTouchEnd={() => setIsMapInteracting(false)}
+              onTouchCancel={() => setIsMapInteracting(false)}
+            >
               {selectedSite && (
                 <MapView
                   ref={mapRef}
                   style={StyleSheet.absoluteFill}
-                  provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
+                  provider={PROVIDER_DEFAULT}
                   initialRegion={{
                     latitude: latitude !== 0 ? (latitude + selectedSite.latitude) / 2 : selectedSite.latitude,
                     longitude: longitude !== 0 ? (longitude + selectedSite.longitude) / 2 : selectedSite.longitude,
@@ -938,15 +1002,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                     description={`Geofence: ${selectedSite.radiusMeters || 500}m • ${selectedSite.code}`}
                     zIndex={10}
                     anchor={{ x: 0.5, y: 1.0 }}
-                  >
-                    <View style={styles.siteMarkerContainer}>
-                      <View style={styles.substationMapPill}>
-                        <Building2 size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
-                        <Text style={styles.substationMapPillText}>{selectedSite.name}</Text>
-                      </View>
-                      <View style={styles.siteMarkerStem} />
-                    </View>
-                  </Marker>
+                  />
 
                   {/* My Device Location Marker (Real Live GPS) */}
                   {latitude !== 0 && longitude !== 0 && (
@@ -955,16 +1011,8 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                       title="My Device Location"
                       description={currentAddress || `Accuracy: ±${accuracy.toFixed(1)}m`}
                       zIndex={15}
-                      anchor={{ x: 0.5, y: 1.0 }}
-                    >
-                      <View style={styles.userMarkerContainer}>
-                        <View style={styles.userDeviceMapPill}>
-                          <View style={styles.userDotCircle} />
-                          <Text style={styles.userDeviceMapPillText}>My Device Location</Text>
-                        </View>
-                        <View style={styles.userMarkerStem} />
-                      </View>
-                    </Marker>
+                      anchor={{ x: 0.5, y: 0.5 }}
+                    />
                   )}
 
                   {/* Midpoint Distance Marker along Polyline */}
@@ -974,15 +1022,23 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                         latitude: (latitude + selectedSite.latitude) / 2,
                         longitude: (longitude + selectedSite.longitude) / 2,
                       }}
+                      title={distanceFormatted}
                       anchor={{ x: 0.5, y: 0.5 }}
                       zIndex={8}
-                    >
-                      <View style={styles.routeDistancePill}>
-                        <Navigation size={10} color="#1E40AF" style={{ marginRight: 3, transform: [{ rotate: '45deg' }] }} />
-                        <Text style={styles.routeDistancePillText}>{distanceFormatted}</Text>
-                      </View>
-                    </Marker>
+                    />
                   )}
+
+                  {/* Nearby Real Places Markers */}
+                  {nearbyPlaces.map((np, idx) => (
+                    <Marker
+                      key={`nearby-${np.id || idx}`}
+                      coordinate={{ latitude: np.latitude, longitude: np.longitude }}
+                      title={np.name}
+                      description={`${np.category_label || ''} • ${np.formatted_distance || ''}`}
+                      pinColor={np.category_color || '#2563EB'}
+                      zIndex={6}
+                    />
+                  ))}
 
                   {/* Connecting Route Line between Device Location & Site Location */}
                   {latitude !== 0 && longitude !== 0 && (
@@ -1091,6 +1147,114 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                 <Navigation size={12} color="#1E63F0" style={{ marginRight: 5 }} />
                 <Text style={styles.directionsBtnText}>Directions to Site</Text>
               </TouchableOpacity>
+            </View>
+
+            {/* Real Maharashtra Nearby Places & Business Search Section */}
+            <View style={styles.placesContainer}>
+              <View style={styles.placesHeader}>
+                <View style={styles.placesHeaderTitleRow}>
+                  <MapPin size={15} color="#1E40AF" style={{ marginRight: 6 }} />
+                  <Text style={styles.placesTitle}>Nearby Places & Local Businesses</Text>
+                </View>
+                {loadingPlaces && <ActivityIndicator size="small" color="#1E40AF" />}
+              </View>
+
+              {/* Search Bar */}
+              <View style={styles.searchBarBox}>
+                <Search size={14} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.searchBarInput}
+                  placeholder="Search shops, landmarks, roads..."
+                  placeholderTextColor="#94A3B8"
+                  value={nearbyQuery}
+                  onChangeText={setNearbyQuery}
+                  onSubmitEditing={() => fetchNearby(nearbyCategory, nearbyQuery)}
+                  returnKeyType="search"
+                />
+                {nearbyQuery.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setNearbyQuery('');
+                      fetchNearby(nearbyCategory, '');
+                    }}
+                    style={{ padding: 4 }}
+                  >
+                    <X size={14} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Category Filter Chips */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipsScroll}>
+                {[
+                  { id: 'all', label: 'All', icon: '📍' },
+                  { id: 'fuel', label: 'Petrol & EV', icon: '⛽' },
+                  { id: 'healthcare', label: 'Hospitals', icon: '🏥' },
+                  { id: 'financial', label: 'Banks & ATMs', icon: '🏧' },
+                  { id: 'food', label: 'Food & Cafes', icon: '🍴' },
+                  { id: 'shop', label: 'Shops & Marts', icon: '🛒' },
+                  { id: 'transit', label: 'Stations', icon: '🚉' },
+                ].map((cat) => {
+                  const isActive = nearbyCategory === cat.id;
+                  return (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[styles.categoryChip, isActive && styles.categoryChipActive]}
+                      onPress={() => {
+                        setNearbyCategory(cat.id);
+                        fetchNearby(cat.id);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.categoryChipIcon}>{cat.icon}</Text>
+                      <Text style={[styles.categoryChipText, isActive && styles.categoryChipTextActive]}>
+                        {cat.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Horizontal List of Nearby Places Cards */}
+              {nearbyPlaces.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.placesListScroll}>
+                  {nearbyPlaces.map((place) => (
+                    <TouchableOpacity
+                      key={place.id}
+                      style={styles.placeCard}
+                      onPress={() => {
+                        if (mapRef.current) {
+                          mapRef.current.animateToRegion({
+                            latitude: place.latitude,
+                            longitude: place.longitude,
+                            latitudeDelta: 0.005,
+                            longitudeDelta: 0.005,
+                          }, 400);
+                        }
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.placeCardHeader}>
+                        <View style={[styles.placeCategoryDot, { backgroundColor: place.category_color || '#2563EB' }]} />
+                        <Text style={styles.placeCategoryText}>{place.category_label || place.category}</Text>
+                        <Text style={styles.placeDistanceText}>{place.formatted_distance}</Text>
+                      </View>
+                      <Text style={styles.placeNameText} numberOfLines={1}>{place.name}</Text>
+                      <Text style={styles.placeAddressText} numberOfLines={1}>{place.road || place.city || place.address}</Text>
+                      <TouchableOpacity
+                        style={styles.placeDirectionsBtn}
+                        onPress={() => {
+                          const url = `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`;
+                          Linking.openURL(url);
+                        }}
+                      >
+                        <Navigation size={10} color="#1E40AF" style={{ marginRight: 4 }} />
+                        <Text style={styles.placeDirectionsBtnText}>Directions</Text>
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
             </View>
 
             {/* 3 Telemetry Metrics below Map */}
@@ -2102,6 +2266,140 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#1E63F0',
+  },
+  placesContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  placesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  placesHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  placesTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  searchBarBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginBottom: 8,
+  },
+  searchBarInput: {
+    flex: 1,
+    fontSize: 12,
+    color: '#0F172A',
+    padding: 0,
+  },
+  categoryChipsScroll: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingBottom: 4,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  categoryChipActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#2563EB',
+  },
+  categoryChipIcon: {
+    fontSize: 11,
+    marginRight: 3,
+  },
+  categoryChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  categoryChipTextActive: {
+    color: '#1E40AF',
+    fontWeight: '800',
+  },
+  placesListScroll: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 8,
+  },
+  placeCard: {
+    width: 160,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 8,
+  },
+  placeCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  placeCategoryDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+  },
+  placeCategoryText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748B',
+    flex: 1,
+  },
+  placeDistanceText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#1E40AF',
+  },
+  placeNameText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  placeAddressText: {
+    fontSize: 10,
+    color: '#64748B',
+    marginBottom: 6,
+  },
+  placeDirectionsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 6,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  placeDirectionsBtnText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#1E40AF',
   },
   substationMapPill: {
     flexDirection: 'row',

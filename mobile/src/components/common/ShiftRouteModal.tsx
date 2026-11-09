@@ -20,6 +20,7 @@ import {
   Milestone,
 } from 'lucide-react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from './AppMapView';
+import { routingService } from '../../services/routingService';
 
 export interface ShiftRouteModalProps {
   visible: boolean;
@@ -55,7 +56,7 @@ export const ShiftRouteModal: React.FC<ShiftRouteModalProps> = ({
   checkInCoords,
   checkOutCoords,
 }) => {
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
   const [mapType, setMapType] = useState<'standard' | 'hybrid'>('standard');
   const [routeCoords, setRouteCoords] = useState<LatLng[]>([]);
   const [loadingRoute, setLoadingRoute] = useState(false);
@@ -118,21 +119,18 @@ export const ShiftRouteModal: React.FC<ShiftRouteModalProps> = ({
     const fetchRoadPath = async () => {
       setLoadingRoute(true);
       try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${startLon},${startLat};${endLon},${endLat}?overview=full&geometries=geojson`;
-        const res = await fetch(url);
-        const data = await res.json();
-
-        if (isMounted && data?.routes?.[0]?.geometry?.coordinates?.length > 0) {
-          const coords: LatLng[] = data.routes[0].geometry.coordinates.map((pt: [number, number]) => ({
-            latitude: pt[1],
-            longitude: pt[0],
+        const routeData = await routingService.getRoadRoute(startLat, startLon, endLat, endLon);
+        if (isMounted && routeData.coordinates && routeData.coordinates.length > 0) {
+          const coords: LatLng[] = routeData.coordinates.map((pt) => ({
+            latitude: pt[0],
+            longitude: pt[1],
           }));
           setRouteCoords(coords);
           setLoadingRoute(false);
           return;
         }
       } catch (err) {
-        console.warn('OSRM route fetch failed, using fallback:', err);
+        console.warn('Backend OSRM route fetch failed, using fallback:', err);
       }
 
       if (isMounted) {
@@ -203,10 +201,54 @@ export const ShiftRouteModal: React.FC<ShiftRouteModalProps> = ({
       border: 1px solid rgba(255,255,255,0.2);
       box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
+    .leaflet-control-attribution,
+    div[class*="attrib"] {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+    }
+    .mappls-brand-badge {
+      position: absolute !important;
+      bottom: 8px !important;
+      left: 8px !important;
+      z-index: 99999 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      background: #FFFFFF !important;
+      padding: 3px 8px !important;
+      border-radius: 4px !important;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.22) !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      color: #0F172A !important;
+      pointer-events: none !important;
+      border: 1px solid #E2E8F0 !important;
+    }
+    .mappls-brand-badge .logo-accent {
+      color: #1E40AF;
+      font-weight: 800;
+      margin-right: 2px;
+    }
+    .mappls-brand-badge .dot-accent {
+      color: #DC2626;
+      margin-right: 4px;
+    }
+    .mappls-brand-badge .sub-accent {
+      color: #64748B;
+      font-size: 10px;
+      font-weight: 600;
+      border-left: 1px solid #CBD5E1;
+      padding-left: 4px;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div class="mappls-brand-badge">
+    <span class="logo-accent">Mappls</span><span class="dot-accent">●</span>
+    <span class="sub-accent">MapmyIndia</span>
+  </div>
   <script>
     var coords = ${coordsJson};
     var startLat = ${startLat};

@@ -209,28 +209,23 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
   useEffect(() => {
     if (!liveCoords?.latitude || !liveCoords?.longitude) return;
 
-    dashboardService.pingLocation(
-      liveCoords.latitude,
-      liveCoords.longitude,
-      10,
-      100,
-      substation?.id,
-      substation?.name
-    ).catch(() => {});
-
-    const pingInterval = setInterval(() => {
-      if (liveCoords?.latitude && liveCoords?.longitude) {
-        dashboardService.pingLocation(
+    const sendPing = async () => {
+      try {
+        await dashboardService.pingLocation(
           liveCoords.latitude,
           liveCoords.longitude,
-          10,
+          8,
           100,
           substation?.id,
-          substation?.name
-        ).catch(() => {});
-      }
-    }, 30000);
+          substation?.name,
+          0,
+          0
+        );
+      } catch {}
+    };
 
+    sendPing();
+    const pingInterval = setInterval(sendPing, 30000);
     return () => clearInterval(pingInterval);
   }, [liveCoords?.latitude, liveCoords?.longitude, substation?.id, substation?.name]);
 
@@ -375,13 +370,6 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
   // Manual Check In Trigger: Navigates to Field Shift Check-In screen
   const handleCheckIn = () => {
-    if (!substation) {
-      Alert.alert(
-        'No Substation Assigned',
-        'You do not have an active work site assigned yet. Please contact your Supervisor or Operations Admin to allocate your designated substation.'
-      );
-      return;
-    }
     // 1. Prevent re-checkin if already checked in today
     if (isShiftActive) {
       Alert.alert('Already Checked In', 'You are already checked in. Your shift is currently in progress.');
@@ -417,20 +405,15 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         let photo: any;
         try {
           photo = await cameraRef.current.takePictureAsync({
-            quality: 0.7,
-            skipProcessing: true,
-            base64: true,
+            quality: 0.5,
+            skipProcessing: false,
           });
         } catch {
           photo = await cameraRef.current.takePictureAsync({
-            quality: 0.7,
-            skipProcessing: false,
-            base64: true,
+            quality: 0.5,
           });
         }
-        const photoData = photo.base64
-          ? (photo.base64.startsWith('data:') ? photo.base64 : `data:image/jpeg;base64,${photo.base64}`)
-          : photo.uri;
+        const photoData = photo.uri || (photo.base64 ? `data:image/jpeg;base64,${photo.base64}` : null);
         setCapturedPhotoUri(photoData);
         triggerHaptic('success');
       } catch (e: any) {
@@ -929,6 +912,25 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
               </View>
             </View>
           </View>
+
+          {/* Card 6: Field Fleet Radar */}
+          <TouchableOpacity
+            style={styles.kpiCard}
+            onPress={() => navigation.navigate('Tracking')}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.kpiLabel}>FIELD FLEET RADAR</Text>
+            <Text style={styles.kpiMainValue}>Live GPS</Text>
+            <View style={styles.kpiFooterRow}>
+              <View style={styles.greenDotRow}>
+                <View style={[styles.tinyGreenDot, { backgroundColor: '#2563EB' }]} />
+                <Text style={[styles.kpiSubText, { color: '#2563EB' }]}>View Telemetry</Text>
+              </View>
+              <View style={[styles.kpiIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                <Navigation size={14} color="#2563EB" />
+              </View>
+            </View>
+          </TouchableOpacity>
         </ScrollView>
 
         {/* ============================================================== */}

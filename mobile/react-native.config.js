@@ -1,0 +1,31 @@
+module.exports = {
+  project: {
+    android: {},
+    ios: {},
+  },
+  unstable_reactLegacyComponentNames: [
+    'RCTMGLCamera',
+    'RCTMGLMapView',
+    'RCTMGLMarkerView',
+    'RCTMGLAndroidTextureMapView',
+    'RCTMGLLight',
+    'RCTMGLPointAnnotation',
+    'RCTMGLCallout',
+    'RCTMGLNativeUserLocation',
+    'RCTMGLVectorSource',
+    'RCTMGLShapeSource',
+    'RCTMGLRasterSource',
+    'RCTMGLImageSource',
+    'RCTMGLImages',
+    'RCTMGLFillLayer',
+    'RCTMGLFillExtrusionLayer',
+    'RCTMGLHeatmapLayer',
+    'RCTMGLLineLayer',
+    'RCTMGLCircleLayer',
+    'RCTMGLSymbolLayer',
+    'RCTMGLRasterLayer',
+    'RCTMGLBackgroundLayer',
+    'RCTMGLGeoAnalytics',
+  ],
+};
+

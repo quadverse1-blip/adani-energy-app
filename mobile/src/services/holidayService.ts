@@ -92,6 +92,11 @@ export const holidayService = {
     try {
       const downloadUrl = `${apiClient.defaults.baseURL}/dashboard/holidays/pdf?year=${year}`;
       const destination = new ExpoFile(Paths.document, filename);
+      if (destination.exists) {
+        try {
+          await destination.delete();
+        } catch (_) {}
+      }
 
       const downloadedFile = await ExpoFile.downloadFileAsync(downloadUrl, destination, {
         headers: {

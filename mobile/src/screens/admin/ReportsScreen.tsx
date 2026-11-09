@@ -373,15 +373,20 @@ Synchronized across all dashboards and muster reports.`,
   };
 
   // Print or Export PDF Report
-  const handleExportPDF = () => {
-    if (Platform.OS === 'web') {
-      window.print();
-    } else {
-      Alert.alert(
-        'Export PDF Report',
-        `Generating printable attendance register for ${monthName}.`,
-        [{ text: 'OK' }]
-      );
+  const handleExportPDF = async () => {
+    setExporting(true);
+    try {
+      if (Platform.OS === 'web') {
+        // On Web, give option or download official PDF
+        await reportService.downloadMusterRollPdf(selectedMonth, selectedYear, selectedSiteFilter);
+      } else {
+        await reportService.downloadMusterRollPdf(selectedMonth, selectedYear, selectedSiteFilter);
+      }
+    } catch (err: any) {
+      console.warn('PDF export error:', err);
+      Alert.alert('Export Failed', err.message || 'Could not generate PDF attendance register.');
+    } finally {
+      setExporting(false);
     }
   };
 

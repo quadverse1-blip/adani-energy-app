@@ -1,4 +1,7 @@
-import { apiClient } from './api';
+import { Platform } from 'react-native';
+import { Paths, File as ExpoFile } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { apiClient, getStoredToken } from './api';
 import { CONFIG } from '../config';
 import { SalarySlip, SalaryConfig, SalarySummaryResponse } from '../types';
 
@@ -99,7 +102,39 @@ export const salaryService = {
         setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
         return { success: true, uri: blobUrl };
       }
-      return { success: true };
+
+      // Native Mobile (Android / iOS)
+      try {
+        const token = await getStoredToken();
+        let downloadUrl = `${apiClient.defaults.baseURL}/salary/download/${encodeURIComponent(employeeId)}?month=${month}&year=${year}`;
+        if (token) downloadUrl += `&token=${encodeURIComponent(token)}`;
+
+        const destination = new ExpoFile(Paths.document, fileName);
+        if (destination.exists) {
+          try {
+            await destination.delete();
+          } catch (_) {}
+        }
+
+        const downloadedFile = await ExpoFile.downloadFileAsync(downloadUrl, destination, {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : '',
+          },
+        });
+
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(downloadedFile.uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: `Download ${fileName}`,
+            UTI: 'com.adobe.pdf',
+          });
+        }
+        return { success: true, uri: downloadedFile.uri };
+      } catch (nativeErr: any) {
+        console.warn('Native payslip download error:', nativeErr);
+        return { success: false, error: nativeErr.message || 'Mobile file download failed' };
+      }
     } catch (err: any) {
       return { success: false, error: err.message || 'Download failed' };
     }
