@@ -49,8 +49,6 @@ import { useAdminDrawerStore } from '../../store/useAdminDrawerStore';
 import { AdminDrawerModal } from '../../components/navigation/AdminDrawerModal';
 import { useSupervisorDrawerStore } from '../../store/useSupervisorDrawerStore';
 import { SupervisorDrawerModal } from '../../components/navigation/SupervisorDrawerModal';
-import { useTechnicianDrawerStore } from '../../store/useTechnicianDrawerStore';
-import { TechnicianDrawerModal } from '../../components/navigation/TechnicianDrawerModal';
 import { useAuthStore } from '../../store/useAuthStore';
 import { AppBackButton } from '../../components/common/AppBackButton';
 
@@ -62,15 +60,12 @@ export const TrackingScreen: React.FC = () => {
   const { user } = useAuthStore();
   const { openDrawer: openAdminDrawer } = useAdminDrawerStore();
   const { openDrawer: openSupervisorDrawer } = useSupervisorDrawerStore();
-  const { openDrawer: openTechnicianDrawer } = useTechnicianDrawerStore();
 
   const handleBack = () => {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else if (user?.role === 'supervisor') {
       navigation.navigate('SupervisorDashboard');
-    } else if (user?.role === 'technician') {
-      navigation.navigate('Dashboard');
     } else {
       navigation.navigate('AdminDashboard');
     }
@@ -79,8 +74,6 @@ export const TrackingScreen: React.FC = () => {
   const handleMenuPress = () => {
     if (user?.role === 'supervisor') {
       openSupervisorDrawer('Tracking');
-    } else if (user?.role === 'technician') {
-      openTechnicianDrawer('Tracking');
     } else {
       openAdminDrawer('Tracking');
     }
@@ -1087,13 +1080,7 @@ export const TrackingScreen: React.FC = () => {
       )}
 
       {/* Navigation Drawer Modal */}
-      {user?.role === 'supervisor' ? (
-        <SupervisorDrawerModal />
-      ) : user?.role === 'technician' ? (
-        <TechnicianDrawerModal />
-      ) : (
-        <AdminDrawerModal />
-      )}
+      {user?.role === 'supervisor' ? <SupervisorDrawerModal /> : <AdminDrawerModal />}
     </View>
   );
 };

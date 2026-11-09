@@ -912,25 +912,6 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
               </View>
             </View>
           </View>
-
-          {/* Card 6: Field Fleet Radar */}
-          <TouchableOpacity
-            style={styles.kpiCard}
-            onPress={() => navigation.navigate('Tracking')}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.kpiLabel}>FIELD FLEET RADAR</Text>
-            <Text style={styles.kpiMainValue}>Live GPS</Text>
-            <View style={styles.kpiFooterRow}>
-              <View style={styles.greenDotRow}>
-                <View style={[styles.tinyGreenDot, { backgroundColor: '#2563EB' }]} />
-                <Text style={[styles.kpiSubText, { color: '#2563EB' }]}>View Telemetry</Text>
-              </View>
-              <View style={[styles.kpiIconCircle, { backgroundColor: '#EFF6FF' }]}>
-                <Navigation size={14} color="#2563EB" />
-              </View>
-            </View>
-          </TouchableOpacity>
         </ScrollView>
 
         {/* ============================================================== */}
