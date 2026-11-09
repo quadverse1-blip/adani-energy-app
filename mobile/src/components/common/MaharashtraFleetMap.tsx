@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
   Platform,
   ActivityIndicator,
   ScrollView,
@@ -15,11 +14,8 @@ const WebViewComponent: any = RNWebView;
 
 import {
   Navigation,
-  MapPin,
   Clock,
   Zap,
-  Route,
-  Compass,
 } from 'lucide-react-native';
 import { FleetTechnician, Substation } from '../../types';
 import { routingService, RoadRouteResponse } from '../../services/routingService';
@@ -164,7 +160,7 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
     postToMap('FLY_TO', { lat: dist.lat, lon: dist.lon, zoom: dist.zoom });
   };
 
-  // Build the high-reliability Leaflet HTML with multi-tier tile failover
+  // Build the high-reliability Leaflet HTML with Google & Esri tiles
   const htmlContent = useMemo(() => {
     const sitesJson = JSON.stringify(
       substations.map((s) => ({
@@ -201,6 +197,10 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
       }))
     );
 
+    const initialLat = selectedTech?.latitude ? selectedTech.latitude : MAHARASHTRA_CENTER.latitude;
+    const initialLon = selectedTech?.longitude ? selectedTech.longitude : MAHARASHTRA_CENTER.longitude;
+    const initialZoom = selectedTech?.latitude ? 14 : MAHARASHTRA_CENTER.zoom;
+
     return `
 <!DOCTYPE html>
 <html>
@@ -216,7 +216,7 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #F1F5F9;
+      background: #E5E7EB;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       touch-action: pan-x pan-y pinch-zoom;
       -webkit-touch-callout: none;
@@ -224,7 +224,6 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
       user-select: none;
     }
     
-    /* 100% Suppress all third-party attribution tags */
     .leaflet-control-attribution,
     div[class*="attrib"] {
       display: none !important;
@@ -232,7 +231,116 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
       opacity: 0 !important;
     }
 
-    /* Official Mappls Enterprise Brand Badge */
+    .custom-leaflet-marker {
+      background: transparent !important;
+      border: none !important;
+      overflow: visible !important;
+    }
+
+    /* Substation Marker */
+    .substation-marker-wrap {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      position: relative;
+      left: -50%;
+      top: -100%;
+    }
+    .substation-marker-box {
+      background: #1E40AF;
+      color: #FFFFFF;
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+      border: 1.5px solid #FFFFFF;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .substation-marker-stem {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 7px solid #1E40AF;
+    }
+
+    /* Technician Marker */
+    .tech-marker-wrap {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      position: relative;
+      left: -50%;
+      top: -50%;
+    }
+    .pulse-ring {
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      margin-left: -24px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.3);
+      border: 2px solid rgba(16, 185, 129, 0.8);
+      animation: tech-radar-pulse 2s infinite ease-out;
+      pointer-events: none;
+    }
+    @keyframes tech-radar-pulse {
+      0% { transform: scale(0.5); opacity: 1; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+    .tech-marker-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+      color: #FFFFFF;
+      border: 2.5px solid #FFFFFF;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+      position: relative;
+      z-index: 2;
+    }
+    .tech-marker-dot-live {
+      background: #10B981;
+    }
+    .tech-marker-dot-lastknown {
+      background: #2563EB;
+    }
+    .tech-marker-dot-offline {
+      background: #64748B;
+    }
+    .tech-marker-badge {
+      margin-top: 3px;
+      background: #0F172A;
+      color: #FFFFFF;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.3);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .tech-marker-badge-selected {
+      background: #1E3A8A;
+      border-color: #60A5FA;
+    }
+
+    /* Mappls Official Brand Badge */
     .mappls-brand-badge {
       position: absolute !important;
       bottom: 8px !important;
@@ -244,7 +352,6 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
       padding: 4px 10px !important;
       border-radius: 6px !important;
       box-shadow: 0 1px 4px rgba(0,0,0,0.25) !important;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
       font-size: 11px !important;
       font-weight: 700 !important;
       color: #0F172A !important;
@@ -270,103 +377,6 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
       padding-left: 5px;
     }
 
-    /* Substation Pin */
-    .substation-marker-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      cursor: pointer;
-    }
-    .substation-marker-box {
-      background: #1E63F0;
-      color: #FFFFFF;
-      padding: 3px 8px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: 800;
-      box-shadow: 0 2px 6px rgba(30, 99, 240, 0.45);
-      border: 1.5px solid #FFFFFF;
-      white-space: nowrap;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .substation-marker-stem {
-      width: 0;
-      height: 0;
-      border-left: 5px solid transparent;
-      border-right: 5px solid transparent;
-      border-top: 6px solid #1E63F0;
-    }
-
-    /* Technician Pin */
-    .tech-marker-wrap {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-    }
-    .pulse-ring {
-      position: absolute;
-      top: -10px;
-      left: 50%;
-      margin-left: -22px;
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      background: rgba(16, 185, 129, 0.28);
-      border: 2px solid rgba(16, 185, 129, 0.7);
-      animation: tech-radar-pulse 2s infinite ease-out;
-      pointer-events: none;
-    }
-    @keyframes tech-radar-pulse {
-      0% { transform: scale(0.5); opacity: 1; }
-      100% { transform: scale(1.6); opacity: 0; }
-    }
-    .tech-marker-dot {
-      width: 26px;
-      height: 26px;
-      border-radius: 13px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 800;
-      color: #FFFFFF;
-      border: 2px solid #FFFFFF;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      position: relative;
-      z-index: 2;
-    }
-    .tech-marker-dot-live {
-      background: #10B981;
-    }
-    .tech-marker-dot-lastknown {
-      background: #3B82F6;
-    }
-    .tech-marker-dot-offline {
-      background: #64748B;
-    }
-    .tech-marker-badge {
-      margin-top: 3px;
-      background: #0F172A;
-      color: #FFFFFF;
-      padding: 2px 6px;
-      border-radius: 5px;
-      font-size: 10px;
-      font-weight: 700;
-      white-space: nowrap;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-      border: 1px solid rgba(255,255,255,0.2);
-    }
-    .tech-marker-badge-selected {
-      background: #1E40AF;
-      border-color: #60A5FA;
-    }
-
-    /* Custom Leaflet Zoom Controls */
     .leaflet-bar {
       border: 1px solid #CBD5E1 !important;
       box-shadow: 0 2px 6px rgba(0,0,0,0.18) !important;
@@ -405,44 +415,41 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
     var map = L.map('map', {
       zoomControl: true,
       attributionControl: false
-    }).setView([${MAHARASHTRA_CENTER.latitude}, ${MAHARASHTRA_CENTER.longitude}], ${MAHARASHTRA_CENTER.zoom});
+    }).setView([${initialLat}, ${initialLon}], ${initialZoom});
 
-    // Multi-tier reliable raster tiles with automatic failover
-    var primaryTiles = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-    var fallbackTiles = 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-    var fallbackTiles2 = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+    // Primary High-Performance Road Tiles (Google Maps Roadmap - Fast, Zero-Blocking CDN in India)
+    var primaryTiles = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+    var fallbackTiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+    var fallbackTiles2 = 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
 
     var tileLayer = L.tileLayer(primaryTiles, {
-      maxZoom: 19,
-      crossOrigin: true
+      maxZoom: 20
     }).addTo(map);
 
-    tileLayer.on('tileerror', function(error, tile) {
-      if (!tile.dataset.retried) {
-        tile.dataset.retried = '1';
-        tile.src = fallbackTiles.replace('{z}', error.coords.z).replace('{x}', error.coords.x).replace('{y}', error.coords.y).replace('{r}', '');
-      } else if (tile.dataset.retried === '1') {
-        tile.dataset.retried = '2';
-        tile.src = fallbackTiles2.replace('{z}', error.coords.z).replace('{x}', error.coords.x).replace('{y}', error.coords.y);
+    tileLayer.on('tileerror', function(e) {
+      if (e && e.tile && !e.tile.getAttribute('data-fb')) {
+        e.tile.setAttribute('data-fb', '1');
+        e.tile.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/' + e.coords.z + '/' + e.coords.y + '/' + e.coords.x;
+      } else if (e && e.tile && e.tile.getAttribute('data-fb') === '1') {
+        e.tile.setAttribute('data-fb', '2');
+        e.tile.src = 'https://a.basemaps.cartocdn.com/rastertiles/voyager/' + e.coords.z + '/' + e.coords.x + '/' + e.coords.y + '.png';
       }
     });
 
-    // 1. Render Substation Geofence Circles & Substation Markers
+    // 1. Render Substation Geofence Circles & Substation Pins
     sitesData.forEach(function(site) {
       if (!site.lat || !site.lon) return;
 
-      // 500m Substation Geofence Perimeter
       L.circle([site.lat, site.lon], {
         radius: site.radius || 500,
-        color: '#1E63F0',
+        color: '#1E40AF',
         weight: 2,
         opacity: 0.85,
         dashArray: '5, 5',
-        fillColor: '#1E63F0',
+        fillColor: '#1E40AF',
         fillOpacity: 0.12
       }).addTo(map);
 
-      // Substation Pin
       var pinHtml = '<div class="substation-marker-wrap">' +
         '<div class="substation-marker-box">⚡ ' + site.name + '</div>' +
         '<div class="substation-marker-stem"></div>' +
@@ -450,12 +457,11 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
 
       var subIcon = L.divIcon({
         html: pinHtml,
-        className: '',
-        iconSize: [160, 40],
-        iconAnchor: [80, 40]
+        className: 'custom-leaflet-marker',
+        iconSize: [0, 0]
       });
 
-      L.marker([site.lat, site.lon], { icon: subIcon }).addTo(map);
+      L.marker([site.lat, site.lon], { icon: subIcon, zIndexOffset: 100 }).addTo(map);
     });
 
     // 2. Render Field Technicians
@@ -468,22 +474,25 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
       var dotClass = isLive ? 'tech-marker-dot-live' : (isOnline ? 'tech-marker-dot-lastknown' : 'tech-marker-dot-offline');
       var pulseHtml = isLive ? '<div class="pulse-ring"></div>' : '';
       var badgeClass = tech.isSelected ? 'tech-marker-badge tech-marker-badge-selected' : 'tech-marker-badge';
+      var statusIcon = isLive ? '🟢' : '🔵';
       var initial = (tech.name || 'T').charAt(0).toUpperCase();
 
       var markerHtml = '<div class="tech-marker-wrap">' +
         pulseHtml +
         '<div class="tech-marker-dot ' + dotClass + '">' + initial + '</div>' +
-        '<div class="' + badgeClass + '">' + tech.name + (isLive ? ' 🟢' : ' 🔵') + '</div>' +
+        '<div class="' + badgeClass + '">' + tech.name + ' ' + statusIcon + '</div>' +
         '</div>';
 
       var techIcon = L.divIcon({
         html: markerHtml,
-        className: '',
-        iconSize: [140, 50],
-        iconAnchor: [70, 25]
+        className: 'custom-leaflet-marker',
+        iconSize: [0, 0]
       });
 
-      var marker = L.marker([tech.lat, tech.lon], { icon: techIcon }).addTo(map);
+      var marker = L.marker([tech.lat, tech.lon], {
+        icon: techIcon,
+        zIndexOffset: tech.isSelected ? 1000 : 500
+      }).addTo(map);
 
       marker.on('click', function() {
         notifyNative('SELECT_TECH', { id: tech.id });
@@ -496,7 +505,6 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
     var activeRouteLine = null;
     var activeRouteCasing = null;
     var historyTrailLine = null;
-    var historyMarkers = [];
 
     function setRoadRoute(coords) {
       clearRoadRoute();
@@ -512,7 +520,7 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
       activeRouteCasing = L.polyline(latLngs, {
         color: '#1E3A8A',
         weight: 7,
-        opacity: 0.8,
+        opacity: 0.85,
         lineCap: 'round',
         lineJoin: 'round'
       }).addTo(map);
@@ -556,8 +564,6 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
 
     function clearHistoryTrail() {
       if (historyTrailLine) { map.removeLayer(historyTrailLine); historyTrailLine = null; }
-      historyMarkers.forEach(function(m) { map.removeLayer(m); });
-      historyMarkers = [];
     }
 
     // 4. Message Handler for Dynamic Updates
@@ -583,9 +589,6 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
 
     window.addEventListener('message', handleIncomingMessage);
     document.addEventListener('message', handleIncomingMessage);
-
-    // Initial Auto-Focus on selected technician if provided
-    ${selectedTech?.latitude && selectedTech?.longitude ? `map.setView([${selectedTech.latitude}, ${selectedTech.longitude}], 14);` : ''}
   </script>
 </body>
 </html>
@@ -650,7 +653,7 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
         ) : (
           <WebViewComponent
             ref={webViewRef}
-            source={{ html: htmlContent, baseUrl: 'https://maps.mappls.com' }}
+            source={{ html: htmlContent }}
             style={styles.webView}
             onMessage={handleMessage}
             javaScriptEnabled={true}
@@ -676,7 +679,7 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
               <View
                 style={[
                   styles.statusIndicatorDot,
-                  { backgroundColor: selectedTech.hasGps ? (selectedTech.isLive ? '#10B981' : '#3B82F6') : '#94A3B8' },
+                  { backgroundColor: selectedTech.hasGps ? (selectedTech.isLive ? '#10B981' : '#2563EB') : '#94A3B8' },
                 ]}
               />
               <Text style={styles.floatingRouteTechName} numberOfLines={1}>
