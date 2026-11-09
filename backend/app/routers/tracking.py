@@ -380,12 +380,19 @@ async def get_live_fleet_radar(token_data: dict = Depends(get_current_user_token
             "onDuty": on_duty_count,
             "standby": standby_count
         },
+        "indiaCenter": {
+            "latitude": 22.5937,
+            "longitude": 78.9629,
+            "zoom": 5,
+            "minZoom": 4,
+            "maxZoom": 20
+        },
         "maharashtraCenter": {
-            "latitude": 19.7515,
-            "longitude": 75.7139,
-            "zoom": 6,
-            "minZoom": 5,
-            "maxZoom": 19
+            "latitude": 22.5937,
+            "longitude": 78.9629,
+            "zoom": 5,
+            "minZoom": 4,
+            "maxZoom": 20
         },
         "mapProvider": "Mappls",
         "mapStyle": "https://apis.mappls.com/maps/vector/style",

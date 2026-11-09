@@ -302,13 +302,19 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         // Silently use defaults
       }
 
-      // Load Notifications from Dashboard Service
-      const stats = await dashboardService.getAdminStats();
-      if (stats?.notifications) {
-        setNotifications(stats.notifications);
+      // Load Notifications from Dashboard Service gracefully
+      try {
+        const stats = await dashboardService.getAdminStats();
+        if (stats?.notifications) {
+          setNotifications(stats.notifications);
+        }
+      } catch {
+        // Silently preserve employee notification state
       }
-    } catch (e) {
-      console.warn('Dashboard loadData error:', e);
+    } catch (e: any) {
+      if (e?.response?.status !== 401) {
+        console.warn('Dashboard loadData notice:', e?.message || e);
+      }
     }
   };
 

@@ -1,13 +1,30 @@
 import React, { useEffect } from 'react';
-import { LogBox, Platform } from 'react-native';
+import { LogBox, Platform, NativeModules } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
 
+// 1. Proactively polyfill missing addListener and removeListeners on legacy native modules to eliminate NativeEventEmitter warnings
+if (Platform.OS !== 'web' && NativeModules) {
+  try {
+    Object.keys(NativeModules).forEach((modName) => {
+      const mod = NativeModules[modName];
+      if (mod && typeof mod === 'object') {
+        if (typeof mod.addListener !== 'function') mod.addListener = () => {};
+        if (typeof mod.removeListeners !== 'function') mod.removeListeners = () => {};
+      }
+    });
+  } catch {}
+}
+
 LogBox.ignoreLogs([
+  '`new NativeEventEmitter()`',
+  'new NativeEventEmitter()',
+  'addListener',
+  'removeListeners',
   'Current location is unavailable',
   'User GPS location fetch error',
   'Location provider is unavailable',
-  'new NativeEventEmitter()',
+  'Dashboard loadData error',
 ]);
 
 // Initialize Mappls SDK with cluster ID from app1794051151341i9612916.a.conf / .olf

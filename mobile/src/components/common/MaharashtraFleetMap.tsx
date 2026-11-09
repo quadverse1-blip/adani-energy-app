@@ -51,24 +51,36 @@ import { routingService, RoadRouteResponse } from '../../services/routingService
 import { trackingService, EmployeeLocationHistoryResponse } from '../../services/trackingService';
 import { placesService, NearbyPlace, PlaceCategory } from '../../services/placesService';
 
-const MAHARASHTRA_CENTER = {
-  latitude: 19.7515,
-  longitude: 75.7139,
-  zoom: 6,
+const ALL_INDIA_CENTER = {
+  latitude: 22.5937,
+  longitude: 78.9629,
+  zoom: 5,
 };
 
-const MAHARASHTRA_DISTRICTS = [
-  { name: 'Entire State', lat: 19.7515, lon: 75.7139, zoom: 6 },
+const MAHARASHTRA_CENTER = ALL_INDIA_CENTER;
+
+const INDIA_OPERATIONAL_ZONES = [
+  { name: 'All India', lat: 22.5937, lon: 78.9629, zoom: 5 },
+  { name: 'Gujarat (Adani Hub)', lat: 23.0225, lon: 72.5714, zoom: 10 },
+  { name: 'Maharashtra', lat: 19.7515, lon: 75.7139, zoom: 7 },
   { name: 'Mumbai (BKC)', lat: 19.0657, lon: 72.8687, zoom: 13 },
   { name: 'Navi Mumbai', lat: 19.033, lon: 73.0297, zoom: 12 },
-  { name: 'Thane', lat: 19.2183, lon: 72.9781, zoom: 12 },
-  { name: 'Pune', lat: 18.5204, lon: 73.8567, zoom: 12 },
-  { name: 'Nashik', lat: 19.9975, lon: 73.7898, zoom: 12 },
+  { name: 'Pune (Hinjawadi)', lat: 18.5204, lon: 73.8567, zoom: 12 },
+  { name: 'Mundra Port Grid', lat: 22.8394, lon: 69.7091, zoom: 12 },
+  { name: 'Delhi NCR', lat: 28.6139, lon: 77.2090, zoom: 11 },
+  { name: 'Bengaluru', lat: 12.9716, lon: 77.5946, zoom: 11 },
+  { name: 'Hyderabad', lat: 17.3850, lon: 78.4867, zoom: 11 },
+  { name: 'Chennai', lat: 13.0827, lon: 80.2707, zoom: 11 },
+  { name: 'Kolkata', lat: 22.5726, lon: 88.3639, zoom: 11 },
+  { name: 'Rajasthan', lat: 26.9124, lon: 75.7873, zoom: 11 },
   { name: 'Nagpur', lat: 21.1458, lon: 79.0882, zoom: 12 },
+  { name: 'Nashik', lat: 19.9975, lon: 73.7898, zoom: 12 },
   { name: 'Chh. Sambhajinagar', lat: 19.8762, lon: 75.3433, zoom: 12 },
   { name: 'Kolhapur', lat: 16.705, lon: 74.2433, zoom: 12 },
   { name: 'Solapur', lat: 17.6599, lon: 75.9064, zoom: 12 },
 ];
+
+const MAHARASHTRA_DISTRICTS = INDIA_OPERATIONAL_ZONES;
 
 const SEARCH_RADII = [
   { label: '500 m', value: 500 },
@@ -135,7 +147,7 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
   const iframeRef = useRef<any>(null);
   const mapplsCameraRef = useRef<any>(null);
 
-  const [activeDistrict, setActiveDistrict] = useState<string>('Entire State');
+  const [activeDistrict, setActiveDistrict] = useState<string>('All India');
   const [activeRoute, setActiveRoute] = useState<RoadRouteResponse | null>(null);
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [historyTrail, setHistoryTrail] = useState<EmployeeLocationHistoryResponse | null>(null);

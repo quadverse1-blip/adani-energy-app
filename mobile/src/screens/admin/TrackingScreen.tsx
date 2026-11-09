@@ -920,7 +920,7 @@ export const TrackingScreen: React.FC = () => {
                 <View style={styles.liveBadge}>
                   <View style={styles.livePulseDot} />
                   <Text style={styles.liveBadgeText} numberOfLines={1}>
-                    LIVE 10s TELEMETRY RADAR
+                    ALL-INDIA LIVE TELEMETRY RADAR
                   </Text>
                 </View>
               </View>

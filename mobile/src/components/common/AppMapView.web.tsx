@@ -85,10 +85,10 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     {
       style,
       initialRegion = {
-        latitude: 19.7515,
-        longitude: 75.7139,
-        latitudeDelta: 3.5,
-        longitudeDelta: 3.5,
+        latitude: 22.5937,
+        longitude: 78.9629,
+        latitudeDelta: 16.0,
+        longitudeDelta: 16.0,
       },
       region,
       children,
