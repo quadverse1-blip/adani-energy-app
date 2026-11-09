@@ -154,28 +154,29 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
     try {
       await fetchTodayAttendance();
       const freshUser = await useAuthStore.getState().refreshProfile();
-      let fetchedSites = await siteService.getSites();
-      if (!fetchedSites || fetchedSites.length === 0) {
-        const storeSites = useAttendanceStore.getState().assignedSites;
-        if (storeSites && storeSites.length > 0) {
-          fetchedSites = storeSites;
-        }
+      let fetchedSites: Substation[] = [];
+      try {
+        fetchedSites = await siteService.getSites();
+      } catch (err) {
+        // Fallback on network failure only
+        fetchedSites = useAttendanceStore.getState().assignedSites || [];
       }
-      setSites(fetchedSites);
+      const validSites = Array.isArray(fetchedSites) ? fetchedSites : [];
+      setSites(validSites);
 
       const targetId = route?.params?.targetSiteId;
       const primaryId = targetId || freshUser?.assignedSiteId || user?.assignedSiteId;
-      if (fetchedSites.length > 0) {
+      if (validSites.length > 0) {
         setSelectedSite((prev) => {
           if (targetId) {
-            const matchTarget = fetchedSites.find((s) => s.id === targetId);
+            const matchTarget = validSites.find((s) => s.id === targetId);
             if (matchTarget) return matchTarget;
           }
-          if (prev && fetchedSites.some((s) => s.id === prev.id)) {
-            return fetchedSites.find((s) => s.id === prev.id) || prev;
+          if (prev && validSites.some((s) => s.id === prev.id)) {
+            return validSites.find((s) => s.id === prev.id) || prev;
           }
-          const matchPrimary = primaryId ? fetchedSites.find((s) => s.id === primaryId) : null;
-          return matchPrimary || fetchedSites[0];
+          const matchPrimary = primaryId ? validSites.find((s) => s.id === primaryId) : null;
+          return matchPrimary || validSites[0];
         });
       } else {
         setSelectedSite(null);

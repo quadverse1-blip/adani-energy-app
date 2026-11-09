@@ -256,10 +256,8 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
     if (!selectedEmployee) return;
     setSavingAllocation(true);
     try {
-      const primarySite = selectedPrimarySiteId || (selectedPermittedSiteIds[0] || 'site_pune_01');
-      const permittedSites = selectedPermittedSiteIds.length > 0
-        ? selectedPermittedSiteIds
-        : [primarySite];
+      const primarySite = selectedPrimarySiteId || (selectedPermittedSiteIds.length > 0 ? selectedPermittedSiteIds[0] : undefined);
+      const permittedSites = selectedPermittedSiteIds;
 
       // Call API
       await employeeService.updateEmployee(selectedEmployee.id, {
@@ -276,7 +274,7 @@ export const SupervisorSiteManagementScreen: React.FC = () => {
         )
       );
 
-      const siteName = getSiteName(primarySite);
+      const siteName = primarySite ? getSiteName(primarySite) : 'None';
       Alert.alert(
         'Site Allocation Updated',
         `Successfully updated work sites for ${selectedEmployee.name}.\n\nPrimary Substation: ${siteName}\nPermitted Geofences: ${permittedSites.length} Substation(s).`,

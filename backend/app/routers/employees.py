@@ -550,15 +550,21 @@ async def update_employee(
             
             if "siteAssignments" not in emp or not isinstance(emp.get("siteAssignments"), dict):
                 emp["siteAssignments"] = {}
+            # Prune unassigned/removed sites from siteAssignments
+            emp["siteAssignments"] = {
+                k: v for k, v in emp["siteAssignments"].items()
+                if k in [str(x) for x in site_ids]
+            }
             for s_id in site_ids:
-                emp["siteAssignments"][str(s_id)] = {
-                    "siteId": str(s_id),
-                    "assignedBy": assigner_name,
-                    "assignedByPhone": assigner_phone,
-                    "assignedByRole": assigner_role,
-                    "assignedById": assigner_id,
-                    "assignedAt": now_iso
-                }
+                if str(s_id) not in emp["siteAssignments"]:
+                    emp["siteAssignments"][str(s_id)] = {
+                        "siteId": str(s_id),
+                        "assignedBy": assigner_name,
+                        "assignedByPhone": assigner_phone,
+                        "assignedByRole": assigner_role,
+                        "assignedById": assigner_id,
+                        "assignedAt": now_iso
+                    }
         else:
             emp["assignedBy"] = None
             emp["assignedByPhone"] = None

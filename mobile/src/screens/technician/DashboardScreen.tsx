@@ -313,9 +313,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
   };
 
   useEffect(() => {
-    if (assignedSite) {
-      setSubstation(assignedSite);
-    }
+    setSubstation(assignedSite || null);
   }, [assignedSite]);
 
   useEffect(() => {

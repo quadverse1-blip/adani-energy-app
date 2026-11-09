@@ -40,10 +40,22 @@ async def login(credentials: LoginRequest):
             detail="Account is currently inactive. Please contact Operations Administrator."
         )
 
-    primary_site = user.get("assignedSiteId") or (user.get("assignedSiteIds", [None])[0] if user.get("assignedSiteIds") else None)
-    site_ids = user.get("assignedSiteIds") or []
-    if primary_site and primary_site not in site_ids:
-        site_ids = [primary_site] + site_ids
+    raw_site_ids = list(user.get("assignedSiteIds") or [])
+    primary_candidate = user.get("assignedSiteId")
+    if primary_candidate and primary_candidate not in raw_site_ids:
+        raw_site_ids.insert(0, primary_candidate)
+
+    # Filter strictly to existing, active, non-deleted sites
+    valid_site_ids = []
+    for s_id in raw_site_ids:
+        if s_id:
+            s_obj = db.get_site(str(s_id))
+            if s_obj and s_obj.get("status", "active") != "deleted":
+                if str(s_id) not in valid_site_ids:
+                    valid_site_ids.append(str(s_id))
+
+    primary_site = valid_site_ids[0] if valid_site_ids else None
+    site_ids = valid_site_ids
 
     token_data = {
         "id": user["_id"],
@@ -88,10 +100,22 @@ async def get_current_user_profile(token_data: dict = Depends(get_current_user_t
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    primary_site = user.get("assignedSiteId") or (user.get("assignedSiteIds", [None])[0] if user.get("assignedSiteIds") else None)
-    site_ids = user.get("assignedSiteIds") or []
-    if primary_site and primary_site not in site_ids:
-        site_ids = [primary_site] + site_ids
+    raw_site_ids = list(user.get("assignedSiteIds") or [])
+    primary_candidate = user.get("assignedSiteId")
+    if primary_candidate and primary_candidate not in raw_site_ids:
+        raw_site_ids.insert(0, primary_candidate)
+
+    # Filter strictly to existing, active, non-deleted sites
+    valid_site_ids = []
+    for s_id in raw_site_ids:
+        if s_id:
+            s_obj = db.get_site(str(s_id))
+            if s_obj and s_obj.get("status", "active") != "deleted":
+                if str(s_id) not in valid_site_ids:
+                    valid_site_ids.append(str(s_id))
+
+    primary_site = valid_site_ids[0] if valid_site_ids else None
+    site_ids = valid_site_ids
 
     return UserProfile(
         id=user["_id"],

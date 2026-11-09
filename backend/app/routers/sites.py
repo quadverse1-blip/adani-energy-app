@@ -10,21 +10,39 @@ router = APIRouter(prefix="/sites", tags=["Substations"])
 @router.get("", response_model=List[SiteResponse])
 async def list_sites(token_data: dict = Depends(get_current_user_token)):
     user_role = str(token_data.get("role", "technician")).lower()
-    raw_sites = db.get_all_sites()
+    raw_sites = [s for s in db.get_all_sites() if s and s.get("status", "active") != "deleted"]
     
     # Requirement: Employees should only see the sites assigned to them.
-    # If explicit sites are assigned, strictly filter to them. If none assigned yet, allow operational sites.
+    # If no sites are assigned (or assigned site was removed), employee must see 0 sites.
     if user_role == "technician":
         emp_id = token_data.get("id")
         emp = db.get_employee(emp_id) or db.find_employee_by_identifier(emp_id)
         if emp:
             assigned_ids = set()
             if emp.get("assignedSiteId"):
-                assigned_ids.add(str(emp["assignedSiteId"]))
+                s_obj = db.get_site(str(emp["assignedSiteId"]))
+                if s_obj and s_obj.get("status", "active") != "deleted":
+                    assigned_ids.add(str(emp["assignedSiteId"]))
+                    if s_obj.get("_id"):
+                        assigned_ids.add(str(s_obj["_id"]))
+                    if s_obj.get("id"):
+                        assigned_ids.add(str(s_obj["id"]))
             for s_id in emp.get("assignedSiteIds", []):
-                assigned_ids.add(str(s_id))
-            if assigned_ids:
-                raw_sites = [s for s in raw_sites if str(s.get("_id")) in assigned_ids or str(s.get("id")) in assigned_ids]
+                if s_id:
+                    s_obj = db.get_site(str(s_id))
+                    if s_obj and s_obj.get("status", "active") != "deleted":
+                        assigned_ids.add(str(s_id))
+                        if s_obj.get("_id"):
+                            assigned_ids.add(str(s_obj["_id"]))
+                        if s_obj.get("id"):
+                            assigned_ids.add(str(s_obj["id"]))
+
+            raw_sites = [
+                s for s in raw_sites 
+                if (str(s.get("_id")) in assigned_ids or str(s.get("id")) in assigned_ids)
+            ]
+        else:
+            raw_sites = []
 
     response = []
     emp = None
@@ -165,14 +183,61 @@ async def update_site(
 @router.delete("/{siteId}")
 async def delete_site(
     siteId: str,
-    token_data: dict = Depends(require_roles(["admin"]))
+    token_data: dict = Depends(require_roles(["admin", "supervisor"]))
 ):
     s = db.get_site(siteId)
-    if s:
-        doc_id = s.get("_id") or siteId
-        if doc_id in db.sites:
-            del db.sites[doc_id]
-        if hasattr(db, "delete_firestore_document_async"):
-            db.delete_firestore_document_async("sites", doc_id)
-        return {"message": "Substation deleted successfully"}
-    raise HTTPException(status_code=404, detail="Substation not found")
+    if not s:
+        raise HTTPException(status_code=404, detail="Substation not found")
+
+    doc_id = str(s.get("_id") or s.get("id") or siteId)
+
+    # 1. Mark status as deleted and remove from in-memory cache
+    s["status"] = "deleted"
+    if doc_id in db.sites:
+        del db.sites[doc_id]
+    if hasattr(db, "_raw_sites") and doc_id in db._raw_sites:
+        del db._raw_sites[doc_id]
+
+    # Delete from Firestore sites collection
+    if hasattr(db, "delete_firestore_document_async"):
+        db.delete_firestore_document_async("sites", doc_id)
+    elif hasattr(db, "delete_firestore_document"):
+        db.delete_firestore_document("sites", doc_id)
+
+    # 2. Fully cascade: Unlink deleted site from all employee profiles in database & Firestore
+    for emp_id, emp in list(db.employees.items()):
+        modified = False
+        if emp.get("assignedSiteIds"):
+            old_ids = [str(x) for x in emp["assignedSiteIds"]]
+            if doc_id in old_ids or str(siteId) in old_ids:
+                new_ids = [x for x in old_ids if x != doc_id and x != str(siteId)]
+                emp["assignedSiteIds"] = new_ids
+                modified = True
+
+        cur_assigned = str(emp.get("assignedSiteId") or "")
+        if cur_assigned == doc_id or cur_assigned == str(siteId):
+            remaining = emp.get("assignedSiteIds") or []
+            if remaining:
+                next_id = remaining[0]
+                emp["assignedSiteId"] = next_id
+                nxt_s = db.get_site(next_id)
+                emp["assignedSiteName"] = nxt_s.get("name") if nxt_s else None
+            else:
+                emp["assignedSiteId"] = None
+                emp["assignedSiteName"] = None
+            modified = True
+
+        if isinstance(emp.get("siteAssignments"), dict):
+            for k in [doc_id, str(siteId)]:
+                if k in emp["siteAssignments"]:
+                    del emp["siteAssignments"][k]
+                    modified = True
+
+        if modified:
+            db.employees[emp_id] = emp
+            if hasattr(db, "set_firestore_document_async"):
+                db.set_firestore_document_async("employees", emp.get("_id") or emp_id, emp)
+            elif hasattr(db, "set_firestore_document"):
+                db.set_firestore_document("employees", emp.get("_id") or emp_id, emp)
+
+    return {"message": "Substation deleted successfully and unlinked from all employee rosters"}

@@ -124,22 +124,25 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
   const assignedSites = useMemo(() => {
     if (!allSites || allSites.length === 0) return [];
 
-    const userSiteIds =
-      user?.assignedSiteIds && user.assignedSiteIds.length > 0
-        ? user.assignedSiteIds
-        : user?.assignedSiteId
-        ? [user.assignedSiteId]
-        : [];
+    if (user?.role === 'technician') {
+      const userSiteIds =
+        user?.assignedSiteIds && user.assignedSiteIds.length > 0
+          ? user.assignedSiteIds
+          : user?.assignedSiteId
+          ? [user.assignedSiteId]
+          : [];
 
-    if (userSiteIds.length === 0) return allSites;
+      if (userSiteIds.length === 0) return [];
 
-    const filtered = allSites.filter(
-      (s) =>
-        userSiteIds.includes(s.id) ||
-        userSiteIds.includes((s as any)._id) ||
-        userSiteIds.includes(s.code)
-    );
-    return filtered.length > 0 ? filtered : allSites;
+      return allSites.filter(
+        (s) =>
+          userSiteIds.includes(s.id) ||
+          userSiteIds.includes((s as any)._id) ||
+          userSiteIds.includes(s.code)
+      );
+    }
+
+    return allSites;
   }, [allSites, user]);
 
   // Active selected site

@@ -148,7 +148,7 @@ async def get_today_attendance(
     site_assignments = emp.get("siteAssignments") or {} if emp else {}
     for s_id in assigned_site_ids:
         raw = db.get_site(s_id)
-        if raw:
+        if raw and raw.get("status", "active") != "deleted":
             s_obj = {**raw, "id": raw.get("_id", raw.get("id"))}
             specific_assign = site_assignments.get(str(s_id)) or {}
             
