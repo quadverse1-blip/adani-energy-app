@@ -25,6 +25,7 @@ import {
   Clock,
   Sparkles,
   Building2,
+  Navigation,
 } from 'lucide-react-native';
 import { useTechnicianDrawerStore } from '../../store/useTechnicianDrawerStore';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -79,6 +80,15 @@ const TECHNICIAN_MENU_ITEMS: NavMenuItem[] = [
     icon: Building2,
     badge: 'SITE',
     badgeColor: '#2563EB',
+  },
+  {
+    key: 'Tracking',
+    label: 'Location Tracking',
+    subLabel: 'Field force live telemetry & radar',
+    screenName: 'Tracking',
+    icon: Navigation,
+    badge: 'LIVE',
+    badgeColor: '#10B981',
   },
   {
     key: 'History',

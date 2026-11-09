@@ -281,51 +281,44 @@ async def match_gps_trail_to_road(req: MatchRequest):
         }
     }
 
-@router.get("/india")
 @router.get("/maharashtra")
 async def get_maharashtra_info():
     """
-    Returns initial map settings and major operational hubs across India.
+    Returns initial map settings and major district centers across Maharashtra state.
     """
     return {
-        "state": "All India",
+        "state": "Maharashtra",
         "country": "India",
         "center": {
-            "latitude": 22.5937,
-            "longitude": 78.9629,
-            "zoom": 5,
-            "minZoom": 4,
-            "maxZoom": 20
+            "latitude": 19.7515,
+            "longitude": 75.7139,
+            "zoom": 6,
+            "minZoom": 5,
+            "maxZoom": 19
         },
         "bbox": {
-            "minLatitude": 8.0883,
-            "maxLatitude": 37.0841,
-            "minLongitude": 68.1766,
-            "maxLongitude": 97.4026
+            "minLatitude": 15.6024,
+            "maxLatitude": 22.0284,
+            "minLongitude": 72.6593,
+            "maxLongitude": 80.8909
         },
         "districts": [
-            {"name": "All India", "latitude": 22.5937, "longitude": 78.9629, "code": "IND"},
-            {"name": "Gujarat (Adani Hub)", "latitude": 23.0225, "longitude": 72.5714, "code": "GUJ"},
-            {"name": "Mundra Port Grid", "latitude": 22.8394, "longitude": 69.7091, "code": "MND"},
             {"name": "Mumbai City", "latitude": 18.9388, "longitude": 72.8354, "code": "MUM"},
             {"name": "Mumbai Suburban (BKC)", "latitude": 19.0657, "longitude": 72.8687, "code": "BKC"},
             {"name": "Navi Mumbai", "latitude": 19.0330, "longitude": 73.0297, "code": "NVM"},
             {"name": "Thane", "latitude": 19.2183, "longitude": 72.9781, "code": "THN"},
-            {"name": "Pune (Hinjawadi)", "latitude": 18.5204, "longitude": 73.8567, "code": "PUN"},
-            {"name": "Delhi NCR", "latitude": 28.6139, "longitude": 77.2090, "code": "DEL"},
-            {"name": "Bengaluru", "latitude": 12.9716, "longitude": 77.5946, "code": "BLR"},
-            {"name": "Hyderabad", "latitude": 17.3850, "longitude": 78.4867, "code": "HYD"},
-            {"name": "Chennai", "latitude": 13.0827, "longitude": 80.2707, "code": "MAA"},
-            {"name": "Kolkata", "latitude": 22.5726, "longitude": 88.3639, "code": "CCU"},
-            {"name": "Rajasthan (Jaipur)", "latitude": 26.9124, "longitude": 75.7873, "code": "JAI"},
+            {"name": "Pune", "latitude": 18.5204, "longitude": 73.8567, "code": "PUN"},
             {"name": "Nashik", "latitude": 19.9975, "longitude": 73.7898, "code": "NSK"},
             {"name": "Nagpur", "latitude": 21.1458, "longitude": 79.0882, "code": "NGP"},
             {"name": "Chhatrapati Sambhajinagar", "latitude": 19.8762, "longitude": 75.3433, "code": "CSN"},
             {"name": "Kolhapur", "latitude": 16.7050, "longitude": 74.2433, "code": "KLP"},
-            {"name": "Solapur", "latitude": 17.6599, "longitude": 75.9064, "code": "SLP"}
+            {"name": "Solapur", "latitude": 17.6599, "longitude": 75.9064, "code": "SLP"},
+            {"name": "Amravati", "latitude": 20.9320, "longitude": 77.7523, "code": "AMR"},
+            {"name": "Nanded", "latitude": 19.1383, "longitude": 77.3210, "code": "NED"},
+            {"name": "Jalgaon", "latitude": 21.0077, "longitude": 75.5626, "code": "JLG"}
         ],
         "tileProvider": "Mappls",
-        "styleUrl": "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "styleUrl": "https://apis.mappls.com/maps/vector/style",
         "attribution": "Mappls ● MapmyIndia"
     }
 

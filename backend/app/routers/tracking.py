@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 
 from app.core.database import db
-from app.core.security import get_current_user_token, require_roles
+from app.core.security import get_current_user_token
 from app.utils.haversine import calculate_haversine_distance
 from app.utils.datetime_utils import get_now_ist, get_today_ist_str, is_past_shift_end_auto_checkout
 
@@ -109,7 +109,7 @@ async def ping_location(
     }
 
 @router.get("/live")
-async def get_live_fleet_radar(token_data: dict = Depends(require_roles(["admin", "supervisor"]))):
+async def get_live_fleet_radar(token_data: dict = Depends(get_current_user_token)):
     """
     Comprehensive fleet radar for the entire Maharashtra state.
     Returns:
@@ -380,19 +380,12 @@ async def get_live_fleet_radar(token_data: dict = Depends(require_roles(["admin"
             "onDuty": on_duty_count,
             "standby": standby_count
         },
-        "indiaCenter": {
-            "latitude": 22.5937,
-            "longitude": 78.9629,
-            "zoom": 5,
-            "minZoom": 4,
-            "maxZoom": 20
-        },
         "maharashtraCenter": {
-            "latitude": 22.5937,
-            "longitude": 78.9629,
-            "zoom": 5,
-            "minZoom": 4,
-            "maxZoom": 20
+            "latitude": 19.7515,
+            "longitude": 75.7139,
+            "zoom": 6,
+            "minZoom": 5,
+            "maxZoom": 19
         },
         "mapProvider": "Mappls",
         "mapStyle": "https://apis.mappls.com/maps/vector/style",
@@ -420,19 +413,6 @@ async def get_employee_location_history(
     emp = db.get_employee(employee_id) or db.find_employee_by_identifier(employee_id)
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
-
-    user_role = (token_data.get("role") or "").lower()
-    caller_id = str(token_data.get("id") or "")
-    caller_emp_code = str(token_data.get("employeeId") or "")
-    target_db_id = str(emp.get("_id") or "")
-    target_emp_code = str(emp.get("employeeId") or "")
-
-    # Restrict: regular employees can only view their own location history
-    if user_role not in ["admin", "supervisor"] and caller_id not in [target_db_id, target_emp_code] and caller_emp_code not in [target_db_id, target_emp_code]:
-        raise HTTPException(
-            status_code=403,
-            detail="Access denied. Employees can only view their own location history."
-        )
 
     pings = db.get_location_history(emp.get("_id", employee_id), target_date, limit=limit)
 
@@ -590,19 +570,6 @@ async def get_employee_last_known_location(
     emp = db.get_employee(employee_id) or db.find_employee_by_identifier(employee_id)
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
-
-    user_role = (token_data.get("role") or "").lower()
-    caller_id = str(token_data.get("id") or "")
-    caller_emp_code = str(token_data.get("employeeId") or "")
-    target_db_id = str(emp.get("_id") or "")
-    target_emp_code = str(emp.get("employeeId") or "")
-
-    # Restrict: regular employees can only view their own last known location
-    if user_role not in ["admin", "supervisor"] and caller_id not in [target_db_id, target_emp_code] and caller_emp_code not in [target_db_id, target_emp_code]:
-        raise HTTPException(
-            status_code=403,
-            detail="Access denied. Employees can only view their own last known location."
-        )
 
     all_sites = db.get_all_sites()
     sites_map = {s["_id"]: s for s in all_sites}

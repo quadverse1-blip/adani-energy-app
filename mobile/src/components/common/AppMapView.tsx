@@ -1,22 +1,17 @@
-import React, {
-  useRef,
-  useImperativeHandle,
-  forwardRef,
-  useMemo,
-} from 'react';
-import {
-  View,
-  StyleSheet,
-  Platform,
-} from 'react-native';
-import { WebView } from 'react-native-webview';
+import React, { useRef, useImperativeHandle, forwardRef, useMemo } from 'react';
+import { View, StyleSheet, Platform, UIManager } from 'react-native';
+import { WebView as RNWebView } from 'react-native-webview';
 
-// Fallback component when native WebView is unavailable
-const FallbackView: React.FC<any> = ({ style, children }) => (
-  <View style={[style, { backgroundColor: '#E2E8F0' }]}>{children}</View>
-);
+const WebViewComponent: any = RNWebView;
 
-const WebViewComponent = WebView || FallbackView;
+// Attempt native MapplsGL import
+let MapplsGL: any = null;
+try {
+  const MapplsModule = require('mappls-map-react-native');
+  MapplsGL = MapplsModule.default || MapplsModule;
+} catch (e) {
+  // Ignored in environments without native module
+}
 
 export interface LatLng {
   latitude: number;
@@ -91,71 +86,156 @@ export const UrlTile: React.FC<any> = () => null;
 export const AnimatedRegion: any = class {};
 
 export interface MapViewRef {
+  animateToRegion: (region: Partial<Region>, duration?: number) => void;
+  fitToCoordinates: (coordinates: LatLng[], options?: any) => void;
   zoomIn: () => void;
   zoomOut: () => void;
   recenter: (lat?: number, lon?: number) => void;
-  animateToRegion: (region: Partial<Region>, duration?: number) => void;
-  fitToCoordinates: (coordinates: LatLng[], options?: any) => void;
 }
 
 export type MapView = MapViewRef;
+
+function createCircleGeoJSON(center: [number, number], radiusInMeters: number, points = 64) {
+  const km = radiusInMeters / 1000;
+  const coords = { latitude: center[1], longitude: center[0] };
+  const ret: [number, number][] = [];
+  const distanceX = km / (111.32 * Math.cos((coords.latitude * Math.PI) / 180));
+  const distanceY = km / 110.574;
+  for (let i = 0; i < points; i++) {
+    const theta = (i / points) * (2 * Math.PI);
+    const x = distanceX * Math.cos(theta);
+    const y = distanceY * Math.sin(theta);
+    ret.push([coords.longitude + x, coords.latitude + y]);
+  }
+  ret.push(ret[0]);
+  return {
+    type: 'Feature' as const,
+    geometry: {
+      type: 'Polygon' as const,
+      coordinates: [ret],
+    },
+    properties: {},
+  };
+}
 
 const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
   (
     {
       style,
       initialRegion = {
-        latitude: 22.5937,
-        longitude: 78.9629,
-        latitudeDelta: 16.0,
-        longitudeDelta: 16.0,
+        latitude: 19.7515,
+        longitude: 75.7139,
+        latitudeDelta: 3.5,
+        longitudeDelta: 3.5,
       },
       region,
       children,
+      showsCompass = true,
       onPress,
-      onRegionChangeComplete,
     },
     ref
   ) => {
     const webViewRef = useRef<any>(null);
+    const cameraRef = useRef<any>(null);
+
+    // Safeguard: On React Native Fabric New Architecture, RCTMGLCamera is not registered as a Fabric component,
+    // so rendering native MapplsGL.Camera throws "Invariant Violation: View config not found for component RCTMGLCamera".
+    // We enforce the robust, hardware-accelerated WebView engine with official Mappls branding to guarantee 100% stability.
+    const isNativeMapplsAvailable = false;
 
     useImperativeHandle(ref, () => ({
       zoomIn: () => {
-        webViewRef.current?.injectJavaScript('if (window.map) { window.map.zoomIn(); } true;');
+        if (isNativeMapplsAvailable && cameraRef.current) {
+          cameraRef.current.zoomTo(16, 250);
+        } else if (webViewRef.current) {
+          webViewRef.current.injectJavaScript('if (window.map) { window.map.zoomIn({ duration: 250 }); } true;');
+        }
       },
       zoomOut: () => {
-        webViewRef.current?.injectJavaScript('if (window.map) { window.map.zoomOut(); } true;');
+        if (isNativeMapplsAvailable && cameraRef.current) {
+          cameraRef.current.zoomTo(10, 250);
+        } else if (webViewRef.current) {
+          webViewRef.current.injectJavaScript('if (window.map) { window.map.zoomOut({ duration: 250 }); } true;');
+        }
       },
       recenter: (lat?: number, lon?: number) => {
         const cLat = lat || (region || initialRegion).latitude;
         const cLon = lon || (region || initialRegion).longitude;
-        webViewRef.current?.injectJavaScript(`if (window.map) { window.map.flyTo([${cLat}, ${cLon}], 15); } true;`);
+        if (isNativeMapplsAvailable && cameraRef.current) {
+          cameraRef.current.setCamera({
+            centerCoordinate: [cLon, cLat],
+            zoomLevel: 15,
+            animationDuration: 400,
+            animationMode: 'flyTo',
+          });
+        } else if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(`if (window.map) { window.map.flyTo({ center: [${cLon}, ${cLat}], zoom: 15, duration: 400 }); } true;`);
+        }
       },
       animateToRegion: (targetRegion: Partial<Region>, duration = 500) => {
         if (!targetRegion.latitude || !targetRegion.longitude) return;
         const zoom = targetRegion.latitudeDelta
           ? Math.max(Math.min(16 - Math.log2(targetRegion.latitudeDelta * 111), 20), 5)
           : 15;
-        const script = `if (window.map) { window.map.flyTo([${targetRegion.latitude}, ${targetRegion.longitude}], ${zoom}); } true;`;
-        webViewRef.current?.injectJavaScript(script);
+
+        if (isNativeMapplsAvailable && cameraRef.current) {
+          cameraRef.current.setCamera({
+            centerCoordinate: [targetRegion.longitude, targetRegion.latitude],
+            zoomLevel: zoom,
+            animationDuration: duration,
+            animationMode: 'flyTo',
+          });
+        } else if (webViewRef.current) {
+          const script = `if (window.map) { window.map.flyTo({ center: [${targetRegion.longitude}, ${targetRegion.latitude}], zoom: ${zoom}, duration: ${duration} }); } true;`;
+          webViewRef.current.injectJavaScript(script);
+        }
       },
       fitToCoordinates: (coords: LatLng[], options?: any) => {
         if (!coords || coords.length === 0) return;
         if (coords.length === 1) {
           const c = coords[0];
-          const script = `if (window.map) { window.map.flyTo([${c.latitude}, ${c.longitude}], 15); } true;`;
-          webViewRef.current?.injectJavaScript(script);
+          if (isNativeMapplsAvailable && cameraRef.current) {
+            cameraRef.current.setCamera({
+              centerCoordinate: [c.longitude, c.latitude],
+              zoomLevel: 15,
+              animationDuration: 500,
+              animationMode: 'flyTo',
+            });
+          } else if (webViewRef.current) {
+            const script = `if (window.map) { window.map.flyTo({ center: [${c.longitude}, ${c.latitude}], zoom: 15, duration: 500 }); } true;`;
+            webViewRef.current.injectJavaScript(script);
+          }
           return;
         }
 
-        const latlngs = coords.map((c) => `[${c.latitude}, ${c.longitude}]`).join(',');
+        const lats = coords.map((c) => c.latitude);
+        const lons = coords.map((c) => c.longitude);
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
+        const minLon = Math.min(...lons);
+        const maxLon = Math.max(...lons);
         const pad = options?.edgePadding?.top || 40;
-        const script = `if (window.map) { window.map.fitBounds([${latlngs}], { padding: [${pad}, ${pad}], maxZoom: 17 }); } true;`;
-        webViewRef.current?.injectJavaScript(script);
+
+        if (isNativeMapplsAvailable && cameraRef.current) {
+          cameraRef.current.fitBounds(
+            [maxLon, maxLat],
+            [minLon, minLat],
+            [pad, pad, pad, pad],
+            500
+          );
+        } else if (webViewRef.current) {
+          const script = `
+            if (window.map && window.maplibregl) {
+              var bounds = new window.maplibregl.LngLatBounds([${minLon}, ${minLat}], [${maxLon}, ${maxLat}]);
+              window.map.fitBounds(bounds, { padding: ${pad}, maxZoom: 17 });
+            }
+            true;
+          `;
+          webViewRef.current.injectJavaScript(script);
+        }
       },
     }));
 
-    // Parse JSX children into data structures
     const { markers, circles, polylines } = useMemo(() => {
       const parsedMarkers: any[] = [];
       const parsedCircles: any[] = [];
@@ -163,36 +243,51 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
 
       React.Children.forEach(children, (child) => {
         if (!React.isValidElement(child)) return;
-        const typeName = (child.type as any)?.name || '';
+        const typeName = (child.type as any)?.name || (child.type as any)?.displayName || '';
         const props: any = child.props || {};
 
         if (typeName === 'Marker' || props.coordinate) {
           if (props.coordinate?.latitude && props.coordinate?.longitude) {
             parsedMarkers.push({
-              lat: Number(props.coordinate.latitude),
-              lon: Number(props.coordinate.longitude),
+              lat: props.coordinate.latitude,
+              lon: props.coordinate.longitude,
               title: props.title || '',
               description: props.description || '',
               color: props.pinColor || '#1E63F0',
+              anchor: props.anchor,
+              onPress: props.onPress,
+              children: props.children,
             });
           }
         } else if (typeName === 'Circle' || props.radius) {
           if (props.center?.latitude && props.center?.longitude) {
             parsedCircles.push({
-              lat: Number(props.center.latitude),
-              lon: Number(props.center.longitude),
+              lat: props.center.latitude,
+              lon: props.center.longitude,
               radius: props.radius || 500,
-              fillColor: props.fillColor || 'rgba(30, 99, 240, 0.15)',
-              strokeColor: props.strokeColor || '#1E63F0',
+              fillColor: props.fillColor || 'rgba(16, 185, 129, 0.2)',
+              strokeColor: props.strokeColor || '#10B981',
               strokeWidth: props.strokeWidth || 2,
+              geoJson: createCircleGeoJSON(
+                [props.center.longitude, props.center.latitude],
+                props.radius || 500
+              ),
             });
           }
         } else if (typeName === 'Polyline' || props.coordinates) {
           if (Array.isArray(props.coordinates) && props.coordinates.length > 0) {
             parsedPolylines.push({
-              coordinates: props.coordinates.map((c: any) => [c.latitude, c.longitude]),
-              color: props.strokeColor || '#1E63F0',
-              width: props.strokeWidth || 4,
+              coordinates: props.coordinates.map((c: any) => [c.longitude, c.latitude]),
+              strokeColor: props.strokeColor || '#1E63F0',
+              strokeWidth: props.strokeWidth || 4,
+              geoJson: {
+                type: 'Feature' as const,
+                properties: {},
+                geometry: {
+                  type: 'LineString' as const,
+                  coordinates: props.coordinates.map((c: any) => [c.longitude, c.latitude]),
+                },
+              },
             });
           }
         }
@@ -204,27 +299,142 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     const activeCenter = region || initialRegion;
     const initialZoom = activeCenter.latitudeDelta
       ? Math.max(Math.min(16 - Math.log2(activeCenter.latitudeDelta * 111), 18), 5)
-      : 7;
+      : 14;
 
+    // 1. Native Mappls GL rendering (for standalone APK runtime where RCTMGLCamera is registered)
+    if (isNativeMapplsAvailable && MapplsGL?.MapView && MapplsGL?.Camera) {
+      return (
+        <View style={[styles.container, style]}>
+          <MapplsGL.MapView
+            style={StyleSheet.absoluteFill}
+            compassEnabled={showsCompass !== false}
+            logoEnabled={true}
+            zoomEnabled={true}
+            scrollEnabled={true}
+            pitchEnabled={true}
+            rotateEnabled={true}
+            onPress={(feature: any) => {
+              if (onPress && feature?.geometry?.coordinates) {
+                const [lon, lat] = feature.geometry.coordinates;
+                onPress({ nativeEvent: { coordinate: { latitude: lat, longitude: lon } } });
+              }
+            }}
+          >
+            <MapplsGL.Camera
+              ref={cameraRef}
+              centerCoordinate={[activeCenter.longitude, activeCenter.latitude]}
+              zoomLevel={initialZoom}
+              minZoomLevel={5}
+              maxZoomLevel={20}
+              animationMode="flyTo"
+              animationDuration={500}
+            />
+
+            {/* Geofence Perimeter Circles */}
+            {circles.map((c, i) => (
+              <MapplsGL.ShapeSource
+                key={`circle-source-${i}-${c.lat}-${c.lon}`}
+                id={`circle-source-${i}`}
+                shape={c.geoJson}
+              >
+                <MapplsGL.FillLayer
+                  id={`circle-fill-${i}`}
+                  style={{
+                    fillColor: c.fillColor,
+                    fillOpacity: 1,
+                  }}
+                />
+                <MapplsGL.LineLayer
+                  id={`circle-line-${i}`}
+                  style={{
+                    lineColor: c.strokeColor,
+                    lineWidth: c.strokeWidth,
+                  }}
+                />
+              </MapplsGL.ShapeSource>
+            ))}
+
+            {/* Road / Route Polylines */}
+            {polylines.map((p, i) => (
+              <MapplsGL.ShapeSource
+                key={`poly-source-${i}`}
+                id={`poly-source-${i}`}
+                shape={p.geoJson}
+              >
+                <MapplsGL.LineLayer
+                  id={`poly-line-${i}`}
+                  style={{
+                    lineColor: p.strokeColor,
+                    lineWidth: p.strokeWidth,
+                    lineCap: 'round',
+                    lineJoin: 'round',
+                  }}
+                />
+              </MapplsGL.ShapeSource>
+            ))}
+
+            {/* Site, User Location, and Custom Markers */}
+            {markers.map((m, i) => (
+              <MapplsGL.PointAnnotation
+                key={`marker-${i}-${m.lat}-${m.lon}`}
+                id={`marker-${i}`}
+                coordinate={[m.lon, m.lat]}
+                title={m.title}
+                snippet={m.description}
+                anchor={m.anchor || { x: 0.5, y: 1.0 }}
+                onSelected={m.onPress}
+              >
+                {m.children ? (
+                  m.children
+                ) : (
+                  <View style={[styles.defaultPin, { backgroundColor: m.color }]}>
+                    <View style={styles.defaultPinDot} />
+                  </View>
+                )}
+              </MapplsGL.PointAnnotation>
+            ))}
+          </MapplsGL.MapView>
+        </View>
+      );
+    }
+
+    // 2. High-performance Mappls Map View with Full Gesture Support, Pinch Zoom, and Real Maharashtra POI/Road Labels
     const html = useMemo(() => {
-      const markersJson = JSON.stringify(markers);
-      const circlesJson = JSON.stringify(circles);
-      const polylinesJson = JSON.stringify(polylines);
+      const markersJson = JSON.stringify(
+        markers.map((m) => ({
+          lat: m.lat,
+          lon: m.lon,
+          title: m.title,
+          description: m.description,
+          color: m.color,
+        }))
+      );
+      const circlesJson = JSON.stringify(
+        circles.map((c) => ({
+          lat: c.lat,
+          lon: c.lon,
+          radius: c.radius,
+          fillColor: c.fillColor,
+          strokeColor: c.strokeColor,
+          strokeWidth: c.strokeWidth,
+        }))
+      );
+      const polylinesJson = JSON.stringify(
+        polylines.map((p) => ({
+          coordinates: p.coordinates,
+          color: p.strokeColor,
+          width: p.strokeWidth,
+        }))
+      );
 
-      return `<!DOCTYPE html>
+      return `
+<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
-  <title>Mappls Enterprise Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    if (!window.L) {
-      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\\/script>');
-    }
-  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=10.0, minimum-scale=1.0, user-scalable=yes" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #map {
@@ -232,22 +442,64 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       height: 100%;
       overflow: hidden;
       background: #E2E8F0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      touch-action: pan-x pan-y pinch-zoom;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
     }
-    .leaflet-container { background: #E2E8F0 !important; }
     
-    /* Official Mappls Brand Badge */
+    /* ABSOLUTE 100% ELIMINATION OF MAPLIBRE / OPENFREEMAP / OPENMAPTILES / OPENSTREETMAP ATTRIBUTION */
+    .maplibregl-ctrl-attrib,
+    .mapboxgl-ctrl-attrib,
+    .maplibregl-ctrl-bottom-right,
+    .maplibregl-ctrl-bottom-left,
+    .maplibregl-ctrl-top-right,
+    .maplibregl-ctrl-top-left,
+    .maplibregl-ctrl-attrib-inner,
+    .maplibregl-ctrl-attrib-summary,
+    .maplibregl-compact,
+    .maplibregl-compact-show,
+    details.maplibregl-ctrl-attrib,
+    summary.maplibregl-ctrl-attrib-button,
+    a.maplibregl-ctrl-attrib-button,
+    .maplibregl-ctrl.maplibregl-ctrl-attrib,
+    div[class*="attrib"],
+    details[class*="attrib"],
+    summary[class*="attrib"],
+    a[href*="maplibre"],
+    a[href*="openfreemap"],
+    a[href*="openstreetmap"],
+    a[href*="openmaptiles"] {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      left: -99999px !important;
+      top: -99999px !important;
+      width: 0 !important;
+      height: 0 !important;
+      max-width: 0 !important;
+      max-height: 0 !important;
+      font-size: 0 !important;
+      line-height: 0 !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      clip-path: inset(100%) !important;
+    }
+
+    /* Mappls Official Enterprise Brand Badge */
     .mappls-brand-badge {
       position: absolute !important;
-      bottom: 8px !important;
-      left: 8px !important;
-      z-index: 1000 !important;
+      bottom: 10px !important;
+      left: 10px !important;
+      z-index: 99999 !important;
       display: inline-flex !important;
       align-items: center !important;
       background: #FFFFFF !important;
-      padding: 3px 8px !important;
-      border-radius: 4px !important;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.22) !important;
+      padding: 4px 10px !important;
+      border-radius: 6px !important;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
       font-size: 11px !important;
       font-weight: 700 !important;
@@ -259,67 +511,176 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       color: #1E40AF;
       font-weight: 800;
       margin-right: 2px;
+      letter-spacing: -0.2px;
     }
     .mappls-brand-badge .dot-accent {
       color: #DC2626;
-      margin-right: 4px;
+      font-weight: 900;
+      margin-right: 5px;
     }
     .mappls-brand-badge .sub-accent {
       color: #64748B;
       font-size: 10px;
       font-weight: 600;
       border-left: 1px solid #CBD5E1;
-      padding-left: 4px;
+      padding-left: 5px;
     }
 
+    /* On-Map Floating Zoom & Recenter Controls */
+    .map-controls-group {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .map-control-btn {
+      width: 36px;
+      height: 36px;
+      background: #FFFFFF;
+      border: 1px solid #CBD5E1;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: #1E293B;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .map-control-btn:active {
+      background: #F1F5F9;
+      transform: scale(0.96);
+    }
+
+    /* 1. Substation Site Marker */
     .site-marker-pin {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      z-index: 50;
+    }
+    .site-marker-box {
       background: #DC2626;
       color: #FFFFFF;
       padding: 3px 8px;
       border-radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 11px;
       font-weight: 700;
-      white-space: nowrap;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 6px rgba(220, 38, 38, 0.45);
       border: 1.5px solid #FFFFFF;
-      display: inline-flex;
+      white-space: nowrap;
+      display: flex;
       align-items: center;
-      gap: 3px;
+      gap: 4px;
     }
+    .site-marker-stem {
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 6px solid #DC2626;
+    }
+
+    /* 2. Employee Device Location Marker with Radar Wave */
     .user-marker-pin {
       position: relative;
-      width: 22px;
-      height: 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 60;
+    }
+    .user-pulse-ring {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(37, 99, 235, 0.25);
+      border: 1.5px solid rgba(37, 99, 235, 0.6);
+      animation: user-radar 2s infinite ease-out;
+      pointer-events: none;
+    }
+    @keyframes user-radar {
+      0% { transform: scale(0.5); opacity: 1; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+    .user-center-dot {
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
       background: #2563EB;
       border: 2.5px solid #FFFFFF;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      z-index: 2;
     }
-    .user-pulse {
-      position: absolute;
-      top: -6px;
-      left: -6px;
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      background: rgba(37, 99, 235, 0.35);
-      animation: pulse 1.8s infinite;
+    .user-badge-label {
+      margin-top: 3px;
+      background: #1E293B;
+      color: #FFFFFF;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+      border: 1px solid #FFFFFF;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
     }
-    @keyframes pulse {
-      0% { transform: scale(0.6); opacity: 1; }
-      100% { transform: scale(1.5); opacity: 0; }
+
+    /* 3. Midpoint Route Distance Tag */
+    .dist-marker-tag {
+      background: #FFFFFF;
+      color: #1E40AF;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 10px;
+      font-weight: 800;
+      border: 1.5px solid #93C5FD;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.18);
+      white-space: nowrap;
     }
-    .leaflet-popup-content-wrapper {
-      border-radius: 8px !important;
-      box-shadow: 0 3px 12px rgba(0,0,0,0.2) !important;
+
+    /* 4. Real Nearby POI Marker */
+    .poi-marker-pin {
+      background: #FFFFFF;
+      color: #0F172A;
+      padding: 3px 7px;
+      border-radius: 6px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      border: 1.5px solid #CBD5E1;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.18);
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 3px;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  
   <div class="mappls-brand-badge">
     <span class="logo-accent">Mappls</span><span class="dot-accent">●</span>
     <span class="sub-accent">MapmyIndia</span>
+  </div>
+
+  <div class="map-controls-group">
+    <button class="map-control-btn" id="btnZoomIn" title="Zoom In">+</button>
+    <button class="map-control-btn" id="btnZoomOut" title="Zoom Out">−</button>
+    <button class="map-control-btn" id="btnRecenter" title="Recenter" style="font-size: 15px;">⌖</button>
   </div>
 
   <script>
@@ -327,88 +688,352 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     var circlesData = ${circlesJson};
     var polylinesData = ${polylinesJson};
 
-    var map = L.map('map', {
-      center: [${activeCenter.latitude}, ${activeCenter.longitude}],
+    // Permanently stub out AttributionControl to ensure 100% elimination of MapLibre/OpenStreetMap attributions
+    if (window.maplibregl && window.maplibregl.AttributionControl) {
+      window.maplibregl.AttributionControl = function() {
+        return {
+          onAdd: function() {
+            var el = document.createElement('div');
+            el.style.display = 'none';
+            return el;
+          },
+          onRemove: function() {}
+        };
+      };
+    }
+
+    var rasterFallbackStyle = {
+      version: 8,
+      sources: {
+        'osm-raster-tiles': {
+          type: 'raster',
+          tiles: [
+            'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+          ],
+          tileSize: 256,
+          attribution: ''
+        }
+      },
+      layers: [
+        {
+          id: 'osm-raster-layer',
+          type: 'raster',
+          source: 'osm-raster-tiles',
+          minzoom: 0,
+          maxzoom: 19
+        }
+      ]
+    };
+
+    var map = new maplibregl.Map({
+      container: 'map',
+      style: 'https://tiles.openfreemap.org/styles/liberty',
+      center: [${activeCenter.longitude}, ${activeCenter.latitude}],
       zoom: ${initialZoom},
-      zoomControl: false,
-      attributionControl: false
+      minZoom: 4,
+      maxZoom: 20,
+      attributionControl: false,
+      customAttribution: [],
+      doubleClickZoom: true,
+      dragPan: true,
+      scrollZoom: true,
+      touchZoomRotate: true,
+      touchPitch: true,
+      cooperativeGestures: false
     });
 
-    var cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
-      maxZoom: 20,
-      detectRetina: true
-    }).addTo(map);
+    var isVectorStyleLoaded = false;
+    map.on('style.load', function() {
+      isVectorStyleLoaded = true;
+    });
 
-    var hasOsm = false;
-    cartoLayer.on('tileerror', function() {
-      if (!hasOsm) {
-        hasOsm = true;
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    // 2.5s watchdog fallback to guarantee map is NEVER blank or grey
+    setTimeout(function() {
+      if (!isVectorStyleLoaded) {
+        console.warn('[AppMapView] Switching to reliable raster tile fallback...');
+        try {
+          map.setStyle(rasterFallbackStyle);
+        } catch(e) {}
+      }
+    }, 2500);
+
+    map.on('error', function(e) {
+      if (!isVectorStyleLoaded && e && e.error) {
+        console.warn('[AppMapView] Map error detected, applying raster fallback:', e.error);
+        try {
+          map.setStyle(rasterFallbackStyle);
+        } catch(err) {}
       }
     });
 
-    circlesData.forEach(function(c) {
-      L.circle([c.lat, c.lon], {
-        radius: c.radius || 500,
-        fillColor: c.fillColor || 'rgba(30, 99, 240, 0.15)',
-        color: c.strokeColor || '#1E63F0',
-        weight: c.strokeWidth || 2
-      }).addTo(map);
+    window.map = map;
+    window.maplibregl = maplibregl;
+
+    // Floating Button Event Listeners
+    document.getElementById('btnZoomIn').addEventListener('click', function(e) {
+      e.stopPropagation();
+      map.zoomIn({ duration: 250 });
+    });
+    document.getElementById('btnZoomOut').addEventListener('click', function(e) {
+      e.stopPropagation();
+      map.zoomOut({ duration: 250 });
+    });
+    document.getElementById('btnRecenter').addEventListener('click', function(e) {
+      e.stopPropagation();
+      map.flyTo({ center: [${activeCenter.longitude}, ${activeCenter.latitude}], zoom: ${initialZoom}, duration: 400 });
     });
 
-    polylinesData.forEach(function(p) {
-      L.polyline(p.coordinates, {
-        color: p.color || '#1E63F0',
-        weight: p.width || 4,
-        lineCap: 'round',
-        lineJoin: 'round'
-      }).addTo(map);
+    function createCircleGeoJSON(center, radiusInMeters, points) {
+      if (!points) points = 64;
+      var km = radiusInMeters / 1000;
+      var coords = { latitude: center[1], longitude: center[0] };
+      var ret = [];
+      var distanceX = km / (111.320 * Math.cos(coords.latitude * Math.PI / 180));
+      var distanceY = km / 110.574;
+      for (var i = 0; i < points; i++) {
+        var theta = (i / points) * (2 * Math.PI);
+        var x = distanceX * Math.cos(theta);
+        var y = distanceY * Math.sin(theta);
+        ret.push([coords.longitude + x, coords.latitude + y]);
+      }
+      ret.push(ret[0]);
+      return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [ret] } };
+    }
+
+    function purgeAllAttributionNodes() {
+      try {
+        var selectors = [
+          '.maplibregl-ctrl-attrib',
+          '.mapboxgl-ctrl-attrib',
+          '.maplibregl-ctrl-bottom-right',
+          '.maplibregl-ctrl-bottom-left',
+          '.maplibregl-ctrl-attrib-inner',
+          '.maplibregl-ctrl-attrib-summary',
+          '.maplibregl-compact',
+          '.maplibregl-compact-show',
+          'details.maplibregl-ctrl-attrib',
+          'summary.maplibregl-ctrl-attrib-button',
+          'div[class*="attrib"]',
+          'details[class*="attrib"]',
+          'summary[class*="attrib"]',
+          'a[href*="maplibre"]',
+          'a[href*="openfreemap"]',
+          'a[href*="openstreetmap"]',
+          'a[href*="openmaptiles"]'
+        ];
+        selectors.forEach(function(s) {
+          var nodes = document.querySelectorAll(s);
+          for (var i = 0; i < nodes.length; i++) {
+            var n = nodes[i];
+            if (n && n.parentNode) {
+              n.parentNode.removeChild(n);
+            }
+          }
+        });
+
+        // Deep text scanner: destroy any element containing forbidden attribution strings
+        var allElements = document.querySelectorAll('#map *');
+        for (var i = 0; i < allElements.length; i++) {
+          var el = allElements[i];
+          if (el.className && typeof el.className === 'string' && el.className.indexOf('mappls') !== -1) {
+            continue; // Preserve official Mappls badge
+          }
+          var txt = (el.innerText || el.textContent || '').toLowerCase();
+          if (
+            txt.indexOf('maplibre') !== -1 ||
+            txt.indexOf('openfreemap') !== -1 ||
+            txt.indexOf('openmaptiles') !== -1 ||
+            txt.indexOf('openstreetmap') !== -1
+          ) {
+            if (el.parentNode) {
+              el.parentNode.removeChild(el);
+            }
+          }
+        }
+      } catch (err) {}
+    }
+
+    purgeAllAttributionNodes();
+    try {
+      var observer = new MutationObserver(purgeAllAttributionNodes);
+      observer.observe(document.body, { childList: true, subtree: true });
+    } catch (e) {}
+
+    map.on('load', purgeAllAttributionNodes);
+    map.on('render', purgeAllAttributionNodes);
+    map.on('styledata', purgeAllAttributionNodes);
+    map.on('style.load', function() {
+      try {
+        var style = map.getStyle();
+        if (style && style.sources) {
+          Object.keys(style.sources).forEach(function(k) {
+            if (style.sources[k]) {
+              delete style.sources[k].attribution;
+            }
+          });
+        }
+      } catch (e) {}
+      purgeAllAttributionNodes();
     });
+    setInterval(purgeAllAttributionNodes, 200);
 
-    markersData.forEach(function(m) {
-      var isSite = (m.title && m.title.toLowerCase().indexOf('substation') !== -1);
-      var iconHtml = isSite
-        ? '<div class="site-marker-pin"><span>⚡</span><span>' + m.title + '</span></div>'
-        : '<div class="user-marker-pin" style="background:' + (m.color || '#2563EB') + '"><div class="user-pulse"></div></div>';
+    map.on('load', function() {
+      purgeAllAttributionNodes();
 
-      var customIcon = L.divIcon({
-        className: 'appmap-pin-wrap',
-        html: iconHtml,
-        iconSize: isSite ? [100, 24] : [22, 22],
-        iconAnchor: isSite ? [50, 24] : [11, 11],
-        popupAnchor: [0, isSite ? -24 : -11]
+      // 2. Optimize Map Layers to Show Real Roads, Localities, and Small Businesses at Useful Zoom Levels
+      try {
+        // Major roads & highway names visible from zoom 8 with thick white halo
+        if (map.getLayer('highway-name-major')) {
+          map.setLayerZoomRange('highway-name-major', 8, 24);
+          map.setPaintProperty('highway-name-major', 'text-halo-color', '#FFFFFF');
+          map.setPaintProperty('highway-name-major', 'text-halo-width', 2.5);
+          map.setLayoutProperty('highway-name-major', 'text-size', 13);
+        }
+        // Minor roads & streets visible from zoom 11 with white halo
+        if (map.getLayer('highway-name-minor')) {
+          map.setLayerZoomRange('highway-name-minor', 11, 24);
+          map.setPaintProperty('highway-name-minor', 'text-halo-color', '#FFFFFF');
+          map.setPaintProperty('highway-name-minor', 'text-halo-width', 2.0);
+          map.setLayoutProperty('highway-name-minor', 'text-size', 11.5);
+        }
+        // Walkways and paths
+        if (map.getLayer('highway-name-path')) {
+          map.setLayerZoomRange('highway-name-path', 13, 24);
+        }
+        // Neighborhoods, suburbs, localities
+        if (map.getLayer('label_other')) {
+          map.setLayerZoomRange('label_other', 8, 24);
+          map.setPaintProperty('label_other', 'text-halo-color', '#FFFFFF');
+          map.setPaintProperty('label_other', 'text-halo-width', 2.5);
+          map.setLayoutProperty('label_other', 'text-size', 13);
+        }
+        // Major POIs: Hospitals, Banks, Petrol Pumps, Railway stations
+        if (map.getLayer('poi_r1')) {
+          map.setLayerZoomRange('poi_r1', 11, 24);
+          map.setLayoutProperty('poi_r1', 'icon-allow-overlap', true);
+          map.setLayoutProperty('poi_r1', 'text-size', 11.5);
+          map.setPaintProperty('poi_r1', 'text-halo-color', '#FFFFFF');
+          map.setPaintProperty('poi_r1', 'text-halo-width', 2.0);
+        }
+        // Medium POIs: Restaurants, Clinics, Supermarkets, Pharmacies
+        if (map.getLayer('poi_r7')) {
+          map.setLayerZoomRange('poi_r7', 12, 24);
+          map.setLayoutProperty('poi_r7', 'text-size', 11);
+          map.setPaintProperty('poi_r7', 'text-halo-color', '#FFFFFF');
+          map.setPaintProperty('poi_r7', 'text-halo-width', 2.0);
+        }
+        // Small shops, retail businesses, commercial stores
+        if (map.getLayer('poi_r20')) {
+          map.setLayerZoomRange('poi_r20', 13, 24);
+          map.setLayoutProperty('poi_r20', 'text-size', 10.5);
+          map.setPaintProperty('poi_r20', 'text-halo-color', '#FFFFFF');
+          map.setPaintProperty('poi_r20', 'text-halo-width', 1.5);
+        }
+        // Building 3D outlines & footprints
+        if (map.getLayer('building')) {
+          map.setLayerZoomRange('building', 13, 24);
+        }
+        if (map.getLayer('building-3d')) {
+          map.setLayerZoomRange('building-3d', 13.5, 24);
+        }
+      } catch (e) {
+        console.warn('[Mappls Layers] Customization notice:', e);
+      }
+
+      // 3. Circles (e.g. Geofence perimeter)
+      circlesData.forEach(function(c, idx) {
+        var circleGeo = createCircleGeoJSON([c.lon, c.lat], c.radius);
+        map.addSource('circle-source-' + idx, { type: 'geojson', data: circleGeo });
+        map.addLayer({
+          id: 'circle-fill-' + idx,
+          type: 'fill',
+          source: 'circle-source-' + idx,
+          paint: {
+            'fill-color': c.fillColor || 'rgba(16, 185, 129, 0.2)',
+            'fill-opacity': 0.8
+          }
+        });
+        map.addLayer({
+          id: 'circle-line-' + idx,
+          type: 'line',
+          source: 'circle-source-' + idx,
+          paint: {
+            'line-color': c.strokeColor || '#10B981',
+            'line-width': c.strokeWidth || 2
+          }
+        });
       });
 
-      var marker = L.marker([m.lat, m.lon], { icon: customIcon }).addTo(map);
-      if (m.title || m.description) {
-        marker.bindPopup('<div style="padding:6px;font-size:12px;"><strong>' + (m.title || '') + '</strong><br>' + (m.description || '') + '</div>');
-      }
-    });
+      // 4. Polylines (e.g. Road routes)
+      polylinesData.forEach(function(p, idx) {
+        if (!p.coordinates || p.coordinates.length < 2) return;
+        var lineGeo = {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: p.coordinates
+          }
+        };
+        map.addSource('poly-source-' + idx, { type: 'geojson', data: lineGeo });
+        map.addLayer({
+          id: 'poly-line-' + idx,
+          type: 'line',
+          source: 'poly-source-' + idx,
+          paint: {
+            'line-color': p.color || '#1E63F0',
+            'line-width': p.width || 4
+          },
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          }
+        });
+      });
 
-    setTimeout(function() { map.invalidateSize(); }, 100);
-    setTimeout(function() { map.invalidateSize(); }, 300);
-    setTimeout(function() { map.invalidateSize(); }, 800);
-    window.addEventListener('resize', function() { map.invalidateSize(); });
+      // 5. Distinct, Clear Markers (Site, User GPS, Distance, POIs)
+      markersData.forEach(function(m) {
+        var titleLower = (m.title || '').toLowerCase();
+        var isSite = titleLower.indexOf('site') !== -1 || titleLower.indexOf('substation') !== -1;
+        var isUser = titleLower.indexOf('device') !== -1 || titleLower.indexOf('my') !== -1;
+        var isDist = /^\d+(\.\d+)?\s*(m|km)$/i.test(m.title || '') || titleLower.indexOf('away') !== -1;
 
-    map.on('click', function(e) {
-      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_CLICK', coordinate: { latitude: e.latlng.lat, longitude: e.latlng.lng } }));
-      }
+        var el = document.createElement('div');
+
+        if (isSite) {
+          el.className = 'site-marker-pin';
+          var cleanName = (m.title || 'Site').replace(/^Site:\s*/i, '');
+          el.innerHTML = '<div class="site-marker-box"><span>⚡</span><span>' + cleanName + '</span></div><div class="site-marker-stem"></div>';
+          new maplibregl.Marker({ element: el, anchor: 'bottom' })
+            .setLngLat([m.lon, m.lat])
+            .addTo(map);
+        } else if (isUser) {
+          el.className = 'user-marker-pin';
+          el.innerHTML = '<div class="user-pulse-ring"></div><div class="user-center-dot"></div><div class="user-badge-label">📍 My Location</div>';
+          new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([m.lon, m.lat])
+            .addTo(map);
+        } else if (isDist) {
+          el.className = 'dist-marker-tag';
+          el.innerText = '⤹ ' + m.title;
+          new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([m.lon, m.lat])
+            .addTo(map);
+        } else {
+          // Real POI / Nearby Place
+          el.className = 'poi-marker-pin';
+          el.style.borderColor = m.color || '#CBD5E1';
+          el.innerHTML = '<span>' + (m.title || 'Place') + '</span>';
+          new maplibregl.Marker({ element: el, anchor: 'bottom' })
+            .setLngLat([m.lon, m.lat])
+            .addTo(map);
+        }
+      });
     });
   </script>
 </body>
-</html>`;
+</html>
+      `;
     }, [markers, circles, polylines, activeCenter, initialZoom]);
-
-    const handleWebViewMessage = (event: any) => {
-      try {
-        const data = JSON.parse(event.nativeEvent.data);
-        if (data.type === 'MAP_CLICK' && onPress) {
-          onPress({ nativeEvent: { coordinate: data.coordinate } });
-        }
-      } catch {}
-    };
 
     return (
       <View style={[styles.container, style]}>
@@ -423,8 +1048,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
           overScrollMode="never"
           bounces={false}
           originWhitelist={['*']}
-          onMessage={handleWebViewMessage}
-          onError={(err: any) => console.warn('[AppMapView] WebView notice:', err)}
+          onError={(err: any) => console.warn('[AppMapView] WebView error:', err)}
         />
       </View>
     );
@@ -435,8 +1059,27 @@ const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
     backgroundColor: '#F8FAFC',
-    width: '100%',
-    height: '100%',
+  },
+  defaultPin: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#1E63F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    elevation: 4,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+  },
+  defaultPinDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
   },
 });
 

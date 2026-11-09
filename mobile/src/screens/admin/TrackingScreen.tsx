@@ -147,13 +147,6 @@ export const TrackingScreen: React.FC = () => {
 
   const selectedTechIdRef = useRef<string | null>(null);
 
-  // Guard: Restrict Tracking screen to Admin and Supervisor roles only
-  useEffect(() => {
-    if (user?.role === 'technician') {
-      navigation.navigate('Dashboard');
-    }
-  }, [user?.role]);
-
   // Keep ref in sync whenever selectedTech changes
   useEffect(() => {
     selectedTechIdRef.current = selectedTech?.id || null;
@@ -161,18 +154,28 @@ export const TrackingScreen: React.FC = () => {
 
   // 2. Fetch Fleet Telemetry Data from Backend
   const fetchLiveTracking = async (isManual = false) => {
-    if (user?.role === 'technician') {
-      setLoading(false);
-      return;
-    }
     if (isManual) setRefreshing(true);
     try {
       const res = await dashboardService.getLiveFleetRadar();
       setData(res);
 
       const currentSelectedId = selectedTechIdRef.current;
-      if (currentSelectedId && res.technicians) {
-        // Keep currently selected technician's data live
+      if (!currentSelectedId && res.technicians && res.technicians.length > 0) {
+        // If technician user, highlight their own location first; otherwise select first active
+        let targetTech: FleetTechnician | undefined;
+        if (user?.employeeId) {
+          const empCode = user.employeeId.toUpperCase();
+          targetTech = res.technicians.find(
+            (t) => (t.employeeId && t.employeeId.toUpperCase() === empCode) || t.id === user.id
+          );
+        }
+        if (!targetTech) {
+          targetTech = res.technicians.find((t) => t.hasGps) || res.technicians[0];
+        }
+        setSelectedTech(targetTech);
+        selectedTechIdRef.current = targetTech.id;
+      } else if (currentSelectedId && res.technicians) {
+        // Keep currently selected technician's data live without resetting back to Rohit!
         const updated = res.technicians.find((t) => t.id === currentSelectedId);
         if (updated) setSelectedTech(updated);
       }
@@ -917,7 +920,7 @@ export const TrackingScreen: React.FC = () => {
                 <View style={styles.liveBadge}>
                   <View style={styles.livePulseDot} />
                   <Text style={styles.liveBadgeText} numberOfLines={1}>
-                    ALL-INDIA LIVE TELEMETRY RADAR
+                    LIVE 10s TELEMETRY RADAR
                   </Text>
                 </View>
               </View>

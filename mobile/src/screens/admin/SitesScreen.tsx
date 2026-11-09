@@ -39,6 +39,7 @@ import {
   Check,
   RotateCcw,
   Users,
+  Navigation,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { siteService } from '../../services/siteService';
@@ -138,6 +139,26 @@ export const SitesScreen: React.FC = () => {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // Overview Map & View Mode States
+  const [siteViewTab, setSiteViewTab] = useState<'map' | 'list'>('map');
+  const [inspectedSite, setInspectedSite] = useState<Substation | null>(null);
+  const overviewMapRef = useRef<any>(null);
+
+  const handleSelectSiteOnMap = (site: Substation) => {
+    setInspectedSite(site);
+    if (site.latitude && site.longitude && overviewMapRef.current) {
+      overviewMapRef.current.animateToRegion(
+        {
+          latitude: site.latitude,
+          longitude: site.longitude,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        },
+        400
+      );
+    }
+  };
+
   // Map state
   const mapRef = useRef<any>(null);
   const [region, setRegion] = useState({
@@ -152,6 +173,9 @@ export const SitesScreen: React.FC = () => {
     try {
       const data = await siteService.getSites();
       setSites(data);
+      if (data && data.length > 0) {
+        setInspectedSite((prev) => prev || data[0]);
+      }
     } catch (e) {
       console.warn('Sites fetch error:', e);
     } finally {
@@ -647,142 +671,309 @@ export const SitesScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Substations Cards List (Matching Background of User Photo) */}
-      <FlatList
-        data={sites}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 30 },
-        ]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
-        }
-        renderItem={({ item }) => (
-          <AppCard style={styles.siteCard}>
-            {/* Top Image Banner */}
-            <View style={styles.cardImageWrap}>
-              <Image
-                source={{
-                  uri:
-                    item.photoUrl ||
-                    'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=800&q=80',
-                }}
-                style={styles.cardImage}
-              />
-              <View style={styles.cardImageOverlay} />
+      {/* View Switcher: Substation Map Radar vs Site Cards List */}
+      <View style={styles.topToggleBar}>
+        <TouchableOpacity delayPressIn={0}
+          style={[styles.topToggleBtn, siteViewTab === 'map' && styles.topToggleBtnActive]}
+          onPress={() => setSiteViewTab('map')}
+          activeOpacity={0.8}
+        >
+          <MapPin size={15} color={siteViewTab === 'map' ? '#1E63F0' : '#64748B'} />
+          <Text style={[styles.topToggleBtnText, siteViewTab === 'map' && styles.topToggleBtnTextActive]}>
+            Substation Map ({sites.length})
+          </Text>
+        </TouchableOpacity>
 
-              {/* Distance Tag on Image */}
-              <View style={styles.distanceTag}>
-                <View style={styles.distanceDot} />
-                <Text style={styles.distanceText}>271 km</Text>
-              </View>
+        <TouchableOpacity delayPressIn={0}
+          style={[styles.topToggleBtn, siteViewTab === 'list' && styles.topToggleBtnActive]}
+          onPress={() => setSiteViewTab('list')}
+          activeOpacity={0.8}
+        >
+          <Building2 size={15} color={siteViewTab === 'list' ? '#1E63F0' : '#64748B'} />
+          <Text style={[styles.topToggleBtnText, siteViewTab === 'list' && styles.topToggleBtnTextActive]}>
+            Site Cards List
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-              {/* Active Status Badge on Image */}
-              <View style={styles.statusPill}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusPillText}>
-                  {item.status ? item.status.toUpperCase() : 'ACTIVE'}
-                </Text>
-              </View>
-            </View>
+      {siteViewTab === 'map' ? (
+        <ScrollView style={styles.mapTabContent} showsVerticalScrollIndicator={false}>
+          {/* Quick Substation Selector Chips */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.siteChipsRow}
+          >
+            {sites.map((s) => {
+              const isSelected = inspectedSite?.id === s.id;
+              return (
+                <TouchableOpacity delayPressIn={0}
+                  key={`chip-${s.id}`}
+                  style={[styles.siteChip, isSelected && styles.siteChipActive]}
+                  onPress={() => handleSelectSiteOnMap(s)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.chipDot, isSelected && { backgroundColor: '#1E63F0' }]} />
+                  <Text style={[styles.siteChipText, isSelected && styles.siteChipTextActive]}>
+                    {s.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
-            {/* Site Info Content */}
-            <View style={styles.cardBody}>
-              <View style={styles.siteTitleRow}>
-                <Text style={styles.siteName}>{item.name}</Text>
-                <View style={styles.codeBadge}>
-                  <Text style={styles.codeBadgeText}>{item.code}</Text>
+          {/* Interactive Substation Geofence Grid Map Frame */}
+          <View style={styles.overviewMapFrame}>
+            <MapView
+              ref={overviewMapRef}
+              style={StyleSheet.absoluteFill}
+              initialRegion={{
+                latitude: inspectedSite?.latitude || 21.1926,
+                longitude: inspectedSite?.longitude || 72.7997,
+                latitudeDelta: 0.04,
+                longitudeDelta: 0.04,
+              }}
+            >
+              {sites.map((s) => {
+                if (!s.latitude || !s.longitude) return null;
+                const isSelected = inspectedSite?.id === s.id;
+                return (
+                  <React.Fragment key={`overview-marker-${s.id}`}>
+                    {/* 500m Substation Geofence Perimeter */}
+                    <Circle
+                      center={{ latitude: s.latitude, longitude: s.longitude }}
+                      radius={s.radiusMeters || 500}
+                      strokeColor={isSelected ? '#1E63F0' : '#10B981'}
+                      strokeWidth={isSelected ? 3 : 2}
+                      fillColor={isSelected ? 'rgba(30, 99, 240, 0.22)' : 'rgba(16, 185, 129, 0.16)'}
+                    />
+
+                    {/* Substation Marker Pin */}
+                    <Marker
+                      coordinate={{ latitude: s.latitude, longitude: s.longitude }}
+                      title={s.name}
+                      description={`${s.code} • Allowed Radius: ${s.radiusMeters || 500}m`}
+                      pinColor={isSelected ? '#1E63F0' : '#DC2626'}
+                      onPress={() => handleSelectSiteOnMap(s)}
+                    />
+                  </React.Fragment>
+                );
+              })}
+            </MapView>
+          </View>
+
+          {/* Inspected Substation Details Card */}
+          {inspectedSite && (
+            <View style={styles.inspectedCard}>
+              <View style={styles.inspectedCardHeader}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={styles.inspectedSiteName}>{inspectedSite.name}</Text>
+                    <View style={styles.codeBadge}>
+                      <Text style={styles.codeBadgeText}>{inspectedSite.code}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.inspectedAddress} numberOfLines={2}>
+                    {inspectedSite.address || 'Address registered on grid'}
+                  </Text>
+                </View>
+
+                <View style={styles.statusPill}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.statusPillText}>
+                    {inspectedSite.status ? inspectedSite.status.toUpperCase() : 'ACTIVE'}
+                  </Text>
                 </View>
               </View>
 
-              {/* Address */}
-              <View style={styles.infoRow}>
-                <MapPin size={14} color="#EF4444" style={{ marginTop: 2, marginRight: 6 }} />
-                <Text style={styles.infoText} numberOfLines={2}>
-                  {item.address}
-                </Text>
-              </View>
-
-              {/* Manager */}
-              <View style={styles.infoRow}>
-                <User size={14} color="#64748B" style={{ marginRight: 6 }} />
-                <Text style={styles.infoLabel}>Manager: </Text>
-                <Text style={styles.infoVal}>
-                  {item.manager?.name || (item.manager?.phone ? item.manager.phone : 'Not Assigned')}
-                </Text>
-              </View>
-              {item.manager?.phone && item.manager?.name ? (
-                <View style={styles.infoRow}>
-                  <Phone size={14} color="#64748B" style={{ marginRight: 6 }} />
-                  <Text style={styles.infoLabel}>Contact: </Text>
-                  <Text style={styles.infoVal}>{item.manager.phone}</Text>
+              <View style={styles.inspectedDetailsRow}>
+                <View style={styles.inspectedDetailCol}>
+                  <Text style={styles.inspectedLabel}>AUTHORIZED GEOFENCE</Text>
+                  <Text style={styles.inspectedValueGreen}>{inspectedSite.radiusMeters || 500} m</Text>
                 </View>
-              ) : null}
-
-              {/* Working Hours */}
-              <View style={styles.infoRow}>
-                <Clock size={14} color="#64748B" style={{ marginRight: 6 }} />
-                <Text style={styles.infoLabel}>Hours: </Text>
-                <Text style={styles.infoVal}>
-                  {item.workingHours || 'Standard Shift'}
-                </Text>
+                <View style={styles.inspectedDetailCol}>
+                  <Text style={styles.inspectedLabel}>WORKING SHIFT</Text>
+                  <Text style={styles.inspectedValue}>{inspectedSite.workingHours || '09:00 AM - 06:00 PM'}</Text>
+                </View>
+                <View style={styles.inspectedDetailCol}>
+                  <Text style={styles.inspectedLabel}>SITE MANAGER</Text>
+                  <Text style={styles.inspectedValue}>
+                    {inspectedSite.manager?.name || inspectedSite.manager?.phone || 'Assigned In-Charge'}
+                  </Text>
+                </View>
               </View>
 
-              {/* Allowed Radius */}
-              <View style={styles.infoRow}>
-                <Shield size={14} color="#10B981" style={{ marginRight: 6 }} />
-                <Text style={styles.infoLabel}>Allowed Radius: </Text>
-                <Text style={[styles.infoVal, { color: '#059669', fontWeight: '800' }]}>
-                  {item.radiusMeters || 500}m
-                </Text>
-              </View>
-
-              {/* GPS Tag with Link */}
-              <TouchableOpacity delayPressIn={0}
-                style={styles.gpsLinkRow}
-                onPress={() =>
-                  Linking.openURL(
-                    `https://maps.mappls.com/?point=${item.latitude},${item.longitude}`
-                  )
-                }
-              >
-                <Zap size={13} color="#2563EB" style={{ marginRight: 5 }} />
-                <Text style={styles.gpsLinkText}>
-                  GPS Tag: {typeof item.latitude === 'number' ? item.latitude.toFixed(4) : (item.latitude || '--')}, {typeof item.longitude === 'number' ? item.longitude.toFixed(4) : (item.longitude || '--')}
-                </Text>
-                <ExternalLink size={12} color="#2563EB" style={{ marginLeft: 4 }} />
-              </TouchableOpacity>
-
-              {/* Action Buttons Row */}
-              <View style={styles.actionRow}>
-                <TouchableOpacity delayPressIn={0} style={styles.rosterBtn} activeOpacity={0.8}>
-                  <Users size={14} color="#2563EB" style={{ marginRight: 6 }} />
-                  <Text style={styles.rosterBtnText}>STAFF ROSTER</Text>
+              <View style={styles.inspectedActionsRow}>
+                <TouchableOpacity delayPressIn={0}
+                  style={styles.openNavBtn}
+                  onPress={() =>
+                    Linking.openURL(
+                      `https://maps.mappls.com/?point=${inspectedSite.latitude},${inspectedSite.longitude}`
+                    )
+                  }
+                  activeOpacity={0.8}
+                >
+                  <Zap size={14} color="#1E63F0" style={{ marginRight: 6 }} />
+                  <Text style={styles.openNavBtnText}>Open Mappls Navigation</Text>
                 </TouchableOpacity>
 
-                <View style={styles.iconActionsWrap}>
-                  <TouchableOpacity delayPressIn={0}
-                    style={styles.iconActionBtn}
-                    onPress={() => handleOpenEdit(item)}
-                    activeOpacity={0.7}
-                  >
-                    <Edit size={16} color="#64748B" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity delayPressIn={0}
-                    style={[styles.iconActionBtn, { backgroundColor: '#FEF2F2' }]}
-                    onPress={() => handleDelete(item)}
-                    activeOpacity={0.7}
-                  >
-                    <Trash2 size={16} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity delayPressIn={0}
+                  style={styles.editSiteQuickBtn}
+                  onPress={() => handleOpenEdit(inspectedSite)}
+                  activeOpacity={0.8}
+                >
+                  <Edit size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.editSiteQuickBtnText}>Edit Geofence</Text>
+                </TouchableOpacity>
               </View>
             </View>
-          </AppCard>
-        )}
-      />
+          )}
+        </ScrollView>
+      ) : (
+        /* Substations Cards List (Matching Background of User Photo) */
+        <FlatList
+          data={sites}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 16) + 30 },
+          ]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+          }
+          renderItem={({ item }) => (
+            <AppCard style={styles.siteCard}>
+              {/* Top Image Banner */}
+              <View style={styles.cardImageWrap}>
+                <Image
+                  source={{
+                    uri:
+                      item.photoUrl ||
+                      'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=800&q=80',
+                  }}
+                  style={styles.cardImage}
+                />
+                <View style={styles.cardImageOverlay} />
+
+                {/* Distance Tag on Image */}
+                <View style={styles.distanceTag}>
+                  <View style={styles.distanceDot} />
+                  <Text style={styles.distanceText}>271 km</Text>
+                </View>
+
+                {/* Active Status Badge on Image */}
+                <View style={styles.statusPill}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.statusPillText}>
+                    {item.status ? item.status.toUpperCase() : 'ACTIVE'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Site Info Content */}
+              <View style={styles.cardBody}>
+                <View style={styles.siteTitleRow}>
+                  <Text style={styles.siteName}>{item.name}</Text>
+                  <View style={styles.codeBadge}>
+                    <Text style={styles.codeBadgeText}>{item.code}</Text>
+                  </View>
+                </View>
+
+                {/* Address */}
+                <View style={styles.infoRow}>
+                  <MapPin size={14} color="#EF4444" style={{ marginTop: 2, marginRight: 6 }} />
+                  <Text style={styles.infoText} numberOfLines={2}>
+                    {item.address}
+                  </Text>
+                </View>
+
+                {/* Manager */}
+                <View style={styles.infoRow}>
+                  <User size={14} color="#64748B" style={{ marginRight: 6 }} />
+                  <Text style={styles.infoLabel}>Manager: </Text>
+                  <Text style={styles.infoVal}>
+                    {item.manager?.name || (item.manager?.phone ? item.manager.phone : 'Not Assigned')}
+                  </Text>
+                </View>
+                {item.manager?.phone && item.manager?.name ? (
+                  <View style={styles.infoRow}>
+                    <Phone size={14} color="#64748B" style={{ marginRight: 6 }} />
+                    <Text style={styles.infoLabel}>Contact: </Text>
+                    <Text style={styles.infoVal}>{item.manager.phone}</Text>
+                  </View>
+                ) : null}
+
+                {/* Working Hours */}
+                <View style={styles.infoRow}>
+                  <Clock size={14} color="#64748B" style={{ marginRight: 6 }} />
+                  <Text style={styles.infoLabel}>Hours: </Text>
+                  <Text style={styles.infoVal}>
+                    {item.workingHours || 'Standard Shift'}
+                  </Text>
+                </View>
+
+                {/* Allowed Radius */}
+                <View style={styles.infoRow}>
+                  <Shield size={14} color="#10B981" style={{ marginRight: 6 }} />
+                  <Text style={styles.infoLabel}>Allowed Radius: </Text>
+                  <Text style={[styles.infoVal, { color: '#059669', fontWeight: '800' }]}>
+                    {item.radiusMeters || 500}m
+                  </Text>
+                </View>
+
+                {/* GPS Tag with Link */}
+                <TouchableOpacity delayPressIn={0}
+                  style={styles.gpsLinkRow}
+                  onPress={() =>
+                    Linking.openURL(
+                      `https://maps.mappls.com/?point=${item.latitude},${item.longitude}`
+                    )
+                  }
+                >
+                  <Zap size={13} color="#2563EB" style={{ marginRight: 5 }} />
+                  <Text style={styles.gpsLinkText}>
+                    GPS Tag: {typeof item.latitude === 'number' ? item.latitude.toFixed(4) : (item.latitude || '--')}, {typeof item.longitude === 'number' ? item.longitude.toFixed(4) : (item.longitude || '--')}
+                  </Text>
+                  <ExternalLink size={12} color="#2563EB" style={{ marginLeft: 4 }} />
+                </TouchableOpacity>
+
+                {/* Action Buttons Row */}
+                <View style={styles.actionRow}>
+                  <TouchableOpacity delayPressIn={0}
+                    style={[styles.rosterBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
+                    onPress={() => {
+                      handleSelectSiteOnMap(item);
+                      setSiteViewTab('map');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <MapPin size={13} color="#1E63F0" style={{ marginRight: 5 }} />
+                    <Text style={[styles.rosterBtnText, { color: '#1E63F0' }]}>VIEW ON MAP</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.iconActionsWrap}>
+                    <TouchableOpacity delayPressIn={0}
+                      style={styles.iconActionBtn}
+                      onPress={() => handleOpenEdit(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Edit size={16} color="#64748B" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity delayPressIn={0}
+                      style={[styles.iconActionBtn, { backgroundColor: '#FEF2F2' }]}
+                      onPress={() => handleDelete(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Trash2 size={16} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </AppCard>
+          )}
+        />
+      )}
 
       {/* ========================================================================= */}
       {/* ADD / EDIT SITE MODAL DIALOG (MATCHES USER IMAGE EXACTLY)                  */}
@@ -1926,5 +2117,185 @@ const styles = StyleSheet.create({
   pickerOptionTextActive: {
     color: '#1E63F0',
     fontWeight: '800',
+  },
+
+  // View Switcher Tabs (Map vs Cards)
+  topToggleBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 10,
+  },
+  topToggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    gap: 6,
+  },
+  topToggleBtnActive: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  topToggleBtnText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  topToggleBtnTextActive: {
+    color: '#1E63F0',
+    fontWeight: '800',
+  },
+
+  // Map Tab Container
+  mapTabContent: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  siteChipsRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  siteChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  siteChipActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#1E63F0',
+  },
+  chipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
+  },
+  siteChipText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  siteChipTextActive: {
+    color: '#1E63F0',
+    fontWeight: '800',
+  },
+  overviewMapFrame: {
+    height: 380,
+    marginHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#E2E8F0',
+  },
+
+  // Inspected Substation Details Card
+  inspectedCard: {
+    margin: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+    gap: 12,
+  },
+  inspectedCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  inspectedSiteName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  inspectedAddress: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  inspectedDetailsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    gap: 8,
+  },
+  inspectedDetailCol: {
+    flex: 1,
+  },
+  inspectedLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.3,
+    marginBottom: 2,
+  },
+  inspectedValue: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  inspectedValueGreen: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  inspectedActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  openNavBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  openNavBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E63F0',
+  },
+  editSiteQuickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#1E63F0',
+  },
+  editSiteQuickBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
