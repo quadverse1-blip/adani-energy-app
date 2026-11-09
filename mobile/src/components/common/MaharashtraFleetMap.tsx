@@ -61,18 +61,26 @@ const MAHARASHTRA_CENTER = ALL_INDIA_CENTER;
 
 const INDIA_OPERATIONAL_ZONES = [
   { name: 'All India', lat: 22.5937, lon: 78.9629, zoom: 5 },
+  { name: 'Delhi NCR', lat: 28.6139, lon: 77.2090, zoom: 11 },
   { name: 'Gujarat (Adani Hub)', lat: 23.0225, lon: 72.5714, zoom: 10 },
+  { name: 'Mundra Port Grid', lat: 22.8394, lon: 69.7091, zoom: 12 },
   { name: 'Maharashtra', lat: 19.7515, lon: 75.7139, zoom: 7 },
   { name: 'Mumbai (BKC)', lat: 19.0657, lon: 72.8687, zoom: 13 },
   { name: 'Navi Mumbai', lat: 19.033, lon: 73.0297, zoom: 12 },
   { name: 'Pune (Hinjawadi)', lat: 18.5204, lon: 73.8567, zoom: 12 },
-  { name: 'Mundra Port Grid', lat: 22.8394, lon: 69.7091, zoom: 12 },
-  { name: 'Delhi NCR', lat: 28.6139, lon: 77.2090, zoom: 11 },
-  { name: 'Bengaluru', lat: 12.9716, lon: 77.5946, zoom: 11 },
-  { name: 'Hyderabad', lat: 17.3850, lon: 78.4867, zoom: 11 },
-  { name: 'Chennai', lat: 13.0827, lon: 80.2707, zoom: 11 },
-  { name: 'Kolkata', lat: 22.5726, lon: 88.3639, zoom: 11 },
-  { name: 'Rajasthan', lat: 26.9124, lon: 75.7873, zoom: 11 },
+  { name: 'Bengaluru (Karnataka)', lat: 12.9716, lon: 77.5946, zoom: 11 },
+  { name: 'Hyderabad (Telangana)', lat: 17.3850, lon: 78.4867, zoom: 11 },
+  { name: 'Chennai (Tamil Nadu)', lat: 13.0827, lon: 80.2707, zoom: 11 },
+  { name: 'Kolkata (West Bengal)', lat: 22.5726, lon: 88.3639, zoom: 11 },
+  { name: 'Rajasthan (Jaipur)', lat: 26.9124, lon: 75.7873, zoom: 11 },
+  { name: 'Uttar Pradesh (Noida/Lucknow)', lat: 26.8467, lon: 80.9462, zoom: 10 },
+  { name: 'Madhya Pradesh (Bhopal)', lat: 23.2599, lon: 77.4126, zoom: 11 },
+  { name: 'Punjab & Haryana (Chandigarh)', lat: 30.7333, lon: 76.7794, zoom: 11 },
+  { name: 'Kerala (Kochi)', lat: 9.9312, lon: 76.2673, zoom: 11 },
+  { name: 'Odisha (Bhubaneswar)', lat: 20.2961, lon: 85.8245, zoom: 11 },
+  { name: 'Assam (Guwahati)', lat: 26.1445, lon: 91.7362, zoom: 11 },
+  { name: 'Jammu & Kashmir (Srinagar)', lat: 34.0837, lon: 74.7973, zoom: 11 },
+  { name: 'Goa', lat: 15.2993, lon: 74.1240, zoom: 11 },
   { name: 'Nagpur', lat: 21.1458, lon: 79.0882, zoom: 12 },
   { name: 'Nashik', lat: 19.9975, lon: 73.7898, zoom: 12 },
   { name: 'Chh. Sambhajinagar', lat: 19.8762, lon: 75.3433, zoom: 12 },
@@ -417,7 +425,7 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=10.0, minimum-scale=1.0, user-scalable=yes" />
-  <title>Adani Maharashtra Workforce Mappls Radar</title>
+  <title>Adani Field Force Live Telemetry – All India Mappls Radar</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

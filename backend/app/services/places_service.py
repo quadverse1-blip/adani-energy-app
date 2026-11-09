@@ -79,10 +79,10 @@ class PlacesService:
     def _fetch_live_osm_search(self, query: str, lat: Optional[float] = None, lon: Optional[float] = None, limit: int = 25) -> List[Dict[str, Any]]:
         """Queries real-world places from Nominatim / OpenStreetMap with strict error boundaries."""
         try:
-            # Query within Maharashtra / India
+            # Query across India
             clean_query = query.strip()
-            if "maharashtra" not in clean_query.lower() and "india" not in clean_query.lower():
-                search_q = f"{clean_query}, Maharashtra"
+            if "india" not in clean_query.lower():
+                search_q = f"{clean_query}, India"
             else:
                 search_q = clean_query
 

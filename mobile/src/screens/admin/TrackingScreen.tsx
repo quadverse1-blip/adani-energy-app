@@ -171,22 +171,8 @@ export const TrackingScreen: React.FC = () => {
       setData(res);
 
       const currentSelectedId = selectedTechIdRef.current;
-      if (!currentSelectedId && res.technicians && res.technicians.length > 0) {
-        // If technician user, highlight their own location first; otherwise select first active
-        let targetTech: FleetTechnician | undefined;
-        if (user?.employeeId) {
-          const empCode = user.employeeId.toUpperCase();
-          targetTech = res.technicians.find(
-            (t) => (t.employeeId && t.employeeId.toUpperCase() === empCode) || t.id === user.id
-          );
-        }
-        if (!targetTech) {
-          targetTech = res.technicians.find((t) => t.hasGps) || res.technicians[0];
-        }
-        setSelectedTech(targetTech);
-        selectedTechIdRef.current = targetTech.id;
-      } else if (currentSelectedId && res.technicians) {
-        // Keep currently selected technician's data live without resetting back to Rohit!
+      if (currentSelectedId && res.technicians) {
+        // Keep currently selected technician's data live
         const updated = res.technicians.find((t) => t.id === currentSelectedId);
         if (updated) setSelectedTech(updated);
       }
