@@ -33,6 +33,10 @@ import {
   KeyRound,
   FileText,
   Trash2,
+  Plus,
+  User as UserIcon,
+  Briefcase,
+  Globe,
 } from 'lucide-react-native';
 import { Platform, ActivityIndicator } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -65,6 +69,28 @@ const ROLE_OPTIONS: { label: string; value: UserRole }[] = [
 ];
 
 const SHIFT_STATUS_OPTIONS = ['Present', 'Absent', 'Half Day'];
+
+interface ManualBulkEmployee {
+  id: string;
+  name: string;
+  designation: string;
+  circle: string;
+  division: string;
+  employeeId: string;
+  phone: string;
+  password: string;
+}
+
+const createEmptyBulkRow = (index: number): ManualBulkEmployee => ({
+  id: `manual_row_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 6)}`,
+  name: '',
+  designation: 'Field Smart Meter Technician',
+  circle: 'Ahmedabad',
+  division: 'North Division',
+  employeeId: '',
+  phone: '',
+  password: 'Adani@123',
+});
 
 export const EmployeesScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -99,6 +125,10 @@ export const EmployeesScreen: React.FC = () => {
 
   // Bulk Upload Modal State
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkTab, setBulkTab] = useState<'form' | 'excel'>('form');
+  const [manualEmployees, setManualEmployees] = useState<ManualBulkEmployee[]>([
+    createEmptyBulkRow(1),
+  ]);
   const [selectedFile, setSelectedFile] = useState<{
     uri: string;
     name: string;
@@ -110,6 +140,68 @@ export const EmployeesScreen: React.FC = () => {
   const [uploadingBulk, setUploadingBulk] = useState(false);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkUploadResponse | null>(null);
+
+  const handleAddRow = () => {
+    setManualEmployees((prev) => [...prev, createEmptyBulkRow(prev.length + 1)]);
+  };
+
+  const handleRemoveRow = (id: string) => {
+    setManualEmployees((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((r) => r.id !== id);
+    });
+  };
+
+  const handleUpdateRow = (id: string, field: keyof ManualBulkEmployee, value: string) => {
+    setManualEmployees((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
+    );
+  };
+
+  const handleSaveManualBulk = async () => {
+    for (let i = 0; i < manualEmployees.length; i++) {
+      const r = manualEmployees[i];
+      if (!r.name.trim()) {
+        Alert.alert('Missing Name', `Row ${i + 1}: Please enter Employee Name.`);
+        return;
+      }
+      if (!r.employeeId.trim()) {
+        Alert.alert('Missing ID', `Row ${i + 1}: Please enter Employee ID / Number.`);
+        return;
+      }
+      const cleanPhone = r.phone.trim().replace(/\D/g, '');
+      if (!cleanPhone || cleanPhone.length < 10) {
+        Alert.alert('Invalid Mobile', `Row ${i + 1}: Please enter a valid 10-digit Mobile Number.`);
+        return;
+      }
+      if (!r.password.trim()) {
+        Alert.alert('Missing Password', `Row ${i + 1}: Please enter Password.`);
+        return;
+      }
+    }
+
+    setUploadingBulk(true);
+    try {
+      const payload = manualEmployees.map((r) => ({
+        name: r.name.trim(),
+        designation: r.designation.trim() || 'Field Smart Meter Technician',
+        circle: r.circle.trim() || undefined,
+        division: r.division.trim() || undefined,
+        employeeId: r.employeeId.trim().toUpperCase(),
+        phone: r.phone.trim(),
+        password: r.password.trim(),
+      }));
+
+      const res = await employeeService.bulkImportJson(payload, bulkDefaultSiteId || undefined);
+      setBulkResult(res);
+      fetchEmployees();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Failed to import employees.';
+      Alert.alert('Import Failed', msg);
+    } finally {
+      setUploadingBulk(false);
+    }
+  };
 
   const handlePickDocument = async () => {
     try {
@@ -451,15 +543,17 @@ export const EmployeesScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Bulk Excel Onboarding Quick Action Banner */}
+      {/* Bulk Employee Onboarding Quick Action Banner */}
       <View style={styles.bulkBannerCard}>
         <View style={styles.bulkBannerLeft}>
           <View style={styles.bulkIconCircle}>
             <FileSpreadsheet size={20} color="#059669" />
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, paddingRight: 6 }}>
             <Text style={styles.bulkBannerHeading}>Bulk Add Employees</Text>
-            <Text style={styles.bulkBannerSubtext}>Upload Excel (.xlsx) with ID, Mobile & Password</Text>
+            <Text style={styles.bulkBannerSubtext}>
+              Add Name, Designation, Circle, Division with ID/Number & Password
+            </Text>
           </View>
         </View>
         <TouchableOpacity
@@ -471,8 +565,8 @@ export const EmployeesScreen: React.FC = () => {
           }}
           activeOpacity={0.85}
         >
-          <UploadCloud size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
-          <Text style={styles.bulkUploadPillText}>Import Excel</Text>
+          <UserPlus size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
+          <Text style={styles.bulkUploadPillText}>Bulk Add</Text>
         </TouchableOpacity>
       </View>
 
@@ -973,7 +1067,7 @@ export const EmployeesScreen: React.FC = () => {
         </TouchableOpacity>
       </Modal>
 
-      {/* Bulk Employee Excel Import Modal */}
+      {/* Bulk Employee Onboarding Modal */}
       <Modal visible={showBulkModal} animationType="slide" transparent>
         <View style={styles.bulkModalBackdrop}>
           <View style={styles.bulkModalContainer}>
@@ -981,11 +1075,11 @@ export const EmployeesScreen: React.FC = () => {
             <View style={styles.bulkModalHeader}>
               <View style={{ flex: 1 }}>
                 <View style={styles.bulkModalBadge}>
-                  <Text style={styles.bulkModalBadgeText}>EXCEL BULK ONBOARDING</Text>
+                  <Text style={styles.bulkModalBadgeText}>BULK EMPLOYEE ONBOARDING</Text>
                 </View>
-                <Text style={styles.bulkModalTitle}>Import Employees from Excel</Text>
+                <Text style={styles.bulkModalTitle}>Bulk Add Employees</Text>
                 <Text style={styles.bulkModalSub}>
-                  Upload .xlsx spreadsheet with ID, Mobile & Password
+                  Add Name, Designation, Circle, Division with ID/Number & Password
                 </Text>
               </View>
               <TouchableOpacity
@@ -1004,6 +1098,7 @@ export const EmployeesScreen: React.FC = () => {
               style={styles.bulkModalScroll}
               contentContainerStyle={styles.bulkModalScrollContent}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
               {bulkResult ? (
                 /* Result View */
@@ -1105,192 +1200,457 @@ export const EmployeesScreen: React.FC = () => {
                   </TouchableOpacity>
                 </View>
               ) : (
-                /* Form View */
+                /* Form View with Tab Switcher */
                 <View>
-                  {/* Format Information Card */}
-                  <View style={styles.formatCard}>
-                    <Text style={styles.formatCardTitle}>Required Excel Columns</Text>
-                    <Text style={styles.formatCardSub}>
-                      Your spreadsheet must include the following 3 mandatory columns in the first row:
-                    </Text>
-
-                    <View style={styles.columnsGrid}>
-                      <View style={styles.columnPill}>
-                        <Smartphone size={13} color="#0369A1" style={{ marginRight: 4 }} />
-                        <Text style={styles.columnPillText}>Employee ID</Text>
-                      </View>
-                      <View style={styles.columnPill}>
-                        <Smartphone size={13} color="#0369A1" style={{ marginRight: 4 }} />
-                        <Text style={styles.columnPillText}>Mobile Number</Text>
-                      </View>
-                      <View style={styles.columnPill}>
-                        <KeyRound size={13} color="#0369A1" style={{ marginRight: 4 }} />
-                        <Text style={styles.columnPillText}>Password</Text>
-                      </View>
-                    </View>
-
-                    <Text style={styles.optionalNote}>
-                      Optional columns: Name, Role, Designation, Assigned Sites
-                    </Text>
-
-                    <View style={styles.loginExplanationRow}>
-                      <ShieldCheck size={14} color="#059669" style={{ marginRight: 6, marginTop: 1 }} />
-                      <Text style={styles.loginExplanationText}>
-                        Employees can log in with either their Mobile Number or Employee ID using the password from this sheet.
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Template Download Card */}
-                  <View style={styles.templateCard}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.templateCardTitle}>Need Sample Format?</Text>
-                      <Text style={styles.templateCardSub}>
-                        Download formatted template with sample employee rows
-                      </Text>
-                    </View>
+                  {/* Mode Tab Switcher */}
+                  <View style={styles.bulkTabSelector}>
                     <TouchableOpacity
-                      style={styles.downloadTemplateBtn}
-                      onPress={handleDownloadTemplate}
-                      disabled={downloadingTemplate}
+                      style={[styles.bulkTabBtn, bulkTab === 'form' && styles.bulkTabBtnActive]}
+                      onPress={() => setBulkTab('form')}
                       activeOpacity={0.8}
                     >
-                      {downloadingTemplate ? (
-                        <ActivityIndicator size="small" color="#1E3A8A" />
-                      ) : (
-                        <>
-                          <Download size={14} color="#1E3A8A" style={{ marginRight: 4 }} />
-                          <Text style={styles.downloadTemplateText}>Download .xlsx</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* File Drop/Picker Zone */}
-                  <Text style={styles.fieldSectionLabel}>Select Spreadsheet File</Text>
-                  {selectedFile ? (
-                    <View style={styles.selectedFileCard}>
-                      <View style={styles.selectedFileIconWrap}>
-                        <FileSpreadsheet size={24} color="#059669" />
-                      </View>
-                      <View style={{ flex: 1, paddingHorizontal: 10 }}>
-                        <Text style={styles.selectedFileName} numberOfLines={1}>
-                          {selectedFile.name}
-                        </Text>
-                        <Text style={styles.selectedFileSize}>
-                          {selectedFile.size
-                            ? `${(selectedFile.size / 1024).toFixed(1)} KB`
-                            : 'Ready to upload'}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.removeFileBtn}
-                        onPress={() => setSelectedFile(null)}
-                        activeOpacity={0.7}
-                      >
-                        <Trash2 size={16} color="#DC2626" />
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.fileDropZone}
-                      onPress={handlePickDocument}
-                      activeOpacity={0.75}
-                    >
-                      <View style={styles.fileDropIconCircle}>
-                        <UploadCloud size={28} color="#059669" />
-                      </View>
-                      <Text style={styles.fileDropTitle}>Tap to Browse Excel File</Text>
-                      <Text style={styles.fileDropSub}>Supports .xlsx, .xls, and .csv files</Text>
-                      <View style={styles.browsePill}>
-                        <Text style={styles.browsePillText}>Choose from Device</Text>
-                      </View>
-                    </TouchableOpacity>
-                  )}
-
-                  {/* Default Substation Assignment (Optional) */}
-                  <Text style={[styles.fieldSectionLabel, { marginTop: 16 }]}>
-                    Assign Default Substation (Optional)
-                  </Text>
-                  <Text style={styles.fieldSectionSub}>
-                    Permit imported employees to check in at this substation if not specified in Excel:
-                  </Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.siteChipsRow}
-                  >
-                    <TouchableOpacity
-                      style={[
-                        styles.siteSelectChip,
-                        !bulkDefaultSiteId && styles.siteSelectChipActive,
-                      ]}
-                      onPress={() => setBulkDefaultSiteId('')}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.siteSelectChipText,
-                          !bulkDefaultSiteId && styles.siteSelectChipTextActive,
-                        ]}
-                      >
-                        None (Unassigned)
+                      <UserPlus size={15} color={bulkTab === 'form' ? '#1E3A8A' : '#64748B'} />
+                      <Text style={[styles.bulkTabBtnText, bulkTab === 'form' && styles.bulkTabBtnTextActive]}>
+                        Direct Multi-Add Form
                       </Text>
                     </TouchableOpacity>
-                    {sites.map((s) => (
-                      <TouchableOpacity
-                        key={s.id}
-                        style={[
-                          styles.siteSelectChip,
-                          bulkDefaultSiteId === s.id && styles.siteSelectChipActive,
-                        ]}
-                        onPress={() => setBulkDefaultSiteId(s.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.siteSelectChipText,
-                            bulkDefaultSiteId === s.id && styles.siteSelectChipTextActive,
-                          ]}
-                        >
-                          {s.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-
-                  {/* Modal Action Buttons */}
-                  <View style={styles.bulkModalActions}>
-                    <TouchableOpacity
-                      style={styles.bulkCancelBtn}
-                      onPress={() => {
-                        setShowBulkModal(false);
-                        setSelectedFile(null);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.bulkCancelBtnText}>Cancel</Text>
-                    </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={[
-                        styles.bulkSubmitBtn,
-                        (!selectedFile || uploadingBulk) && styles.bulkSubmitBtnDisabled,
-                      ]}
-                      onPress={handleUploadBulk}
-                      disabled={!selectedFile || uploadingBulk}
-                      activeOpacity={0.85}
+                      style={[styles.bulkTabBtn, bulkTab === 'excel' && styles.bulkTabBtnActive]}
+                      onPress={() => setBulkTab('excel')}
+                      activeOpacity={0.8}
                     >
-                      {uploadingBulk ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <>
-                          <UploadCloud size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                          <Text style={styles.bulkSubmitBtnText}>Upload & Import</Text>
-                        </>
-                      )}
+                      <FileSpreadsheet size={15} color={bulkTab === 'excel' ? '#1E3A8A' : '#64748B'} />
+                      <Text style={[styles.bulkTabBtnText, bulkTab === 'excel' && styles.bulkTabBtnTextActive]}>
+                        Upload Excel (.xlsx)
+                      </Text>
                     </TouchableOpacity>
                   </View>
+
+                  {/* TAB 1: Direct Multi-Row Form */}
+                  {bulkTab === 'form' && (
+                    <View>
+                      <View style={styles.formatCard}>
+                        <Text style={styles.formatCardTitle}>Batch Employee Form</Text>
+                        <Text style={styles.formatCardSub}>
+                          Add multiple employees at once. Every employee receives Name, Designation, Circle, Division, ID/Number, and Password.
+                        </Text>
+                        <View style={styles.loginExplanationRow}>
+                          <ShieldCheck size={14} color="#059669" style={{ marginRight: 6, marginTop: 1 }} />
+                          <Text style={styles.loginExplanationText}>
+                            Employees can log in with their Mobile Number or Employee ID using the password entered.
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* List of Employee Cards */}
+                      {manualEmployees.map((emp, index) => (
+                        <View key={emp.id} style={styles.manualCard}>
+                          {/* Card Header */}
+                          <View style={styles.manualCardHeader}>
+                            <View style={styles.manualBadge}>
+                              <UserIcon size={12} color="#1E40AF" />
+                              <Text style={styles.manualBadgeText}>Employee #{index + 1}</Text>
+                            </View>
+                            {manualEmployees.length > 1 && (
+                              <TouchableOpacity
+                                style={styles.manualDeleteBtn}
+                                onPress={() => handleRemoveRow(emp.id)}
+                                activeOpacity={0.7}
+                              >
+                                <Trash2 size={14} color="#DC2626" />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+
+                          {/* Row 1: Name & Designation */}
+                          <View style={styles.manualFormRow}>
+                            <View style={styles.manualCol}>
+                              <Text style={styles.manualFieldLabel}>Employee Name *</Text>
+                              <TextInput
+                                style={styles.manualInput}
+                                placeholder="e.g. Amit Verma"
+                                placeholderTextColor="#94A3B8"
+                                value={emp.name}
+                                onChangeText={(v) => handleUpdateRow(emp.id, 'name', v)}
+                              />
+                            </View>
+                            <View style={styles.manualCol}>
+                              <Text style={styles.manualFieldLabel}>Designation</Text>
+                              <TextInput
+                                style={styles.manualInput}
+                                placeholder="e.g. Smart Meter Tech"
+                                placeholderTextColor="#94A3B8"
+                                value={emp.designation}
+                                onChangeText={(v) => handleUpdateRow(emp.id, 'designation', v)}
+                              />
+                            </View>
+                          </View>
+
+                          {/* Row 2: Circle & Division */}
+                          <View style={styles.manualFormRow}>
+                            <View style={styles.manualCol}>
+                              <Text style={styles.manualFieldLabel}>Circle</Text>
+                              <TextInput
+                                style={styles.manualInput}
+                                placeholder="e.g. Ahmedabad"
+                                placeholderTextColor="#94A3B8"
+                                value={emp.circle}
+                                onChangeText={(v) => handleUpdateRow(emp.id, 'circle', v)}
+                              />
+                            </View>
+                            <View style={styles.manualCol}>
+                              <Text style={styles.manualFieldLabel}>Division</Text>
+                              <TextInput
+                                style={styles.manualInput}
+                                placeholder="e.g. North Division"
+                                placeholderTextColor="#94A3B8"
+                                value={emp.division}
+                                onChangeText={(v) => handleUpdateRow(emp.id, 'division', v)}
+                              />
+                            </View>
+                          </View>
+
+                          {/* Row 3: Employee ID & Mobile Number */}
+                          <View style={styles.manualFormRow}>
+                            <View style={styles.manualCol}>
+                              <Text style={styles.manualFieldLabel}>Employee ID / Number *</Text>
+                              <TextInput
+                                style={styles.manualInput}
+                                placeholder="e.g. ADN-TECH-01"
+                                placeholderTextColor="#94A3B8"
+                                autoCapitalize="characters"
+                                value={emp.employeeId}
+                                onChangeText={(v) => handleUpdateRow(emp.id, 'employeeId', v)}
+                              />
+                            </View>
+                            <View style={styles.manualCol}>
+                              <Text style={styles.manualFieldLabel}>Mobile Number *</Text>
+                              <TextInput
+                                style={styles.manualInput}
+                                placeholder="e.g. 9876543210"
+                                placeholderTextColor="#94A3B8"
+                                keyboardType="phone-pad"
+                                maxLength={10}
+                                value={emp.phone}
+                                onChangeText={(v) => handleUpdateRow(emp.id, 'phone', v)}
+                              />
+                            </View>
+                          </View>
+
+                          {/* Row 4: Password */}
+                          <View style={{ marginTop: 2 }}>
+                            <Text style={styles.manualFieldLabel}>Password *</Text>
+                            <TextInput
+                              style={styles.manualInput}
+                              placeholder="e.g. Adani@123"
+                              placeholderTextColor="#94A3B8"
+                              value={emp.password}
+                              onChangeText={(v) => handleUpdateRow(emp.id, 'password', v)}
+                            />
+                          </View>
+                        </View>
+                      ))}
+
+                      {/* Add Another Employee Row Button */}
+                      <TouchableOpacity
+                        style={styles.addAnotherRowBtn}
+                        onPress={handleAddRow}
+                        activeOpacity={0.8}
+                      >
+                        <Plus size={16} color="#1E40AF" />
+                        <Text style={styles.addAnotherRowBtnText}>+ Add Another Employee</Text>
+                      </TouchableOpacity>
+
+                      {/* Default Substation Assignment */}
+                      <Text style={[styles.fieldSectionLabel, { marginTop: 8 }]}>
+                        Assign Default Substation (Optional)
+                      </Text>
+                      <Text style={styles.fieldSectionSub}>
+                        Permit these employees to check in at this substation:
+                      </Text>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.siteChipsRow}
+                      >
+                        <TouchableOpacity
+                          style={[
+                            styles.siteSelectChip,
+                            !bulkDefaultSiteId && styles.siteSelectChipActive,
+                          ]}
+                          onPress={() => setBulkDefaultSiteId('')}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.siteSelectChipText,
+                              !bulkDefaultSiteId && styles.siteSelectChipTextActive,
+                            ]}
+                          >
+                            None (Unassigned)
+                          </Text>
+                        </TouchableOpacity>
+                        {sites.map((s) => (
+                          <TouchableOpacity
+                            key={s.id}
+                            style={[
+                              styles.siteSelectChip,
+                              bulkDefaultSiteId === s.id && styles.siteSelectChipActive,
+                            ]}
+                            onPress={() => setBulkDefaultSiteId(s.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Text
+                              style={[
+                                styles.siteSelectChipText,
+                                bulkDefaultSiteId === s.id && styles.siteSelectChipTextActive,
+                              ]}
+                            >
+                              {s.name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+
+                      {/* Actions for Manual Form */}
+                      <View style={styles.bulkModalActions}>
+                        <TouchableOpacity
+                          style={styles.bulkCancelBtn}
+                          onPress={() => {
+                            setShowBulkModal(false);
+                            setBulkResult(null);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.bulkCancelBtnText}>Cancel</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.bulkSubmitBtn,
+                            uploadingBulk && styles.bulkSubmitBtnDisabled,
+                          ]}
+                          onPress={handleSaveManualBulk}
+                          disabled={uploadingBulk}
+                          activeOpacity={0.85}
+                        >
+                          {uploadingBulk ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          ) : (
+                            <>
+                              <UserPlus size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                              <Text style={styles.bulkSubmitBtnText}>
+                                Save & Add All Employees ({manualEmployees.length})
+                              </Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* TAB 2: Upload Excel File (.xlsx) */}
+                  {bulkTab === 'excel' && (
+                    <View>
+                      {/* Format Information Card */}
+                      <View style={styles.formatCard}>
+                        <Text style={styles.formatCardTitle}>Required Excel Columns</Text>
+                        <Text style={styles.formatCardSub}>
+                          Your spreadsheet must include these columns in the first row:
+                        </Text>
+
+                        <View style={styles.columnsGrid}>
+                          <View style={styles.columnPill}>
+                            <UserIcon size={12} color="#0369A1" style={{ marginRight: 4 }} />
+                            <Text style={styles.columnPillText}>Employee Name</Text>
+                          </View>
+                          <View style={styles.columnPill}>
+                            <Briefcase size={12} color="#0369A1" style={{ marginRight: 4 }} />
+                            <Text style={styles.columnPillText}>Designation</Text>
+                          </View>
+                          <View style={styles.columnPill}>
+                            <Globe size={12} color="#0369A1" style={{ marginRight: 4 }} />
+                            <Text style={styles.columnPillText}>Circle</Text>
+                          </View>
+                          <View style={styles.columnPill}>
+                            <Building2 size={12} color="#0369A1" style={{ marginRight: 4 }} />
+                            <Text style={styles.columnPillText}>Division</Text>
+                          </View>
+                          <View style={styles.columnPill}>
+                            <Smartphone size={12} color="#0369A1" style={{ marginRight: 4 }} />
+                            <Text style={styles.columnPillText}>Employee ID</Text>
+                          </View>
+                          <View style={styles.columnPill}>
+                            <Smartphone size={12} color="#0369A1" style={{ marginRight: 4 }} />
+                            <Text style={styles.columnPillText}>Mobile Number</Text>
+                          </View>
+                          <View style={styles.columnPill}>
+                            <KeyRound size={12} color="#0369A1" style={{ marginRight: 4 }} />
+                            <Text style={styles.columnPillText}>Password</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.loginExplanationRow}>
+                          <ShieldCheck size={14} color="#059669" style={{ marginRight: 6, marginTop: 1 }} />
+                          <Text style={styles.loginExplanationText}>
+                            Employees can log in with their Mobile Number or Employee ID using the password from this sheet.
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Template Download Card */}
+                      <View style={styles.templateCard}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.templateCardTitle}>Need Sample Format?</Text>
+                          <Text style={styles.templateCardSub}>
+                            Download formatted template with Name, Designation, Circle, Division, ID & Password
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.downloadTemplateBtn}
+                          onPress={handleDownloadTemplate}
+                          disabled={downloadingTemplate}
+                          activeOpacity={0.8}
+                        >
+                          {downloadingTemplate ? (
+                            <ActivityIndicator size="small" color="#1E3A8A" />
+                          ) : (
+                            <>
+                              <Download size={14} color="#1E3A8A" style={{ marginRight: 4 }} />
+                              <Text style={styles.downloadTemplateText}>Download .xlsx</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* File Drop/Picker Zone */}
+                      <Text style={styles.fieldSectionLabel}>Select Spreadsheet File</Text>
+                      {selectedFile ? (
+                        <View style={styles.selectedFileCard}>
+                          <View style={styles.selectedFileIconWrap}>
+                            <FileSpreadsheet size={24} color="#059669" />
+                          </View>
+                          <View style={{ flex: 1, paddingHorizontal: 10 }}>
+                            <Text style={styles.selectedFileName} numberOfLines={1}>
+                              {selectedFile.name}
+                            </Text>
+                            <Text style={styles.selectedFileSize}>
+                              {selectedFile.size
+                                ? `${(selectedFile.size / 1024).toFixed(1)} KB`
+                                : 'Ready to upload'}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={styles.removeFileBtn}
+                            onPress={() => setSelectedFile(null)}
+                            activeOpacity={0.7}
+                          >
+                            <Trash2 size={16} color="#DC2626" />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.fileDropZone}
+                          onPress={handlePickDocument}
+                          activeOpacity={0.75}
+                        >
+                          <View style={styles.fileDropIconCircle}>
+                            <UploadCloud size={28} color="#059669" />
+                          </View>
+                          <Text style={styles.fileDropTitle}>Tap to Browse Excel File</Text>
+                          <Text style={styles.fileDropSub}>Supports .xlsx, .xls, and .csv files</Text>
+                          <View style={styles.browsePill}>
+                            <Text style={styles.browsePillText}>Choose from Device</Text>
+                          </View>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Default Substation Assignment (Optional) */}
+                      <Text style={[styles.fieldSectionLabel, { marginTop: 16 }]}>
+                        Assign Default Substation (Optional)
+                      </Text>
+                      <Text style={styles.fieldSectionSub}>
+                        Permit imported employees to check in at this substation if not specified in Excel:
+                      </Text>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.siteChipsRow}
+                      >
+                        <TouchableOpacity
+                          style={[
+                            styles.siteSelectChip,
+                            !bulkDefaultSiteId && styles.siteSelectChipActive,
+                          ]}
+                          onPress={() => setBulkDefaultSiteId('')}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.siteSelectChipText,
+                              !bulkDefaultSiteId && styles.siteSelectChipTextActive,
+                            ]}
+                          >
+                            None (Unassigned)
+                          </Text>
+                        </TouchableOpacity>
+                        {sites.map((s) => (
+                          <TouchableOpacity
+                            key={s.id}
+                            style={[
+                              styles.siteSelectChip,
+                              bulkDefaultSiteId === s.id && styles.siteSelectChipActive,
+                            ]}
+                            onPress={() => setBulkDefaultSiteId(s.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Text
+                              style={[
+                                styles.siteSelectChipText,
+                                bulkDefaultSiteId === s.id && styles.siteSelectChipTextActive,
+                              ]}
+                            >
+                              {s.name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+
+                      {/* Modal Action Buttons */}
+                      <View style={styles.bulkModalActions}>
+                        <TouchableOpacity
+                          style={styles.bulkCancelBtn}
+                          onPress={() => {
+                            setShowBulkModal(false);
+                            setSelectedFile(null);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.bulkCancelBtnText}>Cancel</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.bulkSubmitBtn,
+                            (!selectedFile || uploadingBulk) && styles.bulkSubmitBtnDisabled,
+                          ]}
+                          onPress={handleUploadBulk}
+                          disabled={!selectedFile || uploadingBulk}
+                          activeOpacity={0.85}
+                        >
+                          {uploadingBulk ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          ) : (
+                            <>
+                              <UploadCloud size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                              <Text style={styles.bulkSubmitBtnText}>Upload & Import Excel</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
                 </View>
               )}
             </ScrollView>
@@ -1919,6 +2279,128 @@ const styles = StyleSheet.create({
   bulkModalScrollContent: {
     padding: 20,
     paddingBottom: 36,
+  },
+
+  // Bulk Tab Selector
+  bulkTabSelector: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 16,
+  },
+  bulkTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  bulkTabBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  bulkTabBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  bulkTabBtnTextActive: {
+    color: '#1E3A8A',
+    fontWeight: '800',
+  },
+
+  // Manual Employee Row Card
+  manualCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  manualCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  manualBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  manualBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1E40AF',
+  },
+  manualDeleteBtn: {
+    padding: 4,
+    borderRadius: 6,
+    backgroundColor: '#FEF2F2',
+  },
+  manualFormRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  manualCol: {
+    flex: 1,
+  },
+  manualFieldLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 3,
+    textTransform: 'uppercase',
+  },
+  manualInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: 12,
+    color: '#0F172A',
+  },
+  addAnotherRowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 11,
+    borderRadius: 10,
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  addAnotherRowBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E40AF',
   },
 
   // Format Card

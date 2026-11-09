@@ -392,7 +392,7 @@ async def bulk_upload_employees(
 async def bulk_import_employees_json(
     items: List[BulkEmployeeItem],
     defaultSiteId: Optional[str] = None,
-    token_data: dict = Depends(require_roles(["admin"]))
+    token_data: dict = Depends(require_roles(["admin", "supervisor"]))
 ):
     """Accepts JSON list of employee items for bulk creation/update."""
     dict_records = [item.dict() for item in items]
