@@ -147,6 +147,13 @@ export const TrackingScreen: React.FC = () => {
 
   const selectedTechIdRef = useRef<string | null>(null);
 
+  // Guard: Restrict Tracking screen to Admin and Supervisor roles only
+  useEffect(() => {
+    if (user?.role === 'technician') {
+      navigation.navigate('Dashboard');
+    }
+  }, [user?.role]);
+
   // Keep ref in sync whenever selectedTech changes
   useEffect(() => {
     selectedTechIdRef.current = selectedTech?.id || null;
@@ -154,6 +161,10 @@ export const TrackingScreen: React.FC = () => {
 
   // 2. Fetch Fleet Telemetry Data from Backend
   const fetchLiveTracking = async (isManual = false) => {
+    if (user?.role === 'technician') {
+      setLoading(false);
+      return;
+    }
     if (isManual) setRefreshing(true);
     try {
       const res = await dashboardService.getLiveFleetRadar();

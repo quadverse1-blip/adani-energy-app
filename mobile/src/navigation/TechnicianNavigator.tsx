@@ -8,7 +8,6 @@ import { TodayAttendanceScreen } from '../screens/technician/TodayAttendanceScre
 import { HistoryScreen } from '../screens/technician/HistoryScreen';
 import { SalaryScreen } from '../screens/technician/SalaryScreen';
 import { SiteDetailsScreen } from '../screens/technician/SiteDetailsScreen';
-import { TrackingScreen } from '../screens/admin/TrackingScreen';
 import { SupervisorTeamScreen } from '../screens/supervisor/SupervisorTeamScreen';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -44,11 +43,6 @@ export const TechnicianNavigator: React.FC = () => {
       <Stack.Screen
         name="SiteManagement"
         component={SiteDetailsScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="Tracking"
-        component={TrackingScreen}
         options={{ headerShown: false }}
       />
       {isSupervisor && (

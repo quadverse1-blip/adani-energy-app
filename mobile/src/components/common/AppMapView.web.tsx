@@ -132,8 +132,8 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
         if (typeName === 'Marker' || props.coordinate) {
           if (props.coordinate?.latitude && props.coordinate?.longitude) {
             parsedMarkers.push({
-              lat: Number(props.coordinate.latitude),
-              lon: Number(props.coordinate.longitude),
+              lat: props.coordinate.latitude,
+              lon: props.coordinate.longitude,
               title: props.title || '',
               description: props.description || '',
               color: props.pinColor || '#1E63F0',
@@ -142,8 +142,8 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
         } else if (typeName === 'Circle' || props.radius) {
           if (props.center?.latitude && props.center?.longitude) {
             parsedCircles.push({
-              lat: Number(props.center.latitude),
-              lon: Number(props.center.longitude),
+              lat: props.center.latitude,
+              lon: props.center.longitude,
               radius: props.radius || 500,
               fillColor: props.fillColor || 'rgba(30, 99, 240, 0.15)',
               strokeColor: props.strokeColor || '#1E63F0',
@@ -153,7 +153,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
         } else if (typeName === 'Polyline' || props.coordinates) {
           if (Array.isArray(props.coordinates) && props.coordinates.length > 0) {
             parsedPolylines.push({
-              coordinates: props.coordinates.map((c: any) => [c.latitude, c.longitude]),
+              coordinates: props.coordinates.map((c: any) => [c.longitude, c.latitude]),
               color: props.strokeColor || '#1E63F0',
               width: props.strokeWidth || 4,
             });
@@ -174,28 +174,58 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       const circlesJson = JSON.stringify(circles);
       const polylinesJson = JSON.stringify(polylines);
 
-      return `<!DOCTYPE html>
+      return `
+<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    if (!window.L) {
-      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\\/script>');
-    }
-  </script>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #map { width: 100%; height: 100%; overflow: hidden; background: #E2E8F0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    .leaflet-container { background: #E2E8F0 !important; }
+    html, body, #map { width: 100%; height: 100%; overflow: hidden; background: #E2E8F0; }
+    /* 100% SUPPRESSION OF ANY TRACE OF MAPLIBRE / OPENFREEMAP / OPENMAPTILES / OPENSTREETMAP ATTRIBUTION */
+    .maplibregl-ctrl-attrib,
+    .mapboxgl-ctrl-attrib,
+    .maplibregl-ctrl-bottom-right,
+    .maplibregl-ctrl-bottom-left,
+    .maplibregl-ctrl-attrib-inner,
+    .maplibregl-ctrl-attrib-summary,
+    .maplibregl-compact,
+    .maplibregl-compact-show,
+    details.maplibregl-ctrl-attrib,
+    summary.maplibregl-ctrl-attrib-button,
+    a.maplibregl-ctrl-attrib-button,
+    div[class*="attrib"],
+    details[class*="attrib"],
+    summary[class*="attrib"],
+    a[href*="maplibre"],
+    a[href*="openfreemap"],
+    a[href*="openstreetmap"],
+    a[href*="openmaptiles"] {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      left: -99999px !important;
+      top: -99999px !important;
+      width: 0 !important;
+      height: 0 !important;
+      max-width: 0 !important;
+      max-height: 0 !important;
+      font-size: 0 !important;
+      line-height: 0 !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      clip-path: inset(100%) !important;
+    }
     .mappls-brand-badge {
       position: absolute !important;
       bottom: 8px !important;
       left: 8px !important;
-      z-index: 1000 !important;
+      z-index: 99999 !important;
       display: inline-flex !important;
       align-items: center !important;
       background: #FFFFFF !important;
@@ -235,21 +265,14 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       white-space: nowrap;
       box-shadow: 0 2px 6px rgba(0,0,0,0.3);
       border: 1.5px solid #FFFFFF;
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
     }
     .user-marker-pin {
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
       background: #2563EB;
       border: 2.5px solid #FFFFFF;
       box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-    }
-    .leaflet-popup-content-wrapper {
-      border-radius: 8px !important;
-      box-shadow: 0 3px 12px rgba(0,0,0,0.2) !important;
     }
   </style>
 </head>
@@ -264,87 +287,226 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     var circlesData = ${circlesJson};
     var polylinesData = ${polylinesJson};
 
-    var map = L.map('map', {
-      center: [${activeCenter.latitude}, ${activeCenter.longitude}],
+    // Permanently stub out AttributionControl to ensure 100% elimination of MapLibre/OpenStreetMap attributions
+    if (window.maplibregl && window.maplibregl.AttributionControl) {
+      window.maplibregl.AttributionControl = function() {
+        return {
+          onAdd: function() {
+            var el = document.createElement('div');
+            el.style.display = 'none';
+            return el;
+          },
+          onRemove: function() {}
+        };
+      };
+    }
+
+    var mapplsRasterStyle = {
+      version: 8,
+      sources: {
+        'mappls-voyager': {
+          type: 'raster',
+          tiles: [
+            'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+            'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+            'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+            'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'
+          ],
+          tileSize: 256,
+          attribution: ''
+        }
+      },
+      layers: [
+        {
+          id: 'mappls-voyager-layer',
+          type: 'raster',
+          source: 'mappls-voyager',
+          minzoom: 0,
+          maxzoom: 20
+        }
+      ]
+    };
+
+    var map = new maplibregl.Map({
+      container: 'map',
+      style: mapplsRasterStyle,
+      center: [${activeCenter.longitude}, ${activeCenter.latitude}],
       zoom: ${initialZoom},
-      zoomControl: false,
-      attributionControl: false
-    });
-
-    var cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
+      minZoom: 4,
       maxZoom: 20,
-      detectRetina: true
-    }).addTo(map);
+      attributionControl: false,
+      customAttribution: []
+    });
 
-    var hasOsm = false;
-    cartoLayer.on('tileerror', function() {
-      if (!hasOsm) {
-        hasOsm = true;
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    window.map = map;
+
+    function purgeAllAttributions() {
+      try {
+        var selectors = [
+          '.maplibregl-ctrl-attrib',
+          '.mapboxgl-ctrl-attrib',
+          '.maplibregl-ctrl-bottom-right',
+          '.maplibregl-ctrl-bottom-left',
+          '.maplibregl-ctrl-attrib-inner',
+          '.maplibregl-ctrl-attrib-summary',
+          '.maplibregl-compact',
+          '.maplibregl-compact-show',
+          'details.maplibregl-ctrl-attrib',
+          'summary.maplibregl-ctrl-attrib-button',
+          'div[class*="attrib"]',
+          'details[class*="attrib"]',
+          'summary[class*="attrib"]',
+          'a[href*="maplibre"]',
+          'a[href*="openfreemap"]',
+          'a[href*="openstreetmap"]',
+          'a[href*="openmaptiles"]'
+        ];
+        selectors.forEach(function(s) {
+          document.querySelectorAll(s).forEach(function(el) {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+          });
+        });
+
+        // Deep text scanner: destroy any element containing forbidden attribution strings
+        var allElements = document.querySelectorAll('#map *');
+        for (var i = 0; i < allElements.length; i++) {
+          var el = allElements[i];
+          if (el.className && typeof el.className === 'string' && el.className.indexOf('mappls') !== -1) {
+            continue; // Preserve official Mappls badge
+          }
+          var txt = (el.innerText || el.textContent || '').toLowerCase();
+          if (
+            txt.indexOf('maplibre') !== -1 ||
+            txt.indexOf('openfreemap') !== -1 ||
+            txt.indexOf('openmaptiles') !== -1 ||
+            txt.indexOf('openstreetmap') !== -1
+          ) {
+            if (el.parentNode) {
+              el.parentNode.removeChild(el);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    purgeAllAttributions();
+    try {
+      var observer = new MutationObserver(purgeAllAttributions);
+      observer.observe(document.body, { childList: true, subtree: true });
+    } catch(e) {}
+    map.on('load', purgeAllAttributions);
+    map.on('render', purgeAllAttributions);
+    map.on('style.load', function() {
+      try {
+        var style = map.getStyle();
+        if (style && style.sources) {
+          Object.keys(style.sources).forEach(function(k) {
+            if (style.sources[k]) delete style.sources[k].attribution;
+          });
+        }
+      } catch (e) {}
+      purgeAllAttributions();
+    });
+    setInterval(purgeAllAttributions, 200);
+
+    function createCircleGeoJSON(center, radiusInMeters, points) {
+      if (!points) points = 64;
+      var km = radiusInMeters / 1000;
+      var coords = { latitude: center[1], longitude: center[0] };
+      var ret = [];
+      var distanceX = km / (111.320 * Math.cos(coords.latitude * Math.PI / 180));
+      var distanceY = km / 110.574;
+      for (var i = 0; i < points; i++) {
+        var theta = (i / points) * (2 * Math.PI);
+        var x = distanceX * Math.cos(theta);
+        var y = distanceY * Math.sin(theta);
+        ret.push([coords.longitude + x, coords.latitude + y]);
       }
-    });
+      ret.push(ret[0]);
+      return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [ret] } };
+    }
 
-    circlesData.forEach(function(c) {
-      L.circle([c.lat, c.lon], {
-        radius: c.radius || 500,
-        fillColor: c.fillColor || 'rgba(30, 99, 240, 0.15)',
-        color: c.strokeColor || '#1E63F0',
-        weight: c.strokeWidth || 2
-      }).addTo(map);
-    });
+    map.on('load', function() {
+      // Optimize vector tile layer zoom levels for Maharashtra streets and POIs
+      try {
+        if (map.getLayer('poi_r1')) map.setLayerZoomRange('poi_r1', 13, 24);
+        if (map.getLayer('poi_r7')) map.setLayerZoomRange('poi_r7', 14, 24);
+        if (map.getLayer('poi_r20')) map.setLayerZoomRange('poi_r20', 15, 24);
+        if (map.getLayer('highway-name-minor')) {
+          map.setLayerZoomRange('highway-name-minor', 13.5, 24);
+          map.setPaintProperty('highway-name-minor', 'text-halo-color', '#FFFFFF');
+          map.setPaintProperty('highway-name-minor', 'text-halo-width', 2);
+        }
+      } catch (e) {}
 
-    polylinesData.forEach(function(p) {
-      L.polyline(p.coordinates, {
-        color: p.color || '#1E63F0',
-        weight: p.width || 4,
-        lineCap: 'round',
-        lineJoin: 'round'
-      }).addTo(map);
-    });
-
-    markersData.forEach(function(m) {
-      var isSite = (m.title && m.title.toLowerCase().indexOf('substation') !== -1);
-      var iconHtml = isSite
-        ? '<div class="site-marker-pin"><span>⚡</span><span>' + m.title + '</span></div>'
-        : '<div class="user-marker-pin" style="background:' + (m.color || '#2563EB') + '"></div>';
-
-      var customIcon = L.divIcon({
-        className: 'appmap-pin-wrap',
-        html: iconHtml,
-        iconSize: isSite ? [100, 24] : [16, 16],
-        iconAnchor: isSite ? [50, 24] : [8, 8],
-        popupAnchor: [0, isSite ? -24 : -8]
+      circlesData.forEach(function(c, i) {
+        var sourceId = 'circle-src-' + i;
+        map.addSource(sourceId, {
+          type: 'geojson',
+          data: createCircleGeoJSON([c.lon, c.lat], c.radius)
+        });
+        map.addLayer({
+          id: 'circle-fill-' + i,
+          type: 'fill',
+          source: sourceId,
+          paint: { 'fill-color': c.fillColor || '#1E63F0', 'fill-opacity': 0.15 }
+        });
+        map.addLayer({
+          id: 'circle-line-' + i,
+          type: 'line',
+          source: sourceId,
+          paint: { 'line-color': c.strokeColor || '#1E63F0', 'line-width': c.strokeWidth || 2 }
+        });
       });
 
-      var marker = L.marker([m.lat, m.lon], { icon: customIcon }).addTo(map);
-      if (m.title || m.description) {
-        marker.bindPopup('<div style="padding:6px;font-size:12px;"><strong>' + (m.title || '') + '</strong><br>' + (m.description || '') + '</div>');
-      }
-    });
+      polylinesData.forEach(function(p, i) {
+        var sourceId = 'polyline-src-' + i;
+        map.addSource(sourceId, {
+          type: 'geojson',
+          data: { type: 'Feature', geometry: { type: 'LineString', coordinates: p.coordinates } }
+        });
+        map.addLayer({
+          id: 'polyline-line-' + i,
+          type: 'line',
+          source: sourceId,
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: { 'line-color': p.color || '#1E63F0', 'line-width': p.width || 4 }
+        });
+      });
 
-    setTimeout(function() { map.invalidateSize(); }, 100);
-    setTimeout(function() { map.invalidateSize(); }, 300);
-    setTimeout(function() { map.invalidateSize(); }, 800);
-    window.addEventListener('resize', function() { map.invalidateSize(); });
+      markersData.forEach(function(m) {
+        var el = document.createElement('div');
+        el.className = 'map-pin';
+        if (m.color) el.style.background = m.color;
+
+        var marker = new maplibregl.Marker({ element: el })
+          .setLngLat([m.lon, m.lat])
+          .addTo(map);
+
+        if (m.title || m.description) {
+          var popup = new maplibregl.Popup({ offset: 20 })
+            .setHTML('<strong>' + (m.title || '') + '</strong><br>' + (m.description || ''));
+          marker.setPopup(popup);
+        }
+      });
+    });
 
     window.addEventListener('message', function(event) {
       try {
         var msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         if (!msg) return;
         if (msg.type === 'FLY_TO') {
-          map.flyTo([msg.payload.lat, msg.payload.lon], msg.payload.zoom || 14, { duration: 0.6 });
+          map.flyTo({ center: [msg.payload.lon, msg.payload.lat], zoom: msg.payload.zoom || 14 });
         } else if (msg.type === 'FIT_COORDS') {
-          if (Array.isArray(msg.payload.coords) && msg.payload.coords.length > 0) {
-            var latlngs = msg.payload.coords.map(function(c) { return [c.latitude, c.longitude]; });
-            map.fitBounds(latlngs, { padding: [40, 40], maxZoom: 16 });
-          }
+          var bounds = new maplibregl.LngLatBounds();
+          msg.payload.coords.forEach(function(c) { bounds.extend([c.longitude, c.latitude]); });
+          map.fitBounds(bounds, { padding: 40, maxZoom: 16 });
         }
       } catch (e) {}
     });
   </script>
 </body>
-</html>`;
+</html>
+      `;
     }, [markers, circles, polylines, activeCenter, initialZoom]);
 
     return (
@@ -352,7 +514,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
         <iframe
           ref={iframeRef}
           srcDoc={html}
-          style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+          style={{ width: '100%', height: '100%', border: 'none' }}
           title="Mappls Map View"
         />
       </View>
@@ -366,8 +528,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     overflow: 'hidden',
-    width: '100%',
-    height: '100%',
   },
 });
 
