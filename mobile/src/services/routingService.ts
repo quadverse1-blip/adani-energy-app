@@ -198,7 +198,7 @@ export const routingService = {
           { name: 'Solapur', latitude: 17.6599, longitude: 75.9064, code: 'SLP' },
         ],
         tileProvider: 'Mappls',
-        styleUrl: 'https://tiles.openfreemap.org/styles/liberty',
+        styleUrl: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
       };
     }
   },

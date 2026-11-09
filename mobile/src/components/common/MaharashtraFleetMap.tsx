@@ -704,9 +704,35 @@ export const MaharashtraFleetMap: React.FC<MaharashtraFleetMapProps> = ({
       };
     }
 
+    var mapplsRasterStyle = {
+      version: 8,
+      sources: {
+        'mappls-voyager': {
+          type: 'raster',
+          tiles: [
+            'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+            'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+            'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+            'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'
+          ],
+          tileSize: 256,
+          attribution: ''
+        }
+      },
+      layers: [
+        {
+          id: 'mappls-voyager-layer',
+          type: 'raster',
+          source: 'mappls-voyager',
+          minzoom: 0,
+          maxzoom: 20
+        }
+      ]
+    };
+
     var map = new maplibregl.Map({
       container: 'map',
-      style: 'https://tiles.openfreemap.org/styles/liberty',
+      style: mapplsRasterStyle,
       center: [${MAHARASHTRA_CENTER.longitude}, ${MAHARASHTRA_CENTER.latitude}],
       zoom: ${MAHARASHTRA_CENTER.zoom},
       minZoom: 4,
