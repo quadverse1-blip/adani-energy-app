@@ -139,27 +139,7 @@ export const SitesScreen: React.FC = () => {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // Overview Map & View Mode States
-  const [siteViewTab, setSiteViewTab] = useState<'map' | 'list'>('map');
-  const [inspectedSite, setInspectedSite] = useState<Substation | null>(null);
-  const overviewMapRef = useRef<any>(null);
-
-  const handleSelectSiteOnMap = (site: Substation) => {
-    setInspectedSite(site);
-    if (site.latitude && site.longitude && overviewMapRef.current) {
-      overviewMapRef.current.animateToRegion(
-        {
-          latitude: site.latitude,
-          longitude: site.longitude,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-        },
-        400
-      );
-    }
-  };
-
-  // Map state
+  // Map state for Add/Edit Modal
   const mapRef = useRef<any>(null);
   const [region, setRegion] = useState({
     latitude: 21.1926,
@@ -173,9 +153,6 @@ export const SitesScreen: React.FC = () => {
     try {
       const data = await siteService.getSites();
       setSites(data);
-      if (data && data.length > 0) {
-        setInspectedSite((prev) => prev || data[0]);
-      }
     } catch (e) {
       console.warn('Sites fetch error:', e);
     } finally {
@@ -627,11 +604,13 @@ export const SitesScreen: React.FC = () => {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
+          // Instant optimistic UI deletion
+          setSites((prev) => prev.filter((s) => s.id !== site.id && (s as any)._id !== site.id));
           try {
             await siteService.deleteSite(site.id);
-            fetchSites();
           } catch (e: any) {
-            Alert.alert('Error', e.message);
+            Alert.alert('Error', e.message || 'Failed to delete substation');
+            fetchSites();
           }
         },
       },
@@ -671,165 +650,7 @@ export const SitesScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* View Switcher: Substation Map Radar vs Site Cards List */}
-      <View style={styles.topToggleBar}>
-        <TouchableOpacity delayPressIn={0}
-          style={[styles.topToggleBtn, siteViewTab === 'map' && styles.topToggleBtnActive]}
-          onPress={() => setSiteViewTab('map')}
-          activeOpacity={0.8}
-        >
-          <MapPin size={15} color={siteViewTab === 'map' ? '#1E63F0' : '#64748B'} />
-          <Text style={[styles.topToggleBtnText, siteViewTab === 'map' && styles.topToggleBtnTextActive]}>
-            Substation Map ({sites.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity delayPressIn={0}
-          style={[styles.topToggleBtn, siteViewTab === 'list' && styles.topToggleBtnActive]}
-          onPress={() => setSiteViewTab('list')}
-          activeOpacity={0.8}
-        >
-          <Building2 size={15} color={siteViewTab === 'list' ? '#1E63F0' : '#64748B'} />
-          <Text style={[styles.topToggleBtnText, siteViewTab === 'list' && styles.topToggleBtnTextActive]}>
-            Site Cards List
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {siteViewTab === 'map' ? (
-        <ScrollView style={styles.mapTabContent} showsVerticalScrollIndicator={false}>
-          {/* Quick Substation Selector Chips */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.siteChipsRow}
-          >
-            {sites.map((s) => {
-              const isSelected = inspectedSite?.id === s.id;
-              return (
-                <TouchableOpacity delayPressIn={0}
-                  key={`chip-${s.id}`}
-                  style={[styles.siteChip, isSelected && styles.siteChipActive]}
-                  onPress={() => handleSelectSiteOnMap(s)}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.chipDot, isSelected && { backgroundColor: '#1E63F0' }]} />
-                  <Text style={[styles.siteChipText, isSelected && styles.siteChipTextActive]}>
-                    {s.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          {/* Interactive Substation Geofence Grid Map Frame */}
-          <View style={styles.overviewMapFrame}>
-            <MapView
-              ref={overviewMapRef}
-              style={StyleSheet.absoluteFill}
-              initialRegion={{
-                latitude: inspectedSite?.latitude || 21.1926,
-                longitude: inspectedSite?.longitude || 72.7997,
-                latitudeDelta: 0.04,
-                longitudeDelta: 0.04,
-              }}
-            >
-              {sites.map((s) => {
-                if (!s.latitude || !s.longitude) return null;
-                const isSelected = inspectedSite?.id === s.id;
-                return (
-                  <React.Fragment key={`overview-marker-${s.id}`}>
-                    {/* 500m Substation Geofence Perimeter */}
-                    <Circle
-                      center={{ latitude: s.latitude, longitude: s.longitude }}
-                      radius={s.radiusMeters || 500}
-                      strokeColor={isSelected ? '#1E63F0' : '#10B981'}
-                      strokeWidth={isSelected ? 3 : 2}
-                      fillColor={isSelected ? 'rgba(30, 99, 240, 0.22)' : 'rgba(16, 185, 129, 0.16)'}
-                    />
-
-                    {/* Substation Marker Pin */}
-                    <Marker
-                      coordinate={{ latitude: s.latitude, longitude: s.longitude }}
-                      title={s.name}
-                      description={`${s.code} • Allowed Radius: ${s.radiusMeters || 500}m`}
-                      pinColor={isSelected ? '#1E63F0' : '#DC2626'}
-                      onPress={() => handleSelectSiteOnMap(s)}
-                    />
-                  </React.Fragment>
-                );
-              })}
-            </MapView>
-          </View>
-
-          {/* Inspected Substation Details Card */}
-          {inspectedSite && (
-            <View style={styles.inspectedCard}>
-              <View style={styles.inspectedCardHeader}>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={styles.inspectedSiteName}>{inspectedSite.name}</Text>
-                    <View style={styles.codeBadge}>
-                      <Text style={styles.codeBadgeText}>{inspectedSite.code}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.inspectedAddress} numberOfLines={2}>
-                    {inspectedSite.address || 'Address registered on grid'}
-                  </Text>
-                </View>
-
-                <View style={styles.statusPill}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusPillText}>
-                    {inspectedSite.status ? inspectedSite.status.toUpperCase() : 'ACTIVE'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.inspectedDetailsRow}>
-                <View style={styles.inspectedDetailCol}>
-                  <Text style={styles.inspectedLabel}>AUTHORIZED GEOFENCE</Text>
-                  <Text style={styles.inspectedValueGreen}>{inspectedSite.radiusMeters || 500} m</Text>
-                </View>
-                <View style={styles.inspectedDetailCol}>
-                  <Text style={styles.inspectedLabel}>WORKING SHIFT</Text>
-                  <Text style={styles.inspectedValue}>{inspectedSite.workingHours || '09:00 AM - 06:00 PM'}</Text>
-                </View>
-                <View style={styles.inspectedDetailCol}>
-                  <Text style={styles.inspectedLabel}>SITE MANAGER</Text>
-                  <Text style={styles.inspectedValue}>
-                    {inspectedSite.manager?.name || inspectedSite.manager?.phone || 'Assigned In-Charge'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.inspectedActionsRow}>
-                <TouchableOpacity delayPressIn={0}
-                  style={styles.openNavBtn}
-                  onPress={() =>
-                    Linking.openURL(
-                      `https://maps.mappls.com/?point=${inspectedSite.latitude},${inspectedSite.longitude}`
-                    )
-                  }
-                  activeOpacity={0.8}
-                >
-                  <Zap size={14} color="#1E63F0" style={{ marginRight: 6 }} />
-                  <Text style={styles.openNavBtnText}>Open Mappls Navigation</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity delayPressIn={0}
-                  style={styles.editSiteQuickBtn}
-                  onPress={() => handleOpenEdit(inspectedSite)}
-                  activeOpacity={0.8}
-                >
-                  <Edit size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.editSiteQuickBtnText}>Edit Geofence</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-        </ScrollView>
-      ) : (
+      {/* Substations Cards List */}
         /* Substations Cards List (Matching Background of User Photo) */
         <FlatList
           data={sites}
@@ -941,25 +762,14 @@ export const SitesScreen: React.FC = () => {
                 <View style={styles.actionRow}>
                   <TouchableOpacity delayPressIn={0}
                     style={[styles.rosterBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
-                    onPress={() => {
-                      handleSelectSiteOnMap(item);
-                      setSiteViewTab('map');
-                    }}
+                    onPress={() => handleOpenEdit(item)}
                     activeOpacity={0.8}
                   >
-                    <MapPin size={13} color="#1E63F0" style={{ marginRight: 5 }} />
-                    <Text style={[styles.rosterBtnText, { color: '#1E63F0' }]}>VIEW ON MAP</Text>
+                    <Edit size={13} color="#1E63F0" style={{ marginRight: 5 }} />
+                    <Text style={[styles.rosterBtnText, { color: '#1E63F0' }]}>EDIT GEOFENCE</Text>
                   </TouchableOpacity>
 
                   <View style={styles.iconActionsWrap}>
-                    <TouchableOpacity delayPressIn={0}
-                      style={styles.iconActionBtn}
-                      onPress={() => handleOpenEdit(item)}
-                      activeOpacity={0.7}
-                    >
-                      <Edit size={16} color="#64748B" />
-                    </TouchableOpacity>
-
                     <TouchableOpacity delayPressIn={0}
                       style={[styles.iconActionBtn, { backgroundColor: '#FEF2F2' }]}
                       onPress={() => handleDelete(item)}
@@ -973,7 +783,6 @@ export const SitesScreen: React.FC = () => {
             </AppCard>
           )}
         />
-      )}
 
       {/* ========================================================================= */}
       {/* ADD / EDIT SITE MODAL DIALOG (MATCHES USER IMAGE EXACTLY)                  */}

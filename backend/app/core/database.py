@@ -459,38 +459,54 @@ class FirestoreCollectionDictWrapper:
         self._sync_ttl: float = 10.0
 
     def __getitem__(self, key: str) -> dict:
+        if self.collection_name == "sites" and hasattr(self.db_manager, "_deleted_site_ids") and key in self.db_manager._deleted_site_ids:
+            raise KeyError(key)
         if key in self.fallback_dict:
             return self.fallback_dict[key]
         doc = self.db_manager.get_firestore_document(self.collection_name, key)
         if doc is not None:
+            if self.collection_name == "sites" and (doc.get("status") == "deleted" or (hasattr(self.db_manager, "_deleted_site_ids") and key in self.db_manager._deleted_site_ids)):
+                raise KeyError(key)
             self.fallback_dict[key] = doc
             return doc
         return self.fallback_dict[key]
 
     def __setitem__(self, key: str, value: dict):
+        if self.collection_name == "sites" and hasattr(self.db_manager, "_deleted_site_ids"):
+            self.db_manager._deleted_site_ids.discard(key)
         self.fallback_dict[key] = value
         self.db_manager.set_firestore_document_async(self.collection_name, key, value)
 
     def __delitem__(self, key: str):
         if key in self.fallback_dict:
             del self.fallback_dict[key]
+        if self.collection_name == "sites" and hasattr(self.db_manager, "_deleted_site_ids"):
+            self.db_manager._deleted_site_ids.add(key)
         self.db_manager.delete_firestore_document_async(self.collection_name, key)
 
     def __contains__(self, key: str) -> bool:
+        if self.collection_name == "sites" and hasattr(self.db_manager, "_deleted_site_ids") and key in self.db_manager._deleted_site_ids:
+            return False
         if key in self.fallback_dict:
             return True
         if self.db_manager.is_connected:
             doc = self.db_manager.get_firestore_document(self.collection_name, key)
             if doc is not None:
+                if self.collection_name == "sites" and (doc.get("status") == "deleted" or (hasattr(self.db_manager, "_deleted_site_ids") and key in self.db_manager._deleted_site_ids)):
+                    return False
                 self.fallback_dict[key] = doc
                 return True
         return False
 
     def get(self, key: str, default=None):
+        if self.collection_name == "sites" and hasattr(self.db_manager, "_deleted_site_ids") and key in self.db_manager._deleted_site_ids:
+            return default
         if key in self.fallback_dict:
             return self.fallback_dict[key]
         doc = self.db_manager.get_firestore_document(self.collection_name, key)
         if doc is not None:
+            if self.collection_name == "sites" and (doc.get("status") == "deleted" or (hasattr(self.db_manager, "_deleted_site_ids") and key in self.db_manager._deleted_site_ids)):
+                return default
             self.fallback_dict[key] = doc
             return doc
         return default
@@ -498,8 +514,17 @@ class FirestoreCollectionDictWrapper:
     def values(self, force_refresh: bool = False) -> List[dict]:
         import time
         now_ts = time.time()
+
+        # Prune deleted sites from in-memory fallback dict
+        if self.collection_name == "sites" and hasattr(self.db_manager, "_deleted_site_ids"):
+            for d_id in list(self.db_manager._deleted_site_ids):
+                self.fallback_dict.pop(d_id, None)
+
         if not force_refresh and (now_ts - self._last_sync_time) < self._sync_ttl and len(self.fallback_dict) > 0:
-            return list(self.fallback_dict.values())
+            return [
+                v for v in self.fallback_dict.values()
+                if not (self.collection_name == "sites" and (v.get("status") == "deleted" or (hasattr(self.db_manager, "_deleted_site_ids") and str(v.get("_id")) in self.db_manager._deleted_site_ids)))
+            ]
 
         # Merge local in-memory operational records with remote Firestore documents
         merged = dict(self.fallback_dict)
@@ -508,6 +533,11 @@ class FirestoreCollectionDictWrapper:
             for doc in remote_docs:
                 doc_id = doc.get("_id") or doc.get("id")
                 if doc_id:
+                    # Permanently skip deleted sites
+                    if self.collection_name == "sites" and (doc.get("status") == "deleted" or (hasattr(self.db_manager, "_deleted_site_ids") and str(doc_id) in self.db_manager._deleted_site_ids)):
+                        merged.pop(doc_id, None)
+                        self.fallback_dict.pop(doc_id, None)
+                        continue
                     if doc_id in merged:
                         local_doc = merged[doc_id]
                         local_time = local_doc.get("updatedAt") or (local_doc.get("checkIn") or {}).get("time") or ""
@@ -519,7 +549,10 @@ class FirestoreCollectionDictWrapper:
                         merged[doc_id] = doc
                         self.fallback_dict[doc_id] = doc
         self._last_sync_time = now_ts
-        return list(merged.values())
+        return [
+            v for v in merged.values()
+            if not (self.collection_name == "sites" and (v.get("status") == "deleted" or (hasattr(self.db_manager, "_deleted_site_ids") and str(v.get("_id")) in self.db_manager._deleted_site_ids)))
+        ]
 
     def keys(self):
         return [doc.get('_id') or doc.get('id') for doc in self.values() if doc.get('_id') or doc.get('id')]
@@ -558,6 +591,7 @@ class DatabaseManager:
 
         # Optional firebase-admin client
         self.admin_db: Optional[Any] = None
+        self._deleted_site_ids: Set[str] = set()
 
         # Collection dict wrappers used by all routers
         self.employees = FirestoreCollectionDictWrapper(self, "employees", self._raw_employees)
@@ -828,18 +862,37 @@ class DatabaseManager:
                     return emp
         return None
 
+    def record_deleted_site(self, site_id: str):
+        if not site_id:
+            return
+        clean_id = str(site_id).strip()
+        self._deleted_site_ids.add(clean_id)
+        if clean_id in self._raw_sites:
+            del self._raw_sites[clean_id]
+        if hasattr(self, "sites") and clean_id in self.sites.fallback_dict:
+            del self.sites.fallback_dict[clean_id]
+
     def get_site(self, site_id: str) -> Optional[dict]:
         clean_id = (site_id or "").strip()
-        if not clean_id:
+        if not clean_id or clean_id in self._deleted_site_ids:
             return None
         if clean_id in self._raw_sites:
-            return self._raw_sites[clean_id]
-        for s in self._raw_sites.values():
+            s = self._raw_sites[clean_id]
+            if s and s.get("status") != "deleted":
+                return s
+            return None
+        for s in list(self._raw_sites.values()):
             if str(s.get("code") or "").lower() == clean_id.lower() or str(s.get("_id") or "").lower() == clean_id.lower() or str(s.get("id") or "").lower() == clean_id.lower():
+                s_id = str(s.get("_id") or s.get("id") or "")
+                if s_id in self._deleted_site_ids or s.get("status") == "deleted":
+                    return None
                 return s
         doc = self.get_firestore_document("sites", clean_id)
         if doc:
-            self._raw_sites[doc.get("_id") or clean_id] = doc
+            d_id = str(doc.get("_id") or doc.get("id") or clean_id)
+            if doc.get("status") == "deleted" or d_id in self._deleted_site_ids:
+                return None
+            self._raw_sites[d_id] = doc
             return doc
         return None
 

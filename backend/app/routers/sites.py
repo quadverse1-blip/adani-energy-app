@@ -180,64 +180,82 @@ async def update_site(
     db.set_firestore_document("sites", s["_id"], s)
     return SiteResponse(id=s["_id"], **s)
 
+def _cascade_unlink_deleted_site(doc_id: str, site_id: str):
+    try:
+        for emp_id, emp in list(db.employees.items()):
+            modified = False
+            if emp.get("assignedSiteIds"):
+                old_ids = [str(x) for x in emp["assignedSiteIds"]]
+                if doc_id in old_ids or str(site_id) in old_ids:
+                    new_ids = [x for x in old_ids if x != doc_id and x != str(site_id)]
+                    emp["assignedSiteIds"] = new_ids
+                    modified = True
+
+            cur_assigned = str(emp.get("assignedSiteId") or "")
+            if cur_assigned == doc_id or cur_assigned == str(site_id):
+                remaining = emp.get("assignedSiteIds") or []
+                if remaining:
+                    next_id = remaining[0]
+                    emp["assignedSiteId"] = next_id
+                    nxt_s = db.get_site(next_id)
+                    emp["assignedSiteName"] = nxt_s.get("name") if nxt_s else None
+                else:
+                    emp["assignedSiteId"] = None
+                    emp["assignedSiteName"] = None
+                modified = True
+
+            if isinstance(emp.get("siteAssignments"), dict):
+                for k in [doc_id, str(site_id)]:
+                    if k in emp["siteAssignments"]:
+                        del emp["siteAssignments"][k]
+                        modified = True
+
+            if modified:
+                db.employees[emp_id] = emp
+                if hasattr(db, "set_firestore_document_async"):
+                    db.set_firestore_document_async("employees", emp.get("_id") or emp_id, emp)
+                elif hasattr(db, "set_firestore_document"):
+                    db.set_firestore_document("employees", emp.get("_id") or emp_id, emp)
+    except Exception as e:
+        import logging
+        logging.getLogger("uvicorn.error").warning(f"Error in cascade unlinking deleted site: {e}")
+
 @router.delete("/{siteId}")
 async def delete_site(
     siteId: str,
     token_data: dict = Depends(require_roles(["admin", "supervisor"]))
 ):
+    import threading
     s = db.get_site(siteId)
     if not s:
         raise HTTPException(status_code=404, detail="Substation not found")
 
     doc_id = str(s.get("_id") or s.get("id") or siteId)
 
-    # 1. Mark status as deleted and remove from in-memory cache
+    # 1. Permanently record deletion in database memory layer
     s["status"] = "deleted"
+    db.record_deleted_site(doc_id)
+    db.record_deleted_site(str(siteId))
+
     if doc_id in db.sites:
         del db.sites[doc_id]
-    if hasattr(db, "_raw_sites") and doc_id in db._raw_sites:
-        del db._raw_sites[doc_id]
+    if str(siteId) in db.sites:
+        del db.sites[str(siteId)]
+    if hasattr(db, "_raw_sites"):
+        db._raw_sites.pop(doc_id, None)
+        db._raw_sites.pop(str(siteId), None)
 
-    # Delete from Firestore sites collection
+    # 2. Asynchronously delete from Firestore
+    if hasattr(db, "set_firestore_document_async"):
+        db.set_firestore_document_async("sites", doc_id, {"_id": doc_id, "status": "deleted"})
     if hasattr(db, "delete_firestore_document_async"):
         db.delete_firestore_document_async("sites", doc_id)
-    elif hasattr(db, "delete_firestore_document"):
-        db.delete_firestore_document("sites", doc_id)
 
-    # 2. Fully cascade: Unlink deleted site from all employee profiles in database & Firestore
-    for emp_id, emp in list(db.employees.items()):
-        modified = False
-        if emp.get("assignedSiteIds"):
-            old_ids = [str(x) for x in emp["assignedSiteIds"]]
-            if doc_id in old_ids or str(siteId) in old_ids:
-                new_ids = [x for x in old_ids if x != doc_id and x != str(siteId)]
-                emp["assignedSiteIds"] = new_ids
-                modified = True
+    # 3. Non-blocking background thread to cascade unlinking across all employees
+    threading.Thread(
+        target=_cascade_unlink_deleted_site,
+        args=(doc_id, str(siteId)),
+        daemon=True
+    ).start()
 
-        cur_assigned = str(emp.get("assignedSiteId") or "")
-        if cur_assigned == doc_id or cur_assigned == str(siteId):
-            remaining = emp.get("assignedSiteIds") or []
-            if remaining:
-                next_id = remaining[0]
-                emp["assignedSiteId"] = next_id
-                nxt_s = db.get_site(next_id)
-                emp["assignedSiteName"] = nxt_s.get("name") if nxt_s else None
-            else:
-                emp["assignedSiteId"] = None
-                emp["assignedSiteName"] = None
-            modified = True
-
-        if isinstance(emp.get("siteAssignments"), dict):
-            for k in [doc_id, str(siteId)]:
-                if k in emp["siteAssignments"]:
-                    del emp["siteAssignments"][k]
-                    modified = True
-
-        if modified:
-            db.employees[emp_id] = emp
-            if hasattr(db, "set_firestore_document_async"):
-                db.set_firestore_document_async("employees", emp.get("_id") or emp_id, emp)
-            elif hasattr(db, "set_firestore_document"):
-                db.set_firestore_document("employees", emp.get("_id") or emp_id, emp)
-
-    return {"message": "Substation deleted successfully and unlinked from all employee rosters"}
+    return {"message": "Substation deleted successfully", "id": doc_id}
