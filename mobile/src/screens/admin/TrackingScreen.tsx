@@ -41,7 +41,6 @@ import {
   PhoneCall,
 } from 'lucide-react-native';
 import MapView, { Marker, Circle } from '../../components/common/AppMapView';
-import { MaharashtraFleetMap } from '../../components/common/MaharashtraFleetMap';
 import { dashboardService, FleetRadarData } from '../../services/dashboardService';
 import { FleetTechnician, Substation } from '../../types';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
@@ -616,15 +615,91 @@ export const TrackingScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Mappls Map Maharashtra Fleet Radar */}
-        <MaharashtraFleetMap
-          substations={substations}
-          technicians={displayedTechnicians}
-          selectedTech={selectedTech}
-          onSelectTech={(tech: any) => handleSelectTechnician(tech)}
+        {/* Unified Official Mappls MapView (Identical Engine to Employee CheckIn & Site Screens) */}
+        <MapView
+          ref={mapRef}
           style={styles.mapView}
-          showDistrictSelector={true}
-        />
+          initialRegion={{
+            latitude:
+              selectedTech?.hasGps && selectedTech?.latitude
+                ? selectedTech.latitude
+                : userLocation?.latitude
+                ? userLocation.latitude
+                : substations.length > 0 && substations[0].latitude
+                ? substations[0].latitude
+                : 19.7515,
+            longitude:
+              selectedTech?.hasGps && selectedTech?.longitude
+                ? selectedTech.longitude
+                : userLocation?.longitude
+                ? userLocation.longitude
+                : substations.length > 0 && substations[0].longitude
+                ? substations[0].longitude
+                : 75.7139,
+            latitudeDelta: 0.08,
+            longitudeDelta: 0.08,
+          }}
+          showsCompass={true}
+        >
+          {/* Substation Geofence Perimeter Circles and Markers */}
+          {substations.map((site) => (
+            <React.Fragment key={`sub-${site.id}`}>
+              <Circle
+                center={{ latitude: site.latitude, longitude: site.longitude }}
+                radius={site.radiusMeters || 500}
+                fillColor="rgba(30, 99, 240, 0.15)"
+                strokeColor="#1E63F0"
+                strokeWidth={2}
+              />
+              <Marker
+                coordinate={{ latitude: site.latitude, longitude: site.longitude }}
+                title={`Site: ${site.name}`}
+                description={`Substation Code: ${site.code || ''} • Geofence: ${site.radiusMeters || 500}m`}
+                pinColor="#1E63F0"
+              />
+            </React.Fragment>
+          ))}
+
+          {/* Real Employee Markers (Distinguishing LIVE GPS and LAST KNOWN) */}
+          {displayedTechnicians
+            .filter(
+              (tech) =>
+                tech.hasGps &&
+                tech.latitude !== null &&
+                tech.latitude !== undefined &&
+                tech.longitude !== null &&
+                tech.longitude !== undefined
+            )
+            .map((tech) => {
+              const isLive = Boolean(
+                tech.isLive ||
+                tech.isOnline ||
+                tech.status === 'online' ||
+                tech.status === 'live_online' ||
+                tech.status === 'on_duty_inside'
+              );
+              return (
+                <Marker
+                  key={`tech-${tech.id}`}
+                  coordinate={{ latitude: tech.latitude as number, longitude: tech.longitude as number }}
+                  title={`${isLive ? '🟢' : '🔵'} ${tech.name}`}
+                  description={`${isLive ? 'Live GPS' : 'Last Known'} • ${tech.lastLocationTime || tech.lastSeen || 'Logged'}${tech.assignedSiteName ? ' • ' + tech.assignedSiteName : ''}`}
+                  pinColor={isLive ? '#10B981' : '#3B82F6'}
+                  onPress={() => handleSelectTechnician(tech)}
+                />
+              );
+            })}
+
+          {/* Supervisor / Admin Device Location */}
+          {userLocation && (
+            <Marker
+              coordinate={{ latitude: userLocation.latitude, longitude: userLocation.longitude }}
+              title="My Location"
+              description="Current Supervisor/Admin Device Location"
+              pinColor="#2563EB"
+            />
+          )}
+        </MapView>
       </View>
 
       {/* Quick Active Personnel Chips on Mobile */}

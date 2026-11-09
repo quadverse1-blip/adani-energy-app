@@ -92,6 +92,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       },
       region,
       children,
+      onPress,
     },
     ref
   ) => {
@@ -132,11 +133,13 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
         if (typeName === 'Marker' || props.coordinate) {
           if (props.coordinate?.latitude && props.coordinate?.longitude) {
             parsedMarkers.push({
+              idx: parsedMarkers.length,
               lat: props.coordinate.latitude,
               lon: props.coordinate.longitude,
               title: props.title || '',
               description: props.description || '',
               color: props.pinColor || '#1E63F0',
+              onPress: props.onPress,
             });
           }
         } else if (typeName === 'Circle' || props.radius) {
@@ -508,6 +511,22 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
             .setHTML('<strong>' + (m.title || '') + '</strong><br>' + (m.description || ''));
           marker.setPopup(popup);
         }
+
+        el.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          window.parent.postMessage(JSON.stringify({
+            type: 'markerPress',
+            index: m.idx,
+            title: m.title
+          }), '*');
+        });
+      });
+
+      map.on('click', function(e) {
+        window.parent.postMessage(JSON.stringify({
+          type: 'mapPress',
+          coordinate: { latitude: e.lngLat.lat, longitude: e.lngLat.lng }
+        }), '*');
       });
     });
 
@@ -529,6 +548,25 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
 </html>
       `;
     }, [markers, circles, polylines, activeCenter, initialZoom]);
+
+    React.useEffect(() => {
+      const handleMessage = (event: MessageEvent) => {
+        try {
+          const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+          if (!data) return;
+          if (data.type === 'markerPress') {
+            const target = markers[data.index];
+            if (target && target.onPress) {
+              target.onPress();
+            }
+          } else if (data.type === 'mapPress' && onPress) {
+            onPress({ nativeEvent: { coordinate: data.coordinate } });
+          }
+        } catch (e) {}
+      };
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }, [markers, onPress]);
 
     return (
       <View style={[styles.container, style]}>

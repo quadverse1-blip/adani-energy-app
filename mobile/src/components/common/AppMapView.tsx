@@ -401,7 +401,8 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     // 2. High-performance Mappls Map View with Full Gesture Support, Pinch Zoom, and Real Maharashtra POI/Road Labels
     const html = useMemo(() => {
       const markersJson = JSON.stringify(
-        markers.map((m) => ({
+        markers.map((m, idx) => ({
+          idx,
           lat: m.lat,
           lon: m.lon,
           title: m.title,
@@ -990,11 +991,11 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
         });
       });
 
-      // 5. Distinct, Clear Markers (Site, User GPS, Distance, POIs)
+      // 5. Distinct, Clear Markers (Site, User GPS, Distance, POIs, Technicians)
       markersData.forEach(function(m) {
         var titleLower = (m.title || '').toLowerCase();
         var isSite = titleLower.indexOf('site') !== -1 || titleLower.indexOf('substation') !== -1;
-        var isUser = titleLower.indexOf('device') !== -1 || titleLower.indexOf('my') !== -1;
+        var isUser = titleLower.indexOf('device') !== -1 || titleLower.indexOf('my location') !== -1 || titleLower.indexOf('my') !== -1;
         var isDist = /^\d+(\.\d+)?\s*(m|km)$/i.test(m.title || '') || titleLower.indexOf('away') !== -1;
 
         var el = document.createElement('div');
@@ -1003,29 +1004,55 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
           el.className = 'site-marker-pin';
           var cleanName = (m.title || 'Site').replace(/^Site:\s*/i, '');
           el.innerHTML = '<div class="site-marker-box"><span>⚡</span><span>' + cleanName + '</span></div><div class="site-marker-stem"></div>';
-          new maplibregl.Marker({ element: el, anchor: 'bottom' })
-            .setLngLat([m.lon, m.lat])
-            .addTo(map);
         } else if (isUser) {
           el.className = 'user-marker-pin';
           el.innerHTML = '<div class="user-pulse-ring"></div><div class="user-center-dot"></div><div class="user-badge-label">📍 My Location</div>';
-          new maplibregl.Marker({ element: el, anchor: 'center' })
-            .setLngLat([m.lon, m.lat])
-            .addTo(map);
         } else if (isDist) {
           el.className = 'dist-marker-tag';
           el.innerText = '⤹ ' + m.title;
-          new maplibregl.Marker({ element: el, anchor: 'center' })
-            .setLngLat([m.lon, m.lat])
-            .addTo(map);
         } else {
-          // Real POI / Nearby Place
+          // Employee / Technician / POI Marker
           el.className = 'poi-marker-pin';
-          el.style.borderColor = m.color || '#CBD5E1';
-          el.innerHTML = '<span>' + (m.title || 'Place') + '</span>';
-          new maplibregl.Marker({ element: el, anchor: 'bottom' })
-            .setLngLat([m.lon, m.lat])
-            .addTo(map);
+          var dotColor = m.color || '#10B981';
+          el.style.borderColor = dotColor;
+          el.innerHTML = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:' + dotColor + '; margin-right:4px;"></span><span>' + (m.title || 'Personnel') + '</span>';
+        }
+
+        var marker = new maplibregl.Marker({ element: el, anchor: (isUser || isDist) ? 'center' : 'bottom' })
+          .setLngLat([m.lon, m.lat]);
+
+        if (m.title || m.description) {
+          var popupContent = '<div style="padding:6px 8px; font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif; min-width:130px;">' +
+            '<div style="font-weight:700; font-size:12px; color:#0F172A; margin-bottom:2px;">' + (m.title || '') + '</div>' +
+            (m.description ? '<div style="font-size:11px; color:#475569; line-height:1.35;">' + m.description + '</div>' : '') +
+            '</div>';
+          var popup = new maplibregl.Popup({ offset: 25, closeButton: true }).setHTML(popupContent);
+          marker.setPopup(popup);
+        }
+
+        el.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'markerPress',
+              index: m.idx,
+              title: m.title,
+              lat: m.lat,
+              lon: m.lon
+            }));
+          }
+        });
+
+        marker.addTo(map);
+      });
+
+      // Map Click Dispatcher
+      map.on('click', function(e) {
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'mapPress',
+            coordinate: { latitude: e.lngLat.lat, longitude: e.lngLat.lng }
+          }));
         }
       });
     });
@@ -1052,6 +1079,23 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
           allowFileAccess={true}
           allowUniversalAccessFromFileURLs={true}
           androidLayerType="hardware"
+          onMessage={(event: any) => {
+            try {
+              const raw = event.nativeEvent?.data;
+              if (!raw) return;
+              const msg = JSON.parse(raw);
+              if (msg.type === 'markerPress') {
+                const target = markers[msg.index];
+                if (target && target.onPress) {
+                  target.onPress();
+                }
+              } else if (msg.type === 'mapPress' && onPress) {
+                onPress({ nativeEvent: { coordinate: msg.coordinate } });
+              }
+            } catch (err) {
+              // ignore
+            }
+          }}
           onError={(err: any) => console.warn('[AppMapView] WebView error:', err)}
         />
       </View>
