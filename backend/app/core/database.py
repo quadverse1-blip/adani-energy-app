@@ -533,29 +533,37 @@ class FirestoreCollectionDictWrapper:
                 ))
             ]
 
-        # Merge local in-memory operational records with remote Firestore documents
-        merged = dict(self.fallback_dict)
         remote_docs = self.db_manager.list_firestore_collection(self.collection_name)
-        if remote_docs:
+        if remote_docs is not None:
+            if self.collection_name == "sites":
+                new_dict = {}
+                for doc in remote_docs:
+                    doc_id = doc.get("_id") or doc.get("id")
+                    if not doc_id:
+                        continue
+                    is_deleted = (
+                        doc.get("status") == "deleted" or
+                        (hasattr(self.db_manager, "_deleted_site_ids") and (
+                            str(doc_id) in self.db_manager._deleted_site_ids or
+                            str(doc.get("id") or "") in self.db_manager._deleted_site_ids or
+                            str(doc.get("_id") or "") in self.db_manager._deleted_site_ids or
+                            str(doc.get("code") or "").lower() in self.db_manager._deleted_site_ids
+                        ))
+                    )
+                    if is_deleted:
+                        continue
+                    new_dict[str(doc_id)] = doc
+
+                self.fallback_dict = new_dict
+                self.db_manager._raw_sites = dict(new_dict)
+                self._last_sync_time = now_ts
+                return list(new_dict.values())
+
+            # For other collections, merge local in-memory operational records with remote Firestore documents
+            merged = dict(self.fallback_dict)
             for doc in remote_docs:
                 doc_id = doc.get("_id") or doc.get("id")
                 if doc_id:
-                    # Permanently skip deleted sites
-                    is_deleted = (
-                        self.collection_name == "sites" and (
-                            doc.get("status") == "deleted" or
-                            (hasattr(self.db_manager, "_deleted_site_ids") and (
-                                str(doc_id) in self.db_manager._deleted_site_ids or
-                                str(doc.get("id") or "") in self.db_manager._deleted_site_ids or
-                                str(doc.get("_id") or "") in self.db_manager._deleted_site_ids or
-                                str(doc.get("code") or "").lower() in self.db_manager._deleted_site_ids
-                            ))
-                        )
-                    )
-                    if is_deleted:
-                        merged.pop(doc_id, None)
-                        self.fallback_dict.pop(doc_id, None)
-                        continue
                     if doc_id in merged:
                         local_doc = merged[doc_id]
                         local_time = local_doc.get("updatedAt") or (local_doc.get("checkIn") or {}).get("time") or ""
@@ -566,18 +574,8 @@ class FirestoreCollectionDictWrapper:
                     else:
                         merged[doc_id] = doc
                         self.fallback_dict[doc_id] = doc
-        self._last_sync_time = now_ts
-        return [
-            v for v in merged.values()
-            if not (self.collection_name == "sites" and (
-                v.get("status") == "deleted" or
-                (hasattr(self.db_manager, "_deleted_site_ids") and (
-                    str(v.get("_id") or "") in self.db_manager._deleted_site_ids or
-                    str(v.get("id") or "") in self.db_manager._deleted_site_ids or
-                    str(v.get("code") or "").lower() in self.db_manager._deleted_site_ids
-                ))
-            ))
-        ]
+            self._last_sync_time = now_ts
+            return list(merged.values())
 
     def keys(self):
         return [doc.get('_id') or doc.get('id') for doc in self.values() if doc.get('_id') or doc.get('id')]
@@ -603,7 +601,7 @@ class DatabaseManager:
 
         # In-memory synchronized high-performance operational cache
         self._raw_employees: Dict[str, dict] = {e["_id"]: e for e in SEED_EMPLOYEES}
-        self._raw_sites: Dict[str, dict] = {s["_id"]: s for s in SEED_SITES}
+        self._raw_sites: Dict[str, dict] = {}
         self._raw_attendance: Dict[str, dict] = {a["_id"]: a for a in SEED_ATTENDANCE}
         self._raw_holidays: Dict[str, dict] = {h["_id"]: h for h in SEED_HOLIDAYS}
         self.gps_events: List[dict] = []
@@ -726,8 +724,9 @@ class DatabaseManager:
             if resp.status_code == 200:
                 data = resp.json()
                 raw_docs = data.get("documents", [])
-                if raw_docs:
-                    return [firestore_doc_to_dict(d) for d in raw_docs]
+                return [firestore_doc_to_dict(d) for d in raw_docs]
+            elif resp.status_code == 404:
+                return []
         except Exception:
             pass
         return None
