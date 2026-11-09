@@ -1039,7 +1039,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       <View style={[styles.container, style]}>
         <WebViewComponent
           ref={webViewRef}
-          source={{ html }}
+          source={{ html, baseUrl: 'https://maps.mappls.com' }}
           style={StyleSheet.absoluteFill}
           javaScriptEnabled={true}
           domStorageEnabled={true}
@@ -1048,6 +1048,10 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
           overScrollMode="never"
           bounces={false}
           originWhitelist={['*']}
+          mixedContentMode="always"
+          allowFileAccess={true}
+          allowUniversalAccessFromFileURLs={true}
+          androidLayerType="hardware"
           onError={(err: any) => console.warn('[AppMapView] WebView error:', err)}
         />
       </View>
