@@ -615,6 +615,8 @@ class DatabaseManager:
         # Optional firebase-admin client
         self.admin_db: Optional[Any] = None
         self._deleted_site_ids: Set[str] = set()
+        self._missing_site_ids: Set[str] = set()
+        self._missing_employee_ids: Set[str] = set()
 
         # Collection dict wrappers used by all routers
         self.employees = FirestoreCollectionDictWrapper(self, "employees", self._raw_employees)
@@ -801,7 +803,7 @@ class DatabaseManager:
     # ---------------------------------------------------------
     def get_employee(self, emp_id: str) -> Optional[dict]:
         clean_id = (emp_id or "").strip()
-        if not clean_id:
+        if not clean_id or (hasattr(self, "_missing_employee_ids") and clean_id in self._missing_employee_ids):
             return None
         # Authoritative operational in-memory check first
         if clean_id in self._raw_employees:
@@ -813,7 +815,11 @@ class DatabaseManager:
         doc = self.get_firestore_document("employees", clean_id)
         if doc:
             self._raw_employees[doc.get("_id") or clean_id] = doc
+            if hasattr(self, "_missing_employee_ids"):
+                self._missing_employee_ids.discard(clean_id)
             return doc
+        if hasattr(self, "_missing_employee_ids"):
+            self._missing_employee_ids.add(clean_id)
         return None
 
     def get_user_by_id(self, emp_id: str) -> Optional[dict]:
@@ -912,7 +918,7 @@ class DatabaseManager:
 
     def get_site(self, site_id: str) -> Optional[dict]:
         clean_id = (site_id or "").strip()
-        if not clean_id or clean_id in self._deleted_site_ids:
+        if not clean_id or clean_id in self._deleted_site_ids or (hasattr(self, "_missing_site_ids") and clean_id in self._missing_site_ids):
             return None
         if clean_id in self._raw_sites:
             s = self._raw_sites[clean_id]
@@ -931,7 +937,11 @@ class DatabaseManager:
             if doc.get("status") == "deleted" or d_id in self._deleted_site_ids:
                 return None
             self._raw_sites[d_id] = doc
+            if hasattr(self, "_missing_site_ids"):
+                self._missing_site_ids.discard(clean_id)
             return doc
+        if hasattr(self, "_missing_site_ids"):
+            self._missing_site_ids.add(clean_id)
         return None
 
     def get_all_sites(self) -> List[dict]:

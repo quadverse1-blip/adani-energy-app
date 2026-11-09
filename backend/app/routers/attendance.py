@@ -11,6 +11,7 @@ from app.core.database import db
 from app.services.attendance_service import attendance_service
 from app.services.storage_service import storage_service
 from app.utils.datetime_utils import format_datetime_ist, get_today_ist_str
+from app.utils.haversine import calculate_haversine_distance
 from app.schemas.attendance import (
     CheckInRequest,
     CheckOutRequest,
@@ -348,6 +349,23 @@ async def get_all_attendance_logs(
         enriched = []
         month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         
+        # High-performance batch pre-indexing to eliminate repeated queries and blocking network roundtrips
+        all_sites = db.get_all_sites()
+        site_map = {}
+        for s in all_sites:
+            if s.get("_id"): site_map[str(s["_id"])] = s
+            if s.get("id"): site_map[str(s["id"])] = s
+            if s.get("code"): site_map[str(s["code"]).lower()] = s
+
+        all_employees = db.get_all_employees()
+        emp_map = {}
+        for e in all_employees:
+            if e.get("_id"): emp_map[str(e["_id"])] = e
+            if e.get("id"): emp_map[str(e["id"])] = e
+            if e.get("employeeId"):
+                emp_map[str(e["employeeId"])] = e
+                emp_map[str(e["employeeId"]).lower()] = e
+
         for r in all_records:
             if not isinstance(r, dict):
                 continue
@@ -365,12 +383,12 @@ async def get_all_attendance_logs(
                     pass
 
             emp_key = str(r.get("employeeId") or "")
-            user = db.get_user_by_id(emp_key) if emp_key else None
-            user_name = user.get("name", "Field Technician") if user else (r.get("technicianName") or "")
-            user_emp_id = user.get("employeeId", "") if user else (r.get("technicianCode") or "")
+            user = emp_map.get(emp_key) or emp_map.get(emp_key.lower()) or (db.get_user_by_id(emp_key) if emp_key else None)
+            user_name = user.get("name") if user else (r.get("technicianName") or "Field Technician")
+            user_emp_id = user.get("employeeId") if user else (r.get("technicianCode") or "")
 
             site_key = str(r.get("siteId") or "")
-            site = db.get_site(site_key) if site_key else None
+            site = site_map.get(site_key) or site_map.get(site_key.lower()) or (db.get_site(site_key) if site_key else None)
             site_name = site.get("name") if site else (r.get("siteName") or "")
 
             # Format times in Indian Standard Time (IST)
@@ -466,8 +484,7 @@ async def get_all_attendance_logs(
                     dist_str = str(dist_val)
             elif co_lat is not None and co_lon is not None and (ci_lat != co_lat or ci_lon != co_lon):
                 try:
-                    from app.utils.haversine import calculate_distance
-                    dm = calculate_distance(ci_lat, ci_lon, co_lat, co_lon)
+                    dm = calculate_haversine_distance(ci_lat, ci_lon, co_lat, co_lon)
                     if dm < 50:
                         dist_str = "0 m"
                     elif dm < 1000:

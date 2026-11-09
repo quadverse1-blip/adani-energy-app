@@ -130,8 +130,11 @@ export const AttendanceLogsScreen: React.FC = () => {
   const [selectedDay, setSelectedDay] = useState(now.getDate());
   const [selectedWeek, setSelectedWeek] = useState(Math.min(5, Math.ceil(now.getDate() / 7)));
 
-  const [logs, setLogs] = useState<AttendanceLogItem[]>(FALLBACK_LOGS);
-  const [technicians, setTechnicians] = useState<User[]>([]);
+  const [logs, setLogs] = useState<AttendanceLogItem[]>(() => {
+    const cached = attendanceService.getCachedAllLogs(now.getMonth() + 1, now.getFullYear(), 'daily');
+    return cached && cached.logs?.length > 0 ? cached.logs : FALLBACK_LOGS;
+  });
+  const [technicians, setTechnicians] = useState<User[]>(() => employeeService.getCachedEmployees() || []);
   const [sites, setSites] = useState<Substation[]>([]);
   const [selectedTechFilter, setSelectedTechFilter] = useState<string>('all');
   const [loading, setLoading] = useState(false);
@@ -185,15 +188,18 @@ export const AttendanceLogsScreen: React.FC = () => {
   };
 
   const fetchInitialData = async () => {
-    setLoading(true);
+    const cached = attendanceService.getCachedAllLogs(currentMonth, currentYear, period.toLowerCase(), selectedTechFilter === 'all' ? undefined : selectedTechFilter);
+    if (!cached || !cached.logs || cached.logs.length === 0) {
+      setLoading(true);
+    }
     try {
       const [techList, siteList] = await Promise.all([
         employeeService.getEmployees().catch(() => employeeService.getCachedEmployees()),
         siteService.getSites().catch(() => []),
+        fetchLogs(selectedTechFilter, currentMonth, currentYear, period, false),
       ]);
-      setTechnicians(techList);
-      setSites(siteList);
-      await fetchLogs(selectedTechFilter, currentMonth, currentYear, period);
+      if (techList && techList.length > 0) setTechnicians(techList);
+      if (siteList && siteList.length > 0) setSites(siteList);
     } catch (e) {
       console.warn('Initial fetch error:', e);
     } finally {
@@ -201,22 +207,25 @@ export const AttendanceLogsScreen: React.FC = () => {
     }
   };
 
-  const fetchLogs = async (techFilter = selectedTechFilter, month = currentMonth, year = currentYear, per = period) => {
+  const fetchLogs = async (techFilter = selectedTechFilter, month = currentMonth, year = currentYear, per = period, force = false) => {
     try {
       const data = await attendanceService.getAllLogs(
         month,
         year,
         per.toLowerCase(),
-        techFilter === 'all' ? undefined : techFilter
+        techFilter === 'all' ? undefined : techFilter,
+        force
       );
       if (data && data.logs && data.logs.length > 0) {
         setLogs(data.logs);
-      } else {
+      } else if (!logs || logs.length === 0) {
         setLogs(FALLBACK_LOGS);
       }
     } catch (err) {
       console.warn('Fetch logs error:', err);
-      setLogs(FALLBACK_LOGS);
+      if (!logs || logs.length === 0) {
+        setLogs(FALLBACK_LOGS);
+      }
     }
   };
 
@@ -226,7 +235,11 @@ export const AttendanceLogsScreen: React.FC = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchLogs(selectedTechFilter, currentMonth, currentYear, period);
+    await Promise.all([
+      fetchLogs(selectedTechFilter, currentMonth, currentYear, period, true),
+      employeeService.getEmployees().then(setTechnicians).catch(() => {}),
+      siteService.getSites().then(setSites).catch(() => {}),
+    ]);
     setRefreshing(false);
   };
 

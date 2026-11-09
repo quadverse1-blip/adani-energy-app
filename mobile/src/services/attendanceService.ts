@@ -34,6 +34,8 @@ export interface HistoryResult {
   records: AttendanceRecord[];
 }
 
+let cachedLogsMap: Record<string, { logs: any[]; total: number; timestamp: number }> = {};
+
 export const attendanceService = {
   async uploadPhoto(photoUri: string): Promise<string> {
     if (!photoUri) {
@@ -87,13 +89,29 @@ export const attendanceService = {
     return response.data;
   },
 
-  async getAllLogs(month?: number, year?: number, period?: string, employeeId?: string): Promise<{ logs: any[]; total: number }> {
+  getCachedAllLogs(month?: number, year?: number, period?: string, employeeId?: string): { logs: any[]; total: number } | null {
+    const key = `${month || ''}_${year || ''}_${period || ''}_${employeeId || ''}`;
+    const hit = cachedLogsMap[key];
+    if (hit && Date.now() - hit.timestamp < 60000) {
+      return hit;
+    }
+    return null;
+  },
+
+  async getAllLogs(month?: number, year?: number, period?: string, employeeId?: string, forceRefresh = false): Promise<{ logs: any[]; total: number }> {
+    const key = `${month || ''}_${year || ''}_${period || ''}_${employeeId || ''}`;
+    if (!forceRefresh && cachedLogsMap[key] && Date.now() - cachedLogsMap[key].timestamp < 60000) {
+      return cachedLogsMap[key];
+    }
     const params: Record<string, any> = {};
     if (month) params.month = month;
     if (year) params.year = year;
     if (period) params.period = period;
     if (employeeId) params.employeeId = employeeId;
     const response = await apiClient.get<{ logs: any[]; total: number }>('/attendance/admin/all-logs', { params });
+    if (response.data) {
+      cachedLogsMap[key] = { ...response.data, timestamp: Date.now() };
+    }
     return response.data;
   },
 
@@ -108,6 +126,7 @@ export const attendanceService = {
     duration?: string;
     adminRemarks?: string;
   }): Promise<{ success: boolean; message: string; record: any }> {
+    cachedLogsMap = {};
     const response = await apiClient.post<{ success: boolean; message: string; record: any }>('/attendance/admin/adjust', payload);
     return response.data;
   },
@@ -120,6 +139,7 @@ export const attendanceService = {
     attendanceCategory?: string;
     adminRemarks?: string;
   }): Promise<{ success: boolean; message: string; record: any }> {
+    cachedLogsMap = {};
     const response = await apiClient.post<{ success: boolean; message: string; record: any }>('/attendance/admin/mark-attendance', payload);
     return response.data;
   },
