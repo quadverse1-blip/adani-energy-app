@@ -96,7 +96,7 @@ export const EmployeesScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { openDrawer } = useAdminDrawerStore();
   const [employees, setEmployees] = useState<User[]>(() => employeeService.getCachedEmployees());
-  const [sites, setSites] = useState<Substation[]>([]);
+  const [sites, setSites] = useState<Substation[]>(() => siteService.getCachedSites());
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<'All' | 'Technician' | 'Supervisor' | 'Active'>('All');
   const [loading, setLoading] = useState(false);
@@ -282,23 +282,46 @@ export const EmployeesScreen: React.FC = () => {
     return map;
   }, [sites]);
 
-  const fetchEmployees = async () => {
-    setLoading(true);
-    try {
-      const roleParam =
-        activeFilter === 'Technician'
-          ? 'technician'
-          : activeFilter === 'Supervisor'
-          ? 'supervisor'
-          : undefined;
-      const data = await employeeService.getEmployees({
-        search: search.trim() || undefined,
-        role: roleParam,
-      });
-      setEmployees(data);
+  // Instant in-memory filtering for tabs and search (0ms delay)
+  const displayedEmployees = useMemo(() => {
+    let result = employees;
+    if (activeFilter === 'Technician') {
+      result = result.filter((e) => (e.role || '').toLowerCase() === 'technician');
+    } else if (activeFilter === 'Supervisor') {
+      result = result.filter((e) => (e.role || '').toLowerCase() === 'supervisor');
+    } else if (activeFilter === 'Active') {
+      result = result.filter((e) => (e.status || '').toLowerCase() === 'active');
+    }
+    if (search.trim()) {
+      const s = search.trim().toLowerCase();
+      result = result.filter(
+        (e) =>
+          (e.name || '').toLowerCase().includes(s) ||
+          (e.employeeId || '').toLowerCase().includes(s) ||
+          (e.phone || '').toLowerCase().includes(s) ||
+          (e.designation || '').toLowerCase().includes(s) ||
+          (e.assignedSiteName || '').toLowerCase().includes(s)
+      );
+    }
+    return result;
+  }, [employees, activeFilter, search]);
 
-      const siteList = await siteService.getSites();
-      setSites(siteList);
+  const fetchEmployees = async (forceRefresh = false) => {
+    // Only display full-screen spinner if initial cache is completely empty
+    if (employees.length === 0) {
+      setLoading(true);
+    }
+    try {
+      const [data, siteList] = await Promise.all([
+        employeeService.getEmployees(),
+        siteService.getSites(forceRefresh).catch(() => siteService.getCachedSites()),
+      ]);
+      if (data && data.length > 0) {
+        setEmployees(data);
+      }
+      if (siteList && siteList.length > 0) {
+        setSites(siteList);
+      }
     } catch (e) {
       console.warn('Employees fetch error:', e);
     } finally {
@@ -308,11 +331,11 @@ export const EmployeesScreen: React.FC = () => {
 
   useEffect(() => {
     fetchEmployees();
-  }, [activeFilter]);
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchEmployees();
+    await fetchEmployees(true);
     setRefreshing(false);
   };
 
@@ -521,7 +544,7 @@ export const EmployeesScreen: React.FC = () => {
             placeholderTextColor="#94A3B8"
             value={search}
             onChangeText={setSearch}
-            onSubmitEditing={fetchEmployees}
+            onSubmitEditing={() => fetchEmployees()}
             style={styles.searchTextInput}
           />
         </View>
@@ -599,7 +622,7 @@ export const EmployeesScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.listCard, SHADOWS.sm]}>
-          {employees.length === 0 ? (
+          {displayedEmployees.length === 0 ? (
             loading ? (
               <LoadingSpinner message="Searching workforce directory..." />
             ) : (
@@ -611,14 +634,14 @@ export const EmployeesScreen: React.FC = () => {
               />
             )
           ) : (
-            employees.map((item, index) => (
+            displayedEmployees.map((item, index) => (
               <EmployeeCard
                 key={item.id || item.employeeId}
                 employee={item}
                 sitesMap={sitesMap}
                 onEdit={() => handleOpenEdit(item)}
                 onDelete={() => handleDelete(item)}
-                isLast={index === employees.length - 1}
+                isLast={index === displayedEmployees.length - 1}
               />
             ))
           )}

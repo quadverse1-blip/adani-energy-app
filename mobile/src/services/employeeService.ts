@@ -94,16 +94,27 @@ export const employeeService = {
 
   async createEmployee(data: Partial<User> & { password: string }): Promise<User> {
     const response = await apiClient.post<User>('/employees', data);
+    if (response.data) {
+      cachedEmployeesList = [response.data, ...cachedEmployeesList];
+    }
     return response.data;
   },
 
   async updateEmployee(employeeId: string, data: Partial<User>): Promise<User> {
     const response = await apiClient.put<User>(`/employees/${encodeURIComponent(employeeId)}`, data);
+    if (response.data) {
+      cachedEmployeesList = cachedEmployeesList.map((e) =>
+        e.id === response.data.id || e.employeeId === response.data.employeeId ? response.data : e
+      );
+    }
     return response.data;
   },
 
   async deleteEmployee(employeeId: string): Promise<void> {
     await apiClient.delete(`/employees/${encodeURIComponent(employeeId)}`);
+    cachedEmployeesList = cachedEmployeesList.filter(
+      (e) => e.id !== employeeId && e.employeeId !== employeeId
+    );
   },
 
   async resetPassword(employeeId: string): Promise<{ message: string }> {
