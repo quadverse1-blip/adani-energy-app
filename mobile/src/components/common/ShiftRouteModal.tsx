@@ -71,8 +71,8 @@ export const ShiftRouteModal: React.FC<ShiftRouteModalProps> = ({
     checkOutTime === '--:--';
 
   // Real check-in and destination coordinates
-  const startLat = checkInCoords?.latitude || 12.962590;
-  const startLon = checkInCoords?.longitude || 77.593617;
+  const startLat = checkInCoords?.latitude || (checkInCoords as any)?.siteLatitude || 18.852362;
+  const startLon = checkInCoords?.longitude || (checkInCoords as any)?.siteLongitude || 73.884358;
   const endLat = !isShiftActive && checkOutCoords ? checkOutCoords.latitude : startLat;
   const endLon = !isShiftActive && checkOutCoords ? checkOutCoords.longitude : startLon;
 

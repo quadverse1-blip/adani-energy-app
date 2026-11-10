@@ -954,7 +954,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
       {/* ============================================================ */}
       <Modal visible={!!mapModalRecord} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalContainer, { maxHeight: '92%', padding: 0, overflow: 'visible', backgroundColor: '#FFFFFF' }]}>
+          <View style={[styles.modalContainer, { maxHeight: '92%', padding: 0, overflow: 'hidden' }]}>
             {/* Modal Top Bar */}
             <View style={styles.mapModalHeader}>
               <View style={{ flex: 1, paddingRight: 8 }}>
@@ -977,10 +977,10 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
             </View>
 
             {mapModalRecord ? (() => {
-              const mapLat = mapModalRecord.latitude ?? 12.9610;
-              const mapLng = mapModalRecord.longitude ?? 77.5963;
-              const siteLat = mapModalRecord.siteLatitude ?? mapLat;
-              const siteLng = mapModalRecord.siteLongitude ?? mapLng;
+              const siteLat = mapModalRecord.siteLatitude ?? 18.852362;
+              const siteLng = mapModalRecord.siteLongitude ?? 73.884358;
+              const mapLat = mapModalRecord.latitude ?? siteLat;
+              const mapLng = mapModalRecord.longitude ?? siteLng;
               const siteRadius = mapModalRecord.siteRadius ?? 500;
 
               return (

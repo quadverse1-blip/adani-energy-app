@@ -4,7 +4,10 @@ import * as Location from 'expo-location';
 export interface DeviceCoordinates {
   latitude: number;
   longitude: number;
-  accuracy: number;
+  accuracy?: number;
+  timestamp?: number;
+  isStale?: boolean;
+  isPoorAccuracy?: boolean;
 }
 
 export type GeolocationErrorCode = 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' | 'INSECURE_CONTEXT' | 'UNKNOWN';
@@ -87,10 +90,15 @@ export const fetchRealDeviceLocation = async (
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           if (pos?.coords && pos.coords.latitude && pos.coords.longitude) {
+            const acc = pos.coords.accuracy || 10;
+            const ts = pos.timestamp || Date.now();
             const realCoords: DeviceCoordinates = {
               latitude: pos.coords.latitude,
               longitude: pos.coords.longitude,
-              accuracy: pos.coords.accuracy || 10,
+              accuracy: acc,
+              timestamp: ts,
+              isStale: Date.now() - ts > 300000,
+              isPoorAccuracy: acc > 100,
             };
             onCoordinatesAcquired(realCoords);
             resolve(realCoords);
@@ -147,10 +155,15 @@ export const fetchRealDeviceLocation = async (
         navigator.geolocation.getCurrentPosition(
           (posFallback) => {
             if (posFallback?.coords && posFallback.coords.latitude && posFallback.coords.longitude) {
+              const acc = posFallback.coords.accuracy || 20;
+              const ts = posFallback.timestamp || Date.now();
               const fallbackCoords: DeviceCoordinates = {
                 latitude: posFallback.coords.latitude,
                 longitude: posFallback.coords.longitude,
-                accuracy: posFallback.coords.accuracy || 20,
+                accuracy: acc,
+                timestamp: ts,
+                isStale: Date.now() - ts > 300000,
+                isPoorAccuracy: acc > 100,
               };
               onCoordinatesAcquired(fallbackCoords);
               finishResolve(fallbackCoords);
@@ -300,14 +313,21 @@ export const fetchRealDeviceLocation = async (
     // 2c. Fetch REAL device coordinates from GPS hardware (No stale fake fallbacks)
     let realCoords: DeviceCoordinates | null = null;
 
-    // Fast instant check: last known position from device hardware cache
+    // Fast instant check: last known position from device hardware cache (only if fresh < 60s)
     try {
       const lastKnown = await Location.getLastKnownPositionAsync();
-      if (lastKnown?.coords && lastKnown.coords.latitude !== 0 && lastKnown.coords.longitude !== 0) {
+      const now = Date.now();
+      const lastKnownTs = lastKnown?.timestamp || 0;
+      const isFresh = lastKnownTs > 0 && (now - lastKnownTs) < 60000;
+      if (lastKnown?.coords && lastKnown.coords.latitude !== 0 && lastKnown.coords.longitude !== 0 && isFresh) {
+        const acc = lastKnown.coords.accuracy || 25;
         onCoordinatesAcquired({
           latitude: lastKnown.coords.latitude,
           longitude: lastKnown.coords.longitude,
-          accuracy: lastKnown.coords.accuracy || 25,
+          accuracy: acc,
+          timestamp: lastKnownTs,
+          isStale: false,
+          isPoorAccuracy: acc > 100,
         });
       }
     } catch (_) {}
@@ -315,14 +335,19 @@ export const fetchRealDeviceLocation = async (
     try {
       const fresh = await Promise.race([
         Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-        new Promise<null>((res) => setTimeout(() => res(null), 6000)),
+        new Promise<null>((res) => setTimeout(() => res(null), 8000)),
       ]);
 
       if (fresh?.coords && fresh.coords.latitude !== 0 && fresh.coords.longitude !== 0) {
+        const acc = fresh.coords.accuracy || 8;
+        const ts = fresh.timestamp || Date.now();
         realCoords = {
           latitude: fresh.coords.latitude,
           longitude: fresh.coords.longitude,
-          accuracy: fresh.coords.accuracy || 8,
+          accuracy: acc,
+          timestamp: ts,
+          isStale: false,
+          isPoorAccuracy: acc > 100,
         };
         onCoordinatesAcquired(realCoords);
         return realCoords;
@@ -332,10 +357,15 @@ export const fetchRealDeviceLocation = async (
     try {
       const balanced = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       if (balanced?.coords && balanced.coords.latitude !== 0 && balanced.coords.longitude !== 0) {
+        const acc = balanced.coords.accuracy || 15;
+        const ts = balanced.timestamp || Date.now();
         realCoords = {
           latitude: balanced.coords.latitude,
           longitude: balanced.coords.longitude,
-          accuracy: balanced.coords.accuracy || 12,
+          accuracy: acc,
+          timestamp: ts,
+          isStale: false,
+          isPoorAccuracy: acc > 100,
         };
         onCoordinatesAcquired(realCoords);
         return realCoords;
@@ -441,16 +471,23 @@ export const subscribeRealDeviceLocationWatcher = (
       sub = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          timeInterval: 2000,
+          timeInterval: 2500,
           distanceInterval: 1,
         },
         (loc) => {
           if (!active) return;
           if (loc?.coords && loc.coords.latitude !== 0 && loc.coords.longitude !== 0) {
+            const acc = loc.coords.accuracy || 8;
+            const ts = loc.timestamp || Date.now();
+            const isStale = (Date.now() - ts) > 120000;
+            const isPoorAccuracy = acc > 100;
             onCoordinatesAcquired({
               latitude: loc.coords.latitude,
               longitude: loc.coords.longitude,
-              accuracy: loc.coords.accuracy || 8,
+              accuracy: acc,
+              timestamp: ts,
+              isStale,
+              isPoorAccuracy,
             });
           }
         }

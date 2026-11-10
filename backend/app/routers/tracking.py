@@ -71,7 +71,11 @@ async def ping_location(
     emp["lastLocationTime"] = time_ist_str
     emp["lastSeenTimestamp"] = utc_iso
     emp["batteryLevel"] = req.batteryLevel or 100
-    emp["accuracy"] = f"±{int(req.accuracy or 10)}m Lock"
+    acc_val = float(req.accuracy or 10.0)
+    emp["accuracy"] = f"±{int(acc_val)}m Lock"
+    emp["accuracyMeters"] = acc_val
+    emp["isPoorAccuracy"] = bool(acc_val > 100.0)
+    emp["isStale"] = False
     emp["speed"] = req.speed
     emp["heading"] = req.heading
     emp["hasGps"] = True
@@ -81,6 +85,7 @@ async def ping_location(
         emp["assignedSiteId"] = req.siteId
 
     db.employees[emp.get("_id", emp_id)] = emp
+    db.set_firestore_document_async("users", emp.get("_id", emp_id), emp)
 
     # 2. Record historical breadcrumb point in persistent location_history collection
     ping_doc = {
@@ -223,23 +228,11 @@ async def get_live_fleet_radar(token_data: dict = Depends(get_current_user_token
             update_date = today_str
             update_time = ci.get("timeIST") or "09:30 AM IST"
 
-        # Source D: Latest historical punch across past attendance records
+        # No live or today's coordinates - do not present old check-ins from previous days as live GPS
         else:
-            for ha in emp_atts:
-                if ha.get("checkOut") and ha["checkOut"].get("latitude") is not None:
-                    lat = float(ha["checkOut"]["latitude"])
-                    lon = float(ha["checkOut"]["longitude"])
-                    coord_source = "historical"
-                    update_date = ha.get("date") or "Previous Shift"
-                    update_time = ha["checkOut"].get("timeIST") or "06:00 PM IST"
-                    break
-                elif ha.get("checkIn") and ha["checkIn"].get("latitude") is not None:
-                    lat = float(ha["checkIn"]["latitude"])
-                    lon = float(ha["checkIn"]["longitude"])
-                    coord_source = "historical"
-                    update_date = ha.get("date") or "Previous Shift"
-                    update_time = ha["checkIn"].get("timeIST") or "09:30 AM IST"
-                    break
+            lat = None
+            lon = None
+            coord_source = "none"
 
         # Genuine GPS verification (NO fallback to assigned site!)
         has_gps = (lat is not None and lon is not None)
@@ -319,6 +312,9 @@ async def get_live_fleet_radar(token_data: dict = Depends(get_current_user_token
             "heading": emp.get("heading"),
             "batteryLevel": emp.get("batteryLevel", 100),
             "accuracy": emp.get("accuracy", "±8m Lock" if has_gps else None),
+            "accuracyMeters": emp.get("accuracyMeters", 8.0 if has_gps else None),
+            "isPoorAccuracy": emp.get("isPoorAccuracy", False),
+            "lastLocationTimestamp": emp.get("lastSeenTimestamp"),
             "assignedSiteName": assigned_site.get("name") if assigned_site else "General Field",
             "assignedSiteCode": assigned_site.get("code") if assigned_site else None,
             "assignedSiteId": assigned_site.get("_id") if assigned_site else None,
@@ -388,7 +384,7 @@ async def get_live_fleet_radar(token_data: dict = Depends(get_current_user_token
             "maxZoom": 19
         },
         "mapProvider": "Mappls",
-        "mapStyle": "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "mapStyle": "https://apis.mappls.com/maps/vector/style",
         "attribution": "Mappls ● MapmyIndia",
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
@@ -577,10 +573,7 @@ async def get_employee_last_known_location(
 
     lat = emp.get("latitude")
     lon = emp.get("longitude")
-    if lat is None or lon is None:
-        if assigned_site and assigned_site.get("latitude"):
-            lat = assigned_site["latitude"]
-            lon = assigned_site["longitude"]
+    has_gps = lat is not None and lon is not None
 
     now_utc = datetime.utcnow()
     last_ping_dt = None
@@ -608,6 +601,7 @@ async def get_employee_last_known_location(
         "designation": emp.get("designation", "Field Technician"),
         "circle": emp.get("circle", "Maharashtra"),
         "division": emp.get("division", "Grid Operations"),
+        "hasGps": has_gps,
         "latitude": lat,
         "longitude": lon,
         "accuracy": emp.get("accuracy", "±8m Lock"),

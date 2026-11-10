@@ -44,8 +44,8 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
         style={StyleSheet.absoluteFill}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
         initialRegion={{
-          latitude: center.latitude || 12.9626,
-          longitude: center.longitude || 77.5936,
+          latitude: center.latitude || 18.8524,
+          longitude: center.longitude || 73.8844,
           latitudeDelta: 0.015,
           longitudeDelta: 0.015,
         }}

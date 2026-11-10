@@ -65,8 +65,7 @@
       ],
       "expo-secure-store",
       "expo-sqlite",
-      "expo-sharing",
-      "./plugins/withMappls"
+      "expo-sharing"
     ],
     "extra": {
       "eas": {

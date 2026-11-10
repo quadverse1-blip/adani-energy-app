@@ -924,8 +924,8 @@ export const AttendanceLogsScreen: React.FC = () => {
           distanceTraveled={selectedRouteLog.distanceTraveled}
           duration={selectedRouteLog.duration}
           checkInCoords={{
-            latitude: selectedRouteLog.checkInLatitude || selectedRouteLog.latitude || 12.962590,
-            longitude: selectedRouteLog.checkInLongitude || selectedRouteLog.longitude || 77.593617,
+            latitude: selectedRouteLog.checkInLatitude || selectedRouteLog.latitude || (selectedRouteLog as any).siteLatitude || 18.852362,
+            longitude: selectedRouteLog.checkInLongitude || selectedRouteLog.longitude || (selectedRouteLog as any).siteLongitude || 73.884358,
           }}
           checkOutCoords={
             selectedRouteLog.checkOutLatitude && selectedRouteLog.checkOutLongitude

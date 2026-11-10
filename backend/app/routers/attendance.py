@@ -466,10 +466,10 @@ async def get_all_attendance_logs(
                     pass
 
             # Real coordinates: Only include checkout coordinates if checkout actually occurred
-            ci_lat = float(ci_dict["latitude"]) if (ci_dict and ci_dict.get("latitude")) else (float(site.get("latitude")) if site and site.get("latitude") else 12.962590)
-            ci_lon = float(ci_dict["longitude"]) if (ci_dict and ci_dict.get("longitude")) else (float(site.get("longitude")) if site and site.get("longitude") else 77.593617)
-            co_lat = float(co_dict["latitude"]) if (co_dict and co_dict.get("latitude")) else None
-            co_lon = float(co_dict["longitude"]) if (co_dict and co_dict.get("longitude")) else None
+            ci_lat = float(ci_dict["latitude"]) if (ci_dict and ci_dict.get("latitude") is not None) else (float(site.get("latitude")) if site and site.get("latitude") is not None else None)
+            ci_lon = float(ci_dict["longitude"]) if (ci_dict and ci_dict.get("longitude") is not None) else (float(site.get("longitude")) if site and site.get("longitude") is not None else None)
+            co_lat = float(co_dict["latitude"]) if (co_dict and co_dict.get("latitude") is not None) else None
+            co_lon = float(co_dict["longitude"]) if (co_dict and co_dict.get("longitude") is not None) else None
 
             # Real distance traveled between check-in and check-out sites
             dist_formatted = r.get("distanceTraveledFormatted")

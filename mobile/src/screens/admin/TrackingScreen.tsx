@@ -171,40 +171,8 @@ export const TrackingScreen: React.FC = () => {
         const updated = res.technicians.find((t) => t.id === currentSelectedId);
         if (updated) setSelectedTech(updated);
       }
-    } catch (err) {
-      console.warn('Live tracking fetch error, using fallback roster:', err);
-      // Fallback: build offline radar data from cached employees and sites
-      try {
-        const cachedEmps = require('../../services/employeeService').employeeService.getCachedEmployees();
-        const cachedSites = require('../../services/siteService').siteService.getCachedSites();
-        if (cachedEmps && cachedEmps.length > 0) {
-          setData((prev) => prev || {
-            timestamp: new Date().toISOString(),
-            totalTechnicians: cachedEmps.length,
-            onlineCount: 0,
-            insideGeofenceCount: 0,
-            technicians: cachedEmps.map((e: any) => ({
-              id: e.id || e._id,
-              employeeId: e.employeeId,
-              name: e.name,
-              phone: e.phone,
-              designation: e.designation || 'Field Technician',
-              assignedSiteId: e.assignedSiteId || (e.assignedSiteIds && e.assignedSiteIds[0]),
-              assignedSiteName: e.assignedSiteName || 'Assigned Site',
-              latitude: e.latitude || null,
-              longitude: e.longitude || null,
-              hasGps: Boolean(e.latitude && e.longitude),
-              isLive: false,
-              isOnline: false,
-              status: e.status || 'offline',
-              isInsideGeofence: false,
-              batteryLevel: 100,
-              lastSeen: 'Offline / Cached',
-            })),
-            substations: cachedSites || [],
-          } as any);
-        }
-      } catch (_) {}
+    } catch {
+      // Silently swallow fetch errors
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -308,8 +276,8 @@ export const TrackingScreen: React.FC = () => {
   }, [selectedTech?.id, selectedTech?.latitude, selectedTech?.longitude]);
 
   const handleCopyGPS = () => {
-    const lat = selectedTech?.latitude ?? userLocation?.latitude ?? 12.96259;
-    const lon = selectedTech?.longitude ?? userLocation?.longitude ?? 77.593617;
+    const lat = selectedTech?.latitude ?? userLocation?.latitude ?? substations[0]?.latitude ?? 18.852362;
+    const lon = selectedTech?.longitude ?? userLocation?.longitude ?? substations[0]?.longitude ?? 73.884358;
     const text = `${Number(lat).toFixed(6)}, ${Number(lon).toFixed(6)}`;
 
     if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {

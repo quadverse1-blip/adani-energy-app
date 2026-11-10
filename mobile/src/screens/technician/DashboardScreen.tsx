@@ -14,6 +14,7 @@ import {
   Linking,
 } from 'react-native';
 import * as Location from 'expo-location';
+import { subscribeRealDeviceLocationWatcher } from '../../utils/geolocationUtils';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -182,27 +183,16 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
   // Live GPS Coords from real device location
   const [liveCoords, setLiveCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
+  // Continuous real-time GPS telemetry subscription
   useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          try {
-            const cached = await Location.getLastKnownPositionAsync({});
-            if (cached?.coords && cached.coords.latitude !== 0) {
-              setLiveCoords({ latitude: cached.coords.latitude, longitude: cached.coords.longitude });
-            }
-          } catch (_) {}
-
-          try {
-            const curr = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            if (curr?.coords && curr.coords.latitude !== 0) {
-              setLiveCoords({ latitude: curr.coords.latitude, longitude: curr.coords.longitude });
-            }
-          } catch (_) {}
-        }
-      } catch (_) {}
-    })();
+    const unsub = subscribeRealDeviceLocationWatcher((coords) => {
+      if (coords?.latitude && coords?.longitude && coords.latitude !== 0 && coords.longitude !== 0) {
+        setLiveCoords({ latitude: coords.latitude, longitude: coords.longitude });
+      }
+    });
+    return () => {
+      if (unsub) unsub();
+    };
   }, []);
 
   // Sync real-time location telemetry to Admin Tracking radar
@@ -618,7 +608,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         type: 'success',
         category: 'Geofence Verified',
         title: 'Geofence Verified (500m)',
-        message: `You are inside the authorized 500m geofence perimeter at ${substation?.name || 'Assigned Site'} (Lat: 12.9625, Long: 77.5937).`,
+        message: `You are inside the authorized 500m geofence perimeter at ${substation?.name || 'Assigned Site'}${substation?.latitude ? ` (Lat: ${substation.latitude.toFixed(4)}, Long: ${substation.longitude.toFixed(4)})` : ''}.`,
         timestamp: '10:14 AM',
         employeeId: user?.employeeId || '',
         employeeName: user?.name || 'Technician',

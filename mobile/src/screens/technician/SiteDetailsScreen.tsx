@@ -12,7 +12,8 @@ import {
   Alert,
 } from 'react-native';
 import * as Location from 'expo-location';
-import { fetchRealDeviceLocation } from '../../utils/geolocationUtils';
+import { fetchRealDeviceLocation, subscribeRealDeviceLocationWatcher, DeviceCoordinates } from '../../utils/geolocationUtils';
+import { dashboardService } from '../../services/dashboardService';
 import {
   MapPin,
   Phone,
@@ -25,6 +26,7 @@ import {
   CheckCircle,
   UserCheck,
   PhoneCall,
+  AlertTriangle,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTechnicianDrawerStore } from '../../store/useTechnicianDrawerStore';
@@ -53,8 +55,33 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
 
   const [allSites, setAllSites] = useState<Substation[]>([]);
   const [activeSiteId, setActiveSiteId] = useState<string>(route.params?.siteId || '');
-  const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [userCoords, setUserCoords] = useState<DeviceCoordinates | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Sync live coordinates and telemetry
+  const handleCoordsReceived = useCallback(
+    (coords: DeviceCoordinates) => {
+      if (!coords || (coords.latitude === 0 && coords.longitude === 0)) return;
+      setUserCoords(coords);
+
+      // Sync live telemetry to backend so Admin Tracking radar matches mobile immediately
+      if (coords.latitude && coords.longitude) {
+        dashboardService
+          .pingLocation(
+            coords.latitude,
+            coords.longitude,
+            coords.accuracy || 10,
+            100,
+            activeSiteId || undefined,
+            undefined,
+            0,
+            0
+          )
+          .catch(() => {});
+      }
+    },
+    [activeSiteId]
+  );
 
   // Load all sites and set initial active site
   useEffect(() => {
@@ -95,40 +122,38 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
     };
   }, [user]);
 
-  // Prompt and verify GPS location permissions & device location services
-  const requestGpsAndLocation = useCallback(async (manual = false) => {
-    try {
-      // 1. Check and request location permission
-      const { status } = await Location.requestForegroundPermissionsAsync().catch(() => ({ status: 'undetermined' } as any));
-      if (status === 'granted') {
-        // Fast instant location from device cache
-        const lastKnown = await Location.getLastKnownPositionAsync().catch(() => null);
-        if (lastKnown?.coords && lastKnown.coords.latitude !== 0 && lastKnown.coords.longitude !== 0) {
-          setUserCoords({
-            latitude: lastKnown.coords.latitude,
-            longitude: lastKnown.coords.longitude,
-          });
-        }
+  // Subscribe to real-time continuous GPS hardware watcher while viewing site specifications
+  useEffect(() => {
+    const unsub = subscribeRealDeviceLocationWatcher(
+      handleCoordsReceived,
+      (err) => {
+        console.warn('Real-time location watcher notice:', err.message);
       }
+    );
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [handleCoordsReceived]);
 
-      // 2. Fetch high-precision real GPS coordinates
-      await fetchRealDeviceLocation(
-        {
-          onCoordinatesAcquired: (coords) => {
-            setUserCoords({
-              latitude: coords.latitude,
-              longitude: coords.longitude,
-            });
+  // Prompt and verify GPS location permissions & device location services
+  const requestGpsAndLocation = useCallback(
+    async (manual = false) => {
+      try {
+        await fetchRealDeviceLocation(
+          {
+            onCoordinatesAcquired: handleCoordsReceived,
+            onGpsDisabled: () => {},
+            onPermissionDenied: () => {},
           },
-          onGpsDisabled: () => {},
-          onPermissionDenied: () => {},
-        },
-        manual
-      );
-    } catch (err: any) {
-      console.warn('GPS location request error:', err);
-    }
-  }, []);
+          manual
+        );
+      } catch (err: any) {
+        console.warn('GPS location request error:', err);
+      }
+    },
+    [handleCoordsReceived]
+  );
+
   useFocusEffect(
     useCallback(() => {
       requestGpsAndLocation();
@@ -170,16 +195,13 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
     );
   }, [activeSiteId, assignedSites]);
 
-  // Active resolved user coordinates (from live GPS or authenticated user profile)
+  // Active resolved user coordinates strictly from live GPS (never fake fallback to Bengaluru)
   const activeUserCoords = useMemo(() => {
     if (userCoords && userCoords.latitude !== 0 && userCoords.longitude !== 0) {
       return userCoords;
     }
-    if (user?.latitude && user?.longitude && user.latitude !== 0 && user.longitude !== 0) {
-      return { latitude: user.latitude, longitude: user.longitude };
-    }
     return null;
-  }, [userCoords, user]);
+  }, [userCoords]);
 
   // Compute live Haversine distance, travel time, and geofence status between employee and site
   const distanceInfo = useMemo(() => {
@@ -211,12 +233,20 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
         ? `${Math.floor(travelMinutes / 60)}h ${travelMinutes % 60}m`
         : `${travelMinutes} min`;
 
+    const isPoorAccuracy = Boolean(
+      activeUserCoords.isPoorAccuracy || (activeUserCoords.accuracy && activeUserCoords.accuracy > 100)
+    );
+    const isStale = Boolean(activeUserCoords.isStale);
+
     return {
       distanceMeters: distMeters,
       formattedDistance,
       isInside,
       midCoord,
       travelTimeFormatted,
+      accuracy: activeUserCoords.accuracy,
+      isPoorAccuracy,
+      isStale,
     };
   }, [activeUserCoords, site]);
 
@@ -224,16 +254,37 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
   useEffect(() => {
     if (mapRef.current && site) {
       if (activeUserCoords && activeUserCoords.latitude !== 0 && activeUserCoords.longitude !== 0) {
-        mapRef.current.fitToCoordinates(
-          [
-            { latitude: site.latitude, longitude: site.longitude },
-            { latitude: activeUserCoords.latitude, longitude: activeUserCoords.longitude },
-          ],
-          {
-            edgePadding: { top: 60, right: 60, bottom: 60, left: 60 },
-            animated: true,
-          }
+        const dist = calculateHaversineDistance(
+          activeUserCoords.latitude,
+          activeUserCoords.longitude,
+          site.latitude,
+          site.longitude
         );
+        // Only fit bounds if distance is reasonable (<= 50km)
+        // Never zoom out to the entire subcontinent if employee is distant
+        if (dist <= 50000) {
+          mapRef.current.fitToCoordinates(
+            [
+              { latitude: site.latitude, longitude: site.longitude },
+              { latitude: activeUserCoords.latitude, longitude: activeUserCoords.longitude },
+            ],
+            {
+              edgePadding: { top: 60, right: 60, bottom: 60, left: 60 },
+              animated: true,
+            }
+          );
+        } else {
+          // Center on site at zoom level 15 so 500m geofence remains crisp
+          mapRef.current.animateToRegion(
+            {
+              latitude: site.latitude,
+              longitude: site.longitude,
+              latitudeDelta: 0.015,
+              longitudeDelta: 0.015,
+            },
+            600
+          );
+        }
       } else {
         mapRef.current.animateToRegion(
           {
@@ -511,6 +562,27 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
                 </Text>
               </View>
             </View>
+            {activeUserCoords?.accuracy && (
+              <View
+                style={[
+                  styles.specsGridRow,
+                  { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
+                ]}
+              >
+                <View style={styles.specBox}>
+                  <Text style={styles.specLabel}>GPS ACCURACY</Text>
+                  <Text style={[styles.specValue, { color: distanceInfo?.isPoorAccuracy ? '#D97706' : '#15803D' }]}>
+                    ±{Math.round(activeUserCoords.accuracy)}m {distanceInfo?.isPoorAccuracy ? '(Low)' : '(Lock)'}
+                  </Text>
+                </View>
+                <View style={styles.specBox}>
+                  <Text style={styles.specLabel}>GPS LOCK STATUS</Text>
+                  <Text style={styles.specValue}>
+                    {distanceInfo?.isStale ? 'Cached Position' : 'Live Hardware GPS'}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
         </AppCard>
 
@@ -773,6 +845,16 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
                   {distanceInfo.isInside ? 'INSIDE' : 'OUTSIDE'}
                 </Text>
               </View>
+            </View>
+          )}
+
+          {/* Low GPS Accuracy Warning */}
+          {distanceInfo?.isPoorAccuracy && (
+            <View style={styles.accuracyWarningBanner}>
+              <AlertTriangle size={14} color="#B45309" />
+              <Text style={styles.accuracyWarningText}>
+                Low GPS accuracy (±{Math.round(distanceInfo.accuracy || 100)}m) • Move outdoors for precise distance
+              </Text>
             </View>
           )}
         </AppCard>
@@ -1267,6 +1349,24 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '800',
     color: '#0F172A',
+  },
+  accuracyWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginTop: 8,
+    gap: 6,
+  },
+  accuracyWarningText: {
+    fontSize: 11,
+    color: '#92400E',
+    fontWeight: '600',
+    flex: 1,
   },
 });
 

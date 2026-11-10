@@ -3,7 +3,7 @@ import json
 import logging
 import threading
 from datetime import datetime, date, timedelta
-from typing import Dict, List, Any, Optional, Set
+from typing import Dict, List, Any, Optional
 import requests
 from app.core.config import settings
 
@@ -12,42 +12,80 @@ logger = logging.getLogger("database")
 # Seed initial dataset representing Adani Smart Meter Infrastructure
 SEED_SITES: List[Dict[str, Any]] = [
     {
-        "_id": "site_78733418",
-        "name": "BazarPeth",
-        "code": "ADN-SITE-003",
-        "address": "BazarPeth, Rajgurunagar, Khed, Pune, Maharashtra, 412205, India",
-        "latitude": 18.852362,
-        "longitude": 73.884358,
+        "_id": "site_shantigram_01",
+        "name": "Adani Shantigram Substation",
+        "code": "ADN-SNT-01",
+        "address": "Near SG Highway, Shantigram Township, Ahmedabad, Gujarat 382421",
+        "latitude": 23.1412,
+        "longitude": 72.5489,
         "radiusMeters": 500.0,
-        "voltageClass": "33/11 kV Smart Feeder Hub",
+        "voltageClass": "66/11 kV Smart Feeder Hub",
         "status": "active",
         "manager": {
-            "name": "Demo Supervisor",
-            "phone": "9876543210",
-            "email": "supervisor@adani.com",
-            "designation": "Area Operations Supervisor"
+            "name": "Rajesh Varma",
+            "phone": "9876543201",
+            "email": "rajesh.varma@adani.com",
+            "designation": "Executive Grid In-Charge"
         },
         "workingHours": "09:00 AM - 06:00 PM IST",
-        "activeEngineersCount": 4
+        "activeEngineersCount": 6
     },
     {
-        "_id": "site_e99613b7",
-        "name": "Pimpri",
-        "code": "ADN-SITE-002",
-        "address": "Pimpri, Pimpri Chinchwad Link Road Flyover, Pimpri, Pimpri-Chinchwad, Haveli Subdistrict, Pune, Maharashtra, 411089, India",
-        "latitude": 18.623185,
-        "longitude": 73.801993,
-        "radiusMeters": 500.0,
-        "voltageClass": "66/11 kV Grid Substation",
+        "_id": "site_mundra_01",
+        "name": "Mundra Ultra Feeder Grid Station",
+        "code": "ADN-MND-01",
+        "address": "Adani Port & SEZ Infrastructure Zone, Mundra, Kutch, Gujarat 370421",
+        "latitude": 22.8394,
+        "longitude": 69.7111,
+        "radiusMeters": 600.0,
+        "voltageClass": "220/66 kV Grid Substation",
         "status": "active",
         "manager": {
-            "name": "Demo Supervisor",
-            "phone": "9876543210",
-            "email": "supervisor@adani.com",
-            "designation": "Area Operations Supervisor"
+            "name": "Vikram Desai",
+            "phone": "9876543202",
+            "email": "vikram.desai@adani.com",
+            "designation": "Zonal Superintending Engineer"
+        },
+        "workingHours": "09:00 AM - 06:00 PM IST",
+        "activeEngineersCount": 8
+    },
+    {
+        "_id": "site_navimumbai_01",
+        "name": "Navi Mumbai Smart Meter Distribution Station",
+        "code": "ADN-NVM-01",
+        "address": "MIDC Industrial Area, Mahape, Navi Mumbai, Maharashtra 400710",
+        "latitude": 19.1136,
+        "longitude": 73.0169,
+        "radiusMeters": 500.0,
+        "voltageClass": "33/11 kV Urban Distribution Hub",
+        "status": "active",
+        "manager": {
+            "name": "Sanjay Shinde",
+            "phone": "9876543203",
+            "email": "sanjay.shinde@adani.com",
+            "designation": "Divisional Operations Lead"
         },
         "workingHours": "09:00 AM - 06:00 PM IST",
         "activeEngineersCount": 5
+    },
+    {
+        "_id": "site_bkc_01",
+        "name": "BKC Commercial Smart Meter Substation",
+        "code": "ADN-BKC-01",
+        "address": "G Block, Bandra Kurla Complex, Bandra East, Mumbai, Maharashtra 400051",
+        "latitude": 19.0657,
+        "longitude": 72.8687,
+        "radiusMeters": 400.0,
+        "voltageClass": "33/11 kV Metro Grid Substation",
+        "status": "active",
+        "manager": {
+            "name": "Mahesh Joshi",
+            "phone": "9876543204",
+            "email": "mahesh.joshi@adani.com",
+            "designation": "Senior Project Manager"
+        },
+        "workingHours": "09:00 AM - 06:00 PM IST",
+        "activeEngineersCount": 4
     }
 ]
 
@@ -60,12 +98,12 @@ SEED_EMPLOYEES = [
         "password": "password",
         "role": "admin",
         "designation": "Chief Operations Admin",
-        "assignedSiteIds": ["site_78733418", "site_e99613b7"],
-        "assignedSiteId": "site_78733418",
+        "assignedSiteIds": ["site_shantigram_01", "site_mundra_01", "site_navimumbai_01", "site_bkc_01"],
+        "assignedSiteId": "site_shantigram_01",
         "avatar": "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=400&q=80",
         "status": "active",
         "email": "anita.sharma@adani.com",
-        "circle": "Pune",
+        "circle": "Ahmedabad",
         "division": "Headquarters",
         "department": "Executive Management",
         "shiftStatus": "present",
@@ -79,12 +117,12 @@ SEED_EMPLOYEES = [
         "password": "password",
         "role": "admin",
         "designation": "Operations Administrator",
-        "assignedSiteIds": ["site_78733418", "site_e99613b7"],
-        "assignedSiteId": "site_78733418",
+        "assignedSiteIds": ["site_shantigram_01", "site_mundra_01", "site_navimumbai_01", "site_bkc_01"],
+        "assignedSiteId": "site_shantigram_01",
         "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
         "status": "active",
         "email": "admin@adani.com",
-        "circle": "Pune",
+        "circle": "Ahmedabad",
         "division": "Operations Central",
         "department": "Operations Administration",
         "shiftStatus": "present",
@@ -98,18 +136,17 @@ SEED_EMPLOYEES = [
         "password": "password",
         "role": "supervisor",
         "designation": "Area Operations Supervisor",
-        "assignedSiteIds": ["site_78733418", "site_e99613b7"],
-        "assignedSiteId": "site_78733418",
-        "assignedSiteName": "BazarPeth",
+        "assignedSiteIds": ["site_shantigram_01", "site_mundra_01"],
+        "assignedSiteId": "site_shantigram_01",
         "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
         "status": "active",
         "email": "supervisor@adani.com",
-        "circle": "Pune",
+        "circle": "Ahmedabad",
         "division": "North Division",
         "department": "Smart Meter Operations",
         "shiftStatus": "present",
-        "latitude": 18.852362,
-        "longitude": 73.884358,
+        "latitude": 23.1415,
+        "longitude": 72.5492,
         "createdAt": "2026-01-01T09:00:00Z"
     },
     {
@@ -120,18 +157,17 @@ SEED_EMPLOYEES = [
         "password": "password",
         "role": "technician",
         "designation": "Senior Field Technician",
-        "assignedSiteIds": ["site_78733418"],
-        "assignedSiteId": "site_78733418",
-        "assignedSiteName": "BazarPeth",
+        "assignedSiteIds": ["site_shantigram_01"],
+        "assignedSiteId": "site_shantigram_01",
         "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
         "status": "active",
         "email": "technician@adani.com",
-        "circle": "Pune",
+        "circle": "Ahmedabad",
         "division": "North Division",
         "department": "Field Installation",
         "shiftStatus": "present",
-        "latitude": 18.852362,
-        "longitude": 73.884358,
+        "latitude": 23.1418,
+        "longitude": 72.5485,
         "createdAt": "2026-01-01T09:00:00Z"
     }
 ]
@@ -518,16 +554,6 @@ class FirestoreCollectionDictWrapper:
                         continue
                     new_dict[str(doc_id)] = doc
 
-                # Preserve locally created sites that have not yet synced to remote Firestore
-                for local_id, local_site in list(self.fallback_dict.items()):
-                    if (
-                        local_id not in new_dict
-                        and local_site
-                        and local_site.get("status") != "deleted"
-                        and str(local_id) not in self.db_manager._deleted_site_ids
-                    ):
-                        new_dict[str(local_id)] = local_site
-
                 self.fallback_dict = new_dict
                 self.db_manager._raw_sites = dict(new_dict)
                 self._last_sync_time = now_ts
@@ -548,8 +574,6 @@ class FirestoreCollectionDictWrapper:
                     else:
                         merged[doc_id] = doc
                         self.fallback_dict[doc_id] = doc
-            if self.collection_name == "employees":
-                self.db_manager._raw_employees = dict(merged)
             self._last_sync_time = now_ts
             return list(merged.values())
 
@@ -590,9 +614,9 @@ class DatabaseManager:
 
         # Optional firebase-admin client
         self.admin_db: Optional[Any] = None
-        self._deleted_site_ids: set[str] = set()
-        self._missing_site_ids: set[str] = set()
-        self._missing_employee_ids: set[str] = set()
+        self._deleted_site_ids: Set[str] = set()
+        self._missing_site_ids: Set[str] = set()
+        self._missing_employee_ids: Set[str] = set()
 
         # Collection dict wrappers used by all routers
         self.employees = FirestoreCollectionDictWrapper(self, "employees", self._raw_employees)
@@ -618,10 +642,8 @@ class DatabaseManager:
 
         if sa_path and os.path.exists(sa_path):
             try:
-                import importlib
-                firebase_admin = importlib.import_module("firebase_admin")
-                credentials = importlib.import_module("firebase_admin.credentials")
-                firestore = importlib.import_module("firebase_admin.firestore")
+                import firebase_admin
+                from firebase_admin import credentials, firestore
                 cred = credentials.Certificate(sa_path)
                 try:
                     app = firebase_admin.get_app()
@@ -813,29 +835,27 @@ class DatabaseManager:
         if not clean_id:
             return None
 
-        emp_list = list(self.employees.values())
-
         # Direct alias support for operations admin
         if clean_id in ["admin", "b4s/adani/admin", "operations.admin", "admin@adani.com", "admin001", "demo_admin", "demoadmin", "9999999999"]:
-            for emp in emp_list:
+            for emp in self._raw_employees.values():
                 if str(emp.get("employeeId", "")).upper() == "ADMIN001":
                     return emp
-            for emp in emp_list:
+            for emp in self._raw_employees.values():
                 if emp.get("role") == "admin":
                     return emp
 
         # Direct alias support for supervisor
         if clean_id in ["supervisor", "super001", "super01", "suresh", "suresh.patil", "suresh.patil@b4s.in", "b4s/adani/04", "supervisor@adani.com", "9876543210"]:
-            for emp in emp_list:
+            for emp in self._raw_employees.values():
                 if str(emp.get("employeeId", "")).upper() in ["SUPER001", "SUPER01"] or (emp.get("role") == "supervisor" and "supervisor" in emp.get("name", "").lower()):
                     return emp
-            for emp in emp_list:
+            for emp in self._raw_employees.values():
                 if emp.get("role") == "supervisor":
                     return emp
 
         # Direct alias support for technician
         if clean_id in ["tech001", "technician", "demo_technician", "technician@adani.com", "9876543211"]:
-            for emp in emp_list:
+            for emp in self._raw_employees.values():
                 if str(emp.get("employeeId", "")).upper() == "TECH001":
                     return emp
 
@@ -845,8 +865,8 @@ class DatabaseManager:
         if len(clean_digits) > 10 and clean_digits.startswith("91"):
             clean_digits = clean_digits[2:]
 
-        # Check in employees
-        for emp in emp_list:
+        # Check in memory and cached
+        for emp in self._raw_employees.values():
             e_id = (emp.get("employeeId") or "").strip().lower()
             e_phone = (emp.get("phone") or "").strip().lower()
             e_email = (emp.get("email") or "").strip().lower()
@@ -859,6 +879,20 @@ class DatabaseManager:
                 if emp_phone_digits and emp_phone_digits == clean_digits:
                     return emp
 
+        # Check firestore
+        all_emps = self.get_all_employees()
+        for emp in all_emps:
+            e_id = (emp.get("employeeId") or "").strip().lower()
+            e_phone = (emp.get("phone") or "").strip().lower()
+            e_email = (emp.get("email") or "").strip().lower()
+            if clean_id == e_id or clean_id == e_phone or clean_id == e_email or clean_id == str(emp.get("_id") or "").lower():
+                return emp
+            if clean_digits and len(clean_digits) >= 10:
+                emp_phone_digits = re.sub(r"\D", "", e_phone)
+                if len(emp_phone_digits) > 10 and emp_phone_digits.startswith("91"):
+                    emp_phone_digits = emp_phone_digits[2:]
+                if emp_phone_digits and emp_phone_digits == clean_digits:
+                    return emp
         return None
 
     def record_deleted_site(self, site_id: str):

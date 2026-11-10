@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { LogBox, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
@@ -10,24 +10,20 @@ LogBox.ignoreLogs([
   'new NativeEventEmitter()',
 ]);
 
-// Initialize Mappls SDK only if API keys are explicitly configured
-const mapplsMapKey = process.env.EXPO_PUBLIC_MAPPLS_MAP_KEY || '';
-const mapplsRestKey = process.env.EXPO_PUBLIC_MAPPLS_REST_KEY || '';
-
-if (Platform.OS !== 'web' && (mapplsMapKey || mapplsRestKey)) {
+// Initialize Mappls SDK with cluster ID from app1794051151341i9612916.a.conf / .olf
+if (Platform.OS !== 'web') {
   try {
     const MapplsModule = require('mappls-map-react-native');
     const MapplsGL = MapplsModule.default || MapplsModule;
     if (MapplsGL) {
-      if (mapplsMapKey && typeof MapplsGL.setMapSDKKey === 'function') {
-        MapplsGL.setMapSDKKey(mapplsMapKey);
-      }
-      if (mapplsRestKey && typeof MapplsGL.setRestAPIKey === 'function') {
-        MapplsGL.setRestAPIKey(mapplsRestKey);
+      if (typeof MapplsGL.setClusterId === 'function') {
+        MapplsGL.setClusterId('1794051151341i9612916');
+      } else if (typeof MapplsGL.settingClusterId === 'function') {
+        MapplsGL.settingClusterId('1794051151341i9612916', null);
       }
     }
   } catch (err) {
-    // Gracefully handled if native module is not linked
+    // Native module unavailable in web / dev client without native links
   }
 }
 

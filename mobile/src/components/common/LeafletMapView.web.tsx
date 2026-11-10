@@ -29,8 +29,8 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
 
   // Generate self-contained Leaflet HTML
   const htmlContent = useMemo(() => {
-    const centerLat = center.latitude || 12.9626;
-    const centerLon = center.longitude || 77.5936;
+    const centerLat = center.latitude || 18.8524;
+    const centerLon = center.longitude || 73.8844;
     const centerZoom = center.zoom || 16;
 
     const substationsData = JSON.stringify(

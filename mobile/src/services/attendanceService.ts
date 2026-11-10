@@ -50,24 +50,7 @@ export const attendanceService = {
       return response.data.photoUrl || photoUri;
     }
 
-    // 2. On native platforms, convert file URI to base64 to avoid React Native Android multipart boundary crashes
-    try {
-      const FileSystemLegacy = require('expo-file-system/legacy');
-      const b64 = await FileSystemLegacy.readAsStringAsync(photoUri, {
-        encoding: FileSystemLegacy.EncodingType.Base64,
-      });
-      if (b64) {
-        const fullDataUri = `data:image/jpeg;base64,${b64}`;
-        const response = await apiClient.post<{ photoUrl: string; photoPath?: string }>('/attendance/upload-photo', {
-          photoBase64: fullDataUri,
-        });
-        return response.data.photoUrl || fullDataUri;
-      }
-    } catch (_) {
-      // Fall through to FormData
-    }
-
-    // 3. Fallback: multipart FormData
+    // 2. If it's a file URI, upload via FormData (do NOT set explicit Content-Type header so Axios calculates boundary)
     const formData = new FormData();
     const filename = photoUri.split('/').pop() || `selfie_${Date.now()}.jpg`;
     
@@ -78,13 +61,7 @@ export const attendanceService = {
       type: 'image/jpeg',
     });
 
-    const response = await apiClient.post<{ photoUrl: string; photoPath?: string }>(
-      '/attendance/upload-photo',
-      formData,
-      {
-        transformRequest: (data) => data, // Prevent axios default JSON serialization
-      }
-    );
+    const response = await apiClient.post<{ photoUrl: string; photoPath?: string }>('/attendance/upload-photo', formData);
     return response.data.photoUrl || photoUri;
   },
 

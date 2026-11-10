@@ -458,11 +458,6 @@ export const EmployeesScreen: React.FC = () => {
     }
     setSaving(true);
     try {
-      const latParsed = parseFloat(latitude);
-      const lngParsed = parseFloat(longitude);
-      const safeLat = (!isNaN(latParsed) && isFinite(latParsed)) ? latParsed : undefined;
-      const safeLng = (!isNaN(lngParsed) && isFinite(lngParsed)) ? lngParsed : undefined;
-
       const payload: Partial<User> = {
         name: name.trim(),
         employeeId: employeeId.trim(),
@@ -474,8 +469,8 @@ export const EmployeesScreen: React.FC = () => {
         division: division.trim() || undefined,
         assignedSiteIds,
         assignedSiteId: assignedSiteIds[0] || undefined,
-        latitude: safeLat,
-        longitude: safeLng,
+        latitude: parseFloat(latitude) || undefined,
+        longitude: parseFloat(longitude) || undefined,
         locationName: locationName.trim() || undefined,
         shiftStatus,
       };
@@ -926,7 +921,7 @@ export const EmployeesScreen: React.FC = () => {
                       value={latitude}
                       onChangeText={setLatitude}
                       keyboardType="numeric"
-                      placeholder="e.g. 12.962879"
+                      placeholder="e.g. 18.852362"
                       placeholderTextColor="#94A3B8"
                     />
                   </View>
@@ -937,7 +932,7 @@ export const EmployeesScreen: React.FC = () => {
                       value={longitude}
                       onChangeText={setLongitude}
                       keyboardType="numeric"
-                      placeholder="e.g. 77.5968"
+                      placeholder="e.g. 73.884358"
                       placeholderTextColor="#94A3B8"
                     />
                   </View>
