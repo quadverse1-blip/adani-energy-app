@@ -29,15 +29,32 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
         .toUpperCase()
     : 'EM';
 
-  // Assigned site names
-  const siteIds =
-    employee.assignedSiteIds && employee.assignedSiteIds.length > 0
-      ? employee.assignedSiteIds
-      : employee.assignedSiteId
-      ? [employee.assignedSiteId]
-      : [];
+  // Resolve assigned site(s) strictly from valid existing sites in sitesMap or assignedSiteName
+  // Never show raw database IDs (e.g. site_849e0927)
+  const resolvedSiteNames: string[] = [];
 
-  const siteNames = siteIds.map((id) => sitesMap[id]?.name || id);
+  // 1. Check primary assignedSiteId
+  if (employee.assignedSiteId && sitesMap[employee.assignedSiteId]?.name) {
+    resolvedSiteNames.push(sitesMap[employee.assignedSiteId].name);
+  }
+
+  // 2. Check assignedSiteIds (only include valid sites that exist in sitesMap and aren't duplicates)
+  if (employee.assignedSiteIds && Array.isArray(employee.assignedSiteIds)) {
+    employee.assignedSiteIds.forEach((id) => {
+      const siteObj = sitesMap[id];
+      if (siteObj?.name && !resolvedSiteNames.includes(siteObj.name)) {
+        resolvedSiteNames.push(siteObj.name);
+      }
+    });
+  }
+
+  // 3. Fallback to assignedSiteName if not already added and not a raw ID
+  if (resolvedSiteNames.length === 0 && employee.assignedSiteName) {
+    const rawName = String(employee.assignedSiteName).trim();
+    if (!rawName.startsWith('site_') && rawName !== 'null' && rawName !== 'undefined') {
+      resolvedSiteNames.push(rawName);
+    }
+  }
 
   const hasCoords =
     typeof employee.latitude === 'number' && typeof employee.longitude === 'number';
@@ -66,7 +83,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
         {/* Tags Row */}
         <View style={styles.tagsRow}>
           {/* Substation Badges */}
-          {siteNames.map((siteName, index) => (
+          {resolvedSiteNames.map((siteName, index) => (
             <View key={index} style={styles.siteBadge}>
               <Building2 size={11} color="#2563EB" />
               <Text style={styles.siteBadgeText} numberOfLines={1}>

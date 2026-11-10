@@ -8,6 +8,7 @@ export interface User {
   designation: string;
   assignedSiteId?: string;
   assignedSiteIds?: string[];
+  assignedSiteName?: string;
   phone?: string;
   email?: string;
   avatar?: string;

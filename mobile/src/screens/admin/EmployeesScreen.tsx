@@ -275,7 +275,9 @@ export const EmployeesScreen: React.FC = () => {
   const sitesMap = useMemo(() => {
     const map: Record<string, Substation> = {};
     sites.forEach((s) => {
-      map[s.id] = s;
+      if (s.id) map[s.id] = s;
+      if ((s as any)._id) map[(s as any)._id] = s;
+      if (s.code) map[s.code] = s;
     });
     return map;
   }, [sites]);
@@ -362,10 +364,11 @@ export const EmployeesScreen: React.FC = () => {
   };
 
   const toggleSiteAssignment = (siteId: string) => {
+    // Single-site assignment: select the site, or deselect if clicked again
     if (assignedSiteIds.includes(siteId)) {
-      setAssignedSiteIds(assignedSiteIds.filter((id) => id !== siteId));
+      setAssignedSiteIds([]);
     } else {
-      setAssignedSiteIds([...assignedSiteIds, siteId]);
+      setAssignedSiteIds([siteId]);
     }
   };
 
@@ -754,19 +757,20 @@ export const EmployeesScreen: React.FC = () => {
               {/* SECTION: Assigned Substations & Sites */}
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionHeading}>
-                  Assigned Substations & Sites ({assignedSiteIds.length} selected)
+                  Assigned Substation ({assignedSiteIds.length > 0 ? (sitesMap[assignedSiteIds[0]]?.name || '1 selected') : 'None'})
                 </Text>
-                <Text style={styles.sectionSubHeading}>Click to assign multiple sites</Text>
+                <Text style={styles.sectionSubHeading}>Select the primary substation assigned to this employee</Text>
               </View>
 
               {/* Selected Sites Pills with ✕ button */}
               <View style={styles.selectedPillsRow}>
                 {assignedSiteIds.map((siteId) => {
                   const s = sitesMap[siteId];
+                  if (!s) return null;
                   return (
                     <View key={siteId} style={styles.selectedPill}>
                       <Building2 size={12} color="#2563EB" />
-                      <Text style={styles.selectedPillText}>{s?.name || siteId}</Text>
+                      <Text style={styles.selectedPillText}>{s.name}</Text>
                       <TouchableOpacity delayPressIn={0}
                         onPress={() => removeSiteAssignment(siteId)}
                         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}

@@ -28,6 +28,9 @@ async def list_employees(
     raw_employees = db.get_all_employees()
     results = []
     
+    valid_sites = db.get_all_sites()
+    valid_site_map = {str(s.get("_id") or s.get("id")): s for s in valid_sites}
+
     for emp in raw_employees:
         if role and emp.get("role") != role:
             continue
@@ -40,7 +43,19 @@ async def list_employees(
             phone_match = s in emp.get("phone", "").lower()
             if not (name_match or id_match or phone_match):
                 continue
-                
+
+        # Strictly sanitize assigned site IDs against active database sites
+        raw_ids = emp.get("assignedSiteIds") or []
+        clean_ids = [str(sid) for sid in raw_ids if str(sid) in valid_site_map]
+        primary_site = emp.get("assignedSiteId")
+        if primary_site and str(primary_site) not in valid_site_map:
+            primary_site = clean_ids[0] if clean_ids else None
+        elif primary_site and str(primary_site) not in clean_ids:
+            clean_ids.insert(0, str(primary_site))
+
+        site_obj = valid_site_map.get(str(primary_site)) if primary_site else None
+        assigned_name = site_obj.get("name") if site_obj else emp.get("assignedSiteName")
+
         results.append(EmployeeResponse(
             id=emp["_id"],
             employeeId=emp.get("employeeId", ""),
@@ -48,8 +63,9 @@ async def list_employees(
             phone=emp.get("phone", ""),
             role=emp.get("role", "technician"),
             designation=emp.get("designation", "Field Technician"),
-            assignedSiteIds=emp.get("assignedSiteIds", []),
-            assignedSiteId=emp.get("assignedSiteId"),
+            assignedSiteIds=clean_ids,
+            assignedSiteId=primary_site,
+            assignedSiteName=assigned_name,
             status=emp.get("status", "active"),
             email=emp.get("email"),
             department=emp.get("department"),

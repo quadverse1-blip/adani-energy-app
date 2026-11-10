@@ -53,6 +53,7 @@ class EmployeeResponse(BaseModel):
     designation: str
     assignedSiteIds: List[str] = []
     assignedSiteId: Optional[str] = None
+    assignedSiteName: Optional[str] = None
     status: str
     email: Optional[str] = None
     department: Optional[str] = None
