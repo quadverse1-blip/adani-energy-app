@@ -37,7 +37,8 @@ import { AppCard } from '../../components/common/AppCard';
 import { AppButton } from '../../components/common/AppButton';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { AppBackButton } from '../../components/common/AppBackButton';
-import MapView, { Marker, Circle, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from '../../components/common/AppMapView';
+import MapView, { Marker, Circle, Polyline, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from '../../components/common/AppMapView';
+import { calculateHaversineDistance } from '../../utils/haversine';
 
 interface SiteDetailsScreenProps {
   route: any;
@@ -155,17 +156,67 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
     );
   }, [activeSiteId, assignedSites]);
 
-  // Fit native map to site and user coordinates
+  // Active resolved user coordinates (from live GPS or authenticated user profile)
+  const activeUserCoords = useMemo(() => {
+    if (userCoords && userCoords.latitude !== 0 && userCoords.longitude !== 0) {
+      return userCoords;
+    }
+    if (user?.latitude && user?.longitude && user.latitude !== 0 && user.longitude !== 0) {
+      return { latitude: user.latitude, longitude: user.longitude };
+    }
+    return null;
+  }, [userCoords, user]);
+
+  // Compute live Haversine distance, travel time, and geofence status between employee and site
+  const distanceInfo = useMemo(() => {
+    if (!activeUserCoords || !site) return null;
+    const distMeters = calculateHaversineDistance(
+      activeUserCoords.latitude,
+      activeUserCoords.longitude,
+      site.latitude,
+      site.longitude
+    );
+    const radius = site.radiusMeters || 500;
+    const isInside = distMeters <= radius;
+
+    let formattedDistance = '';
+    if (distMeters < 1000) {
+      formattedDistance = `${Math.round(distMeters)} m`;
+    } else {
+      formattedDistance = `${(distMeters / 1000).toFixed(1)} km`;
+    }
+
+    const midCoord = {
+      latitude: (activeUserCoords.latitude + site.latitude) / 2,
+      longitude: (activeUserCoords.longitude + site.longitude) / 2,
+    };
+
+    const travelMinutes = Math.max(1, Math.round(distMeters / 667)); // ~40 km/h avg speed
+    const travelTimeFormatted =
+      travelMinutes >= 60
+        ? `${Math.floor(travelMinutes / 60)}h ${travelMinutes % 60}m`
+        : `${travelMinutes} min`;
+
+    return {
+      distanceMeters: distMeters,
+      formattedDistance,
+      isInside,
+      midCoord,
+      travelTimeFormatted,
+    };
+  }, [activeUserCoords, site]);
+
+  // Fit native map to site and employee user coordinates
   useEffect(() => {
     if (mapRef.current && site) {
-      if (userCoords && userCoords.latitude !== 0 && userCoords.longitude !== 0) {
+      if (activeUserCoords && activeUserCoords.latitude !== 0 && activeUserCoords.longitude !== 0) {
         mapRef.current.fitToCoordinates(
           [
             { latitude: site.latitude, longitude: site.longitude },
-            { latitude: userCoords.latitude, longitude: userCoords.longitude },
+            { latitude: activeUserCoords.latitude, longitude: activeUserCoords.longitude },
           ],
           {
-            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+            edgePadding: { top: 60, right: 60, bottom: 60, left: 60 },
             animated: true,
           }
         );
@@ -181,7 +232,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
         );
       }
     }
-  }, [site, userCoords]);
+  }, [site, activeUserCoords]);
 
   const handleCall = () => {
     if (site?.manager?.phone) {
@@ -400,18 +451,51 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
           <Text style={styles.name}>{site.name}</Text>
           <Text style={styles.address}>{site.address}</Text>
 
-          <View style={styles.specsRow}>
-            <View style={styles.specBox}>
-              <Text style={styles.specLabel}>GEOFENCE RADIUS</Text>
-              <Text style={styles.specValue}>{site.radiusMeters || 500}m</Text>
+          <View style={styles.specsGrid}>
+            <View style={styles.specsGridRow}>
+              <View style={styles.specBox}>
+                <Text style={styles.specLabel}>DISTANCE TO SITE</Text>
+                <Text
+                  style={[
+                    styles.specValue,
+                    { color: distanceInfo?.isInside ? '#15803D' : '#1D4ED8', fontWeight: '800' },
+                  ]}
+                >
+                  {distanceInfo ? distanceInfo.formattedDistance : 'Acquiring GPS...'}
+                </Text>
+              </View>
+              <View style={styles.specBox}>
+                <Text style={styles.specLabel}>GEOFENCE STATUS</Text>
+                <Text
+                  style={[
+                    styles.specValue,
+                    { color: distanceInfo?.isInside ? '#15803D' : '#D97706', fontWeight: '800' },
+                  ]}
+                >
+                  {distanceInfo
+                    ? distanceInfo.isInside
+                      ? '✓ Inside Boundary'
+                      : 'Outside Boundary'
+                    : 'Verifying...'}
+                </Text>
+              </View>
             </View>
-            <View style={styles.specBox}>
-              <Text style={styles.specLabel}>GPS LATITUDE</Text>
-              <Text style={styles.specValue}>{site.latitude.toFixed(4)}° N</Text>
-            </View>
-            <View style={styles.specBox}>
-              <Text style={styles.specLabel}>GPS LONGITUDE</Text>
-              <Text style={styles.specValue}>{site.longitude.toFixed(4)}° E</Text>
+            <View
+              style={[
+                styles.specsGridRow,
+                { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
+              ]}
+            >
+              <View style={styles.specBox}>
+                <Text style={styles.specLabel}>GEOFENCE RADIUS</Text>
+                <Text style={styles.specValue}>{site.radiusMeters || 500}m</Text>
+              </View>
+              <View style={styles.specBox}>
+                <Text style={styles.specLabel}>SITE GPS COORDINATES</Text>
+                <Text style={styles.specValue}>
+                  {site.latitude.toFixed(4)}° N, {site.longitude.toFixed(4)}° E
+                </Text>
+              </View>
             </View>
           </View>
         </AppCard>
@@ -511,7 +595,28 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
 
         {/* Interactive Geofence Radar Map via Mappls Map */}
         <AppCard style={styles.card}>
-          <Text style={styles.sectionTitle}>GEOFENCE RADAR & RADIAL BOUNDARY</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>GEOFENCE RADAR & RADIAL BOUNDARY</Text>
+            {distanceInfo && (
+              <View
+                style={[
+                  styles.inlineDistBadge,
+                  distanceInfo.isInside ? styles.inlineDistBadgeInside : styles.inlineDistBadgeOutside,
+                ]}
+              >
+                <Navigation size={11} color={distanceInfo.isInside ? '#15803D' : '#1D4ED8'} />
+                <Text
+                  style={[
+                    styles.inlineDistText,
+                    distanceInfo.isInside ? styles.inlineDistTextInside : styles.inlineDistTextOutside,
+                  ]}
+                >
+                  {distanceInfo.formattedDistance} away
+                </Text>
+              </View>
+            )}
+          </View>
+
           <View style={styles.mapContainer}>
             <MapView
               ref={mapRef}
@@ -534,11 +639,36 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
                   longitude: site.longitude,
                 }}
                 radius={site.radiusMeters || 500}
-                fillColor="rgba(67, 56, 202, 0.16)"
-                strokeColor="#4338CA"
+                fillColor={
+                  distanceInfo?.isInside ? 'rgba(16, 185, 129, 0.22)' : 'rgba(67, 56, 202, 0.16)'
+                }
+                strokeColor={distanceInfo?.isInside ? '#10B981' : '#4338CA'}
                 strokeWidth={2}
                 zIndex={2}
               />
+
+              {/* Connecting Flight/Route Line Between Employee and Site */}
+              {activeUserCoords && (
+                <Polyline
+                  coordinates={[
+                    { latitude: activeUserCoords.latitude, longitude: activeUserCoords.longitude },
+                    { latitude: site.latitude, longitude: site.longitude },
+                  ]}
+                  strokeColor="#2563EB"
+                  strokeWidth={3}
+                  lineDashPattern={[8, 4]}
+                />
+              )}
+
+              {/* Midpoint Distance Marker Badge */}
+              {activeUserCoords && distanceInfo && (
+                <Marker
+                  coordinate={distanceInfo.midCoord}
+                  title={distanceInfo.formattedDistance}
+                  description={`Direct distance between your location and ${site.name}`}
+                  zIndex={12}
+                />
+              )}
 
               {/* Site Marker */}
               <Marker
@@ -560,11 +690,12 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
               </Marker>
 
               {/* User Live Location Marker */}
-              {userCoords && userCoords.latitude !== 0 && userCoords.longitude !== 0 && (
+              {activeUserCoords && (
                 <Marker
-                  coordinate={userCoords}
-                  title="Your Current Location"
-                  description="Real Device Live GPS"
+                  coordinate={activeUserCoords}
+                  title="My Location"
+                  description="Your Current Device GPS Position"
+                  pinColor="#2563EB"
                   zIndex={15}
                 >
                   <View style={styles.userMarkerWrap}>
@@ -577,14 +708,50 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
               )}
             </MapView>
 
-            {/* Floating Geofence Perimeter Active Badge */}
+            {/* Floating Live Distance & Geofence Status Badge */}
             <View style={styles.geofenceOverlayBadge}>
-              <View style={styles.pulseDot} />
+              <View
+                style={[
+                  styles.pulseDot,
+                  distanceInfo?.isInside ? { backgroundColor: '#10B981' } : { backgroundColor: '#38BDF8' },
+                ]}
+              />
               <Text style={styles.geofenceOverlayText}>
-                {site.radiusMeters || 500}m Geofence Perimeter Active
+                {distanceInfo
+                  ? `Distance: ${distanceInfo.formattedDistance} • ${
+                      distanceInfo.isInside ? 'Inside Geofence' : 'Outside Geofence'
+                    }`
+                  : `${site.radiusMeters || 500}m Geofence Perimeter Active`}
               </Text>
             </View>
           </View>
+
+          {/* Real-time Distance & Telemetry Metrics Strip below the map */}
+          {distanceInfo && (
+            <View style={styles.mapTelemetryBar}>
+              <View style={styles.mapTelemetryItem}>
+                <Text style={styles.telemetryLabel}>CURRENT DISTANCE</Text>
+                <Text style={styles.telemetryValue}>{distanceInfo.formattedDistance}</Text>
+              </View>
+              <View style={styles.mapTelemetryDivider} />
+              <View style={styles.mapTelemetryItem}>
+                <Text style={styles.telemetryLabel}>EST. TRAVEL TIME</Text>
+                <Text style={styles.telemetryValue}>{distanceInfo.travelTimeFormatted}</Text>
+              </View>
+              <View style={styles.mapTelemetryDivider} />
+              <View style={styles.mapTelemetryItem}>
+                <Text style={styles.telemetryLabel}>GEOFENCE RADAR</Text>
+                <Text
+                  style={[
+                    styles.telemetryValue,
+                    { color: distanceInfo.isInside ? '#15803D' : '#D97706' },
+                  ]}
+                >
+                  {distanceInfo.isInside ? 'INSIDE' : 'OUTSIDE'}
+                </Text>
+              </View>
+            </View>
+          )}
         </AppCard>
 
         {/* Turn-by-Turn Navigation Action */}
@@ -785,6 +952,17 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 14,
   },
+  specsGrid: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  specsGridRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   specsRow: {
     flexDirection: 'row',
     backgroundColor: '#F8FAFC',
@@ -802,18 +980,52 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#64748B',
     marginBottom: 2,
+    letterSpacing: 0.3,
   },
   specValue: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '800',
     color: '#0F172A',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 11,
     fontWeight: '800',
     color: '#64748B',
     letterSpacing: 0.6,
-    marginBottom: 12,
+  },
+  inlineDistBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 4,
+  },
+  inlineDistBadgeInside: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  inlineDistBadgeOutside: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  inlineDistText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  inlineDistTextInside: {
+    color: '#15803D',
+  },
+  inlineDistTextOutside: {
+    color: '#1D4ED8',
   },
 
   // Manager Profile Section
@@ -982,6 +1194,40 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 9,
     fontWeight: '700',
+  },
+
+  // Map Telemetry Bar
+  mapTelemetryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  mapTelemetryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  mapTelemetryDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#CBD5E1',
+  },
+  telemetryLabel: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#64748B',
+    marginBottom: 2,
+    letterSpacing: 0.4,
+  },
+  telemetryValue: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0F172A',
   },
 });
 
