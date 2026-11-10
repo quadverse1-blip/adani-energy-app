@@ -161,14 +161,14 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
         if (isNativeMapplsAvailable && cameraRef.current) {
           cameraRef.current.zoomTo(16, 250);
         } else if (webViewRef.current) {
-          webViewRef.current.injectJavaScript('if (window.map) { window.map.zoomIn({ duration: 250 }); } true;');
+          webViewRef.current.injectJavaScript('if (window.map) { window.map.zoomIn(); } true;');
         }
       },
       zoomOut: () => {
         if (isNativeMapplsAvailable && cameraRef.current) {
           cameraRef.current.zoomTo(10, 250);
         } else if (webViewRef.current) {
-          webViewRef.current.injectJavaScript('if (window.map) { window.map.zoomOut({ duration: 250 }); } true;');
+          webViewRef.current.injectJavaScript('if (window.map) { window.map.zoomOut(); } true;');
         }
       },
       recenter: (lat?: number, lon?: number) => {
@@ -182,13 +182,13 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
             animationMode: 'flyTo',
           });
         } else if (webViewRef.current) {
-          webViewRef.current.injectJavaScript(`if (window.map) { window.map.flyTo({ center: [${cLon}, ${cLat}], zoom: 15, duration: 400 }); } true;`);
+          webViewRef.current.injectJavaScript(`if (window.map) { window.map.setView([${cLat}, ${cLon}], 15); } true;`);
         }
       },
       animateToRegion: (targetRegion: Partial<Region>, duration = 500) => {
         if (!targetRegion.latitude || !targetRegion.longitude) return;
         const zoom = targetRegion.latitudeDelta
-          ? Math.max(Math.min(16 - Math.log2(targetRegion.latitudeDelta * 111), 20), 5)
+          ? Math.max(Math.min(16 - Math.log2(targetRegion.latitudeDelta * 111), 18), 5)
           : 15;
 
         if (isNativeMapplsAvailable && cameraRef.current) {
@@ -199,7 +199,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
             animationMode: 'flyTo',
           });
         } else if (webViewRef.current) {
-          const script = `if (window.map) { window.map.flyTo({ center: [${targetRegion.longitude}, ${targetRegion.latitude}], zoom: ${zoom}, duration: ${duration} }); } true;`;
+          const script = `if (window.map) { window.map.flyTo([${targetRegion.latitude}, ${targetRegion.longitude}], ${zoom}, { duration: ${duration / 1000} }); } true;`;
           webViewRef.current.injectJavaScript(script);
         }
       },
@@ -215,7 +215,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
               animationMode: 'flyTo',
             });
           } else if (webViewRef.current) {
-            const script = `if (window.map) { window.map.flyTo({ center: [${c.longitude}, ${c.latitude}], zoom: 15, duration: 500 }); } true;`;
+            const script = `if (window.map) { window.map.setView([${c.latitude}, ${c.longitude}], 15); } true;`;
             webViewRef.current.injectJavaScript(script);
           }
           return;
@@ -238,9 +238,8 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
           );
         } else if (webViewRef.current) {
           const script = `
-            if (window.map && window.maplibregl) {
-              var bounds = new window.maplibregl.LngLatBounds([${minLon}, ${minLat}], [${maxLon}, ${maxLat}]);
-              window.map.fitBounds(bounds, { padding: ${pad}, maxZoom: 17 });
+            if (window.map) {
+              window.map.fitBounds([[${minLat}, ${minLon}], [${maxLat}, ${maxLon}]], { padding: [${pad}, ${pad}], maxZoom: 16 });
             }
             true;
           `;
@@ -426,6 +425,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     }
 
     // 2. High-performance Mappls Map View with Full Gesture Support, Pinch Zoom, and Real Maharashtra POI/Road Labels
+    // Built on 100% reliable 2D Leaflet rendering that works on ALL Android devices, Web, and Expo Go without WebGL requirements
     const html = useMemo(() => {
       const markersJson = JSON.stringify(
         markers.map((m, idx) => ({
@@ -461,65 +461,34 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=10.0, minimum-scale=1.0, user-scalable=yes" />
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-  <script>
-    window.onerror = function(msg, url, line) {
-      console.warn('[AppMapView WebView JS]', msg, line);
-      return true;
-    };
-  </script>
+  <title>Mappls Map</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #map {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #E2E8F0;
+      background: #F1F5F9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       touch-action: pan-x pan-y pinch-zoom;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
     }
     
-    /* ABSOLUTE 100% ELIMINATION OF MAPLIBRE / OPENFREEMAP / OPENMAPTILES / OPENSTREETMAP ATTRIBUTION */
-    .maplibregl-ctrl-attrib,
-    .mapboxgl-ctrl-attrib,
-    .maplibregl-ctrl-bottom-right,
-    .maplibregl-ctrl-bottom-left,
-    .maplibregl-ctrl-top-right,
-    .maplibregl-ctrl-top-left,
-    .maplibregl-ctrl-attrib-inner,
-    .maplibregl-ctrl-attrib-summary,
-    .maplibregl-compact,
-    .maplibregl-compact-show,
-    details.maplibregl-ctrl-attrib,
-    summary.maplibregl-ctrl-attrib-button,
-    a.maplibregl-ctrl-attrib-button,
-    .maplibregl-ctrl.maplibregl-ctrl-attrib,
-    div[class*="attrib"],
-    details[class*="attrib"],
-    summary[class*="attrib"],
-    a[href*="maplibre"],
-    a[href*="openfreemap"],
-    a[href*="openstreetmap"],
-    a[href*="openmaptiles"] {
+    .leaflet-control-attribution,
+    div[class*="attrib"] {
       display: none !important;
       visibility: hidden !important;
       opacity: 0 !important;
-      pointer-events: none !important;
-      position: absolute !important;
-      left: -99999px !important;
-      top: -99999px !important;
-      width: 0 !important;
-      height: 0 !important;
-      max-width: 0 !important;
-      max-height: 0 !important;
-      font-size: 0 !important;
-      line-height: 0 !important;
-      overflow: hidden !important;
-      clip: rect(0, 0, 0, 0) !important;
-      clip-path: inset(100%) !important;
+    }
+
+    .custom-map-marker {
+      background: transparent !important;
+      border: none !important;
+      overflow: visible !important;
     }
 
     /* Mappls Official Enterprise Brand Badge */
@@ -593,13 +562,14 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       transform: scale(0.96);
     }
 
-    /* 1. Substation Site Marker */
+    /* Substation Site Marker */
     .site-marker-pin {
       display: flex;
       flex-direction: column;
       align-items: center;
       cursor: pointer;
       z-index: 50;
+      transform: translate(-50%, -100%);
     }
     .site-marker-box {
       background: #DC2626;
@@ -624,7 +594,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       border-top: 6px solid #DC2626;
     }
 
-    /* 2. Employee Device Location Marker with Radar Wave */
+    /* Employee Device Location Marker with Radar Wave */
     .user-marker-pin {
       position: relative;
       display: flex;
@@ -633,11 +603,12 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       justify-content: center;
       cursor: pointer;
       z-index: 60;
+      transform: translate(-50%, -50%);
     }
     .user-pulse-ring {
       position: absolute;
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
       background: rgba(37, 99, 235, 0.25);
       border: 1.5px solid rgba(37, 99, 235, 0.6);
@@ -671,7 +642,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       box-shadow: 0 1px 3px rgba(0,0,0,0.25);
     }
 
-    /* 3. Midpoint Route Distance Tag */
+    /* Midpoint Route Distance Tag */
     .dist-marker-tag {
       background: #FFFFFF;
       color: #1E40AF;
@@ -683,9 +654,10 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       border: 1.5px solid #93C5FD;
       box-shadow: 0 2px 5px rgba(0,0,0,0.18);
       white-space: nowrap;
+      transform: translate(-50%, -50%);
     }
 
-    /* 4. Real Nearby POI Marker */
+    /* Technician / POI Marker */
     .poi-marker-pin {
       background: #FFFFFF;
       color: #0F172A;
@@ -700,6 +672,14 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       display: flex;
       align-items: center;
       gap: 3px;
+      transform: translate(-50%, -50%);
+    }
+
+    .leaflet-bar {
+      border: 1px solid #CBD5E1 !important;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.18) !important;
+      border-radius: 8px !important;
+      overflow: hidden;
     }
   </style>
 </head>
@@ -722,374 +702,168 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     var circlesData = ${circlesJson};
     var polylinesData = ${polylinesJson};
 
-    var rasterFallbackStyle = {
-      version: 8,
-      sources: {
-        'osm-raster-tiles': {
-          type: 'raster',
-          tiles: [
-            'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-            'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-            'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-            'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'
-          ],
-          tileSize: 256,
-          attribution: ''
-        }
-      },
-      layers: [
-        {
-          id: 'osm-raster-layer',
-          type: 'raster',
-          source: 'osm-raster-tiles',
-          minzoom: 0,
-          maxzoom: 20
-        }
-      ]
-    };
-
     var attempts = 0;
-    function startMap() {
-      if (typeof window.maplibregl === 'undefined') {
+    function initMap() {
+      if (typeof window.L === 'undefined') {
         attempts++;
-        if (attempts === 50) {
+        if (attempts === 25) {
           var fb = document.createElement('script');
-          fb.src = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+          fb.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
           document.head.appendChild(fb);
         }
-        setTimeout(startMap, 40);
+        setTimeout(initMap, 50);
         return;
       }
 
       try {
-        if (window.maplibregl && window.maplibregl.AttributionControl) {
-          window.maplibregl.AttributionControl = function() {
-            return {
-              onAdd: function() {
-                var el = document.createElement('div');
-                el.style.display = 'none';
-                return el;
-              },
-              onRemove: function() {}
-            };
-          };
-        }
-
-        var map = new maplibregl.Map({
-          container: 'map',
-          style: 'https://tiles.openfreemap.org/styles/liberty',
-          center: [${activeCenter.longitude}, ${activeCenter.latitude}],
+        var map = L.map('map', {
+          center: [${activeCenter.latitude}, ${activeCenter.longitude}],
           zoom: ${initialZoom},
           minZoom: 4,
-          maxZoom: 20,
-          attributionControl: false,
-          customAttribution: [],
-          doubleClickZoom: true,
-          dragPan: true,
-          scrollZoom: true,
-          touchZoomRotate: true,
-          touchPitch: true,
-          cooperativeGestures: false
+          maxZoom: 19,
+          zoomControl: false,
+          attributionControl: false
         });
 
         window.map = map;
-        window.maplibregl = maplibregl;
 
-        // Auto-resize on mount to handle parent modal animations
-        setTimeout(function() { try { map.resize(); } catch(e){} }, 200);
-        setTimeout(function() { try { map.resize(); } catch(e){} }, 600);
+        // Primary High-Performance Road Tiles (Fast, 100% accessible CDN in India with Fallbacks)
+        var primaryTiles = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+        var fallbackTiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+        var fallbackTiles2 = 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
 
-    // Floating Button Event Listeners
-    document.getElementById('btnZoomIn').addEventListener('click', function(e) {
-      e.stopPropagation();
-      map.zoomIn({ duration: 250 });
-    });
-    document.getElementById('btnZoomOut').addEventListener('click', function(e) {
-      e.stopPropagation();
-      map.zoomOut({ duration: 250 });
-    });
-    document.getElementById('btnRecenter').addEventListener('click', function(e) {
-      e.stopPropagation();
-      map.flyTo({ center: [${activeCenter.longitude}, ${activeCenter.latitude}], zoom: ${initialZoom}, duration: 400 });
-    });
+        var tileLayer = L.tileLayer(primaryTiles, {
+          maxZoom: 20
+        }).addTo(map);
 
-    function createCircleGeoJSON(center, radiusInMeters, points) {
-      if (!points) points = 64;
-      var km = radiusInMeters / 1000;
-      var coords = { latitude: center[1], longitude: center[0] };
-      var ret = [];
-      var distanceX = km / (111.320 * Math.cos(coords.latitude * Math.PI / 180));
-      var distanceY = km / 110.574;
-      for (var i = 0; i < points; i++) {
-        var theta = (i / points) * (2 * Math.PI);
-        var x = distanceX * Math.cos(theta);
-        var y = distanceY * Math.sin(theta);
-        ret.push([coords.longitude + x, coords.latitude + y]);
-      }
-      ret.push(ret[0]);
-      return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [ret] } };
-    }
-
-    function purgeAllAttributionNodes() {
-      try {
-        var selectors = [
-          '.maplibregl-ctrl-attrib',
-          '.mapboxgl-ctrl-attrib',
-          '.maplibregl-ctrl-bottom-right',
-          '.maplibregl-ctrl-bottom-left',
-          '.maplibregl-ctrl-attrib-inner',
-          '.maplibregl-ctrl-attrib-summary',
-          '.maplibregl-compact',
-          '.maplibregl-compact-show',
-          'details.maplibregl-ctrl-attrib',
-          'summary.maplibregl-ctrl-attrib-button',
-          'div[class*="attrib"]',
-          'details[class*="attrib"]',
-          'summary[class*="attrib"]',
-          'a[href*="maplibre"]',
-          'a[href*="openfreemap"]',
-          'a[href*="openstreetmap"]',
-          'a[href*="openmaptiles"]'
-        ];
-        selectors.forEach(function(s) {
-          var nodes = document.querySelectorAll(s);
-          for (var i = 0; i < nodes.length; i++) {
-            var n = nodes[i];
-            if (n && n.parentNode) {
-              n.parentNode.removeChild(n);
-            }
+        tileLayer.on('tileerror', function(e) {
+          if (e && e.tile && !e.tile.getAttribute('data-fb')) {
+            e.tile.setAttribute('data-fb', '1');
+            e.tile.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/' + e.coords.z + '/' + e.coords.y + '/' + e.coords.x;
+          } else if (e && e.tile && e.tile.getAttribute('data-fb') === '1') {
+            e.tile.setAttribute('data-fb', '2');
+            e.tile.src = 'https://a.basemaps.cartocdn.com/rastertiles/voyager/' + e.coords.z + '/' + e.coords.x + '/' + e.coords.y + '.png';
           }
         });
 
-        // Deep text scanner: destroy any element containing forbidden attribution strings
-        var allElements = document.querySelectorAll('#map *');
-        for (var i = 0; i < allElements.length; i++) {
-          var el = allElements[i];
-          if (el.className && typeof el.className === 'string' && el.className.indexOf('mappls') !== -1) {
-            continue; // Preserve official Mappls badge
-          }
-          var txt = (el.innerText || el.textContent || '').toLowerCase();
-          if (
-            txt.indexOf('maplibre') !== -1 ||
-            txt.indexOf('openfreemap') !== -1 ||
-            txt.indexOf('openmaptiles') !== -1 ||
-            txt.indexOf('openstreetmap') !== -1
-          ) {
-            if (el.parentNode) {
-              el.parentNode.removeChild(el);
-            }
-          }
-        }
-      } catch (err) {}
-    }
+        // 1. Render Circles (e.g. Geofence Perimeters)
+        circlesData.forEach(function(c) {
+          L.circle([c.lat, c.lon], {
+            radius: c.radius || 500,
+            color: c.strokeColor || '#1E40AF',
+            fillColor: c.fillColor || 'rgba(30, 64, 175, 0.15)',
+            fillOpacity: 0.22,
+            weight: c.strokeWidth || 2
+          }).addTo(map);
+        });
 
-    purgeAllAttributionNodes();
-    try {
-      var observer = new MutationObserver(purgeAllAttributionNodes);
-      observer.observe(document.body, { childList: true, subtree: true });
-    } catch (e) {}
+        // 2. Render Polylines (e.g. Connecting Routes)
+        polylinesData.forEach(function(p) {
+          if (!p.coordinates || p.coordinates.length < 2) return;
+          var latLngs = p.coordinates.map(function(pt) { return [pt[1], pt[0]]; });
+          L.polyline(latLngs, {
+            color: p.color || '#2563EB',
+            weight: p.width || 3.5,
+            dashArray: '6, 6'
+          }).addTo(map);
+        });
 
-    map.on('load', purgeAllAttributionNodes);
-    map.on('render', purgeAllAttributionNodes);
-    map.on('styledata', purgeAllAttributionNodes);
-    map.on('style.load', function() {
-      try {
-        var style = map.getStyle();
-        if (style && style.sources) {
-          Object.keys(style.sources).forEach(function(k) {
-            if (style.sources[k]) {
-              delete style.sources[k].attribution;
+        // 3. Render Custom Markers
+        markersData.forEach(function(m) {
+          var titleLower = (m.title || '').toLowerCase();
+          var isSite = titleLower.indexOf('site') !== -1 || titleLower.indexOf('substation') !== -1;
+          var isUser = titleLower.indexOf('device') !== -1 || titleLower.indexOf('my location') !== -1 || titleLower.indexOf('punch') !== -1 || titleLower.indexOf('your location') !== -1;
+          var isDist = /^\\d+(\\.\\d+)?\\s*(m|km)$/i.test(m.title || '') || titleLower.indexOf('away') !== -1;
+
+          var html = '';
+          var iconClass = 'custom-map-marker';
+          var iconSize = [30, 30];
+          var iconAnchor = [15, 15];
+
+          if (isSite) {
+            var cleanName = (m.title || 'Site').replace(/^Site:\\s*/i, '');
+            html = '<div class="site-marker-pin"><div class="site-marker-box"><span>⚡</span><span>' + cleanName + '</span></div><div class="site-marker-stem"></div></div>';
+            iconAnchor = [60, 35];
+            iconSize = [120, 40];
+          } else if (isUser) {
+            html = '<div class="user-marker-pin"><div class="user-pulse-ring"></div><div class="user-center-dot"></div><div class="user-badge-label">📍 My Location</div></div>';
+            iconAnchor = [40, 20];
+            iconSize = [80, 45];
+          } else if (isDist) {
+            html = '<div class="dist-marker-tag">⤹ ' + m.title + '</div>';
+            iconAnchor = [35, 12];
+            iconSize = [70, 24];
+          } else {
+            var dotColor = m.color || '#10B981';
+            html = '<div class="poi-marker-pin" style="border-color:' + dotColor + ';"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:' + dotColor + '; margin-right:4px;"></span><span>' + (m.title || 'Personnel') + '</span></div>';
+            iconAnchor = [45, 14];
+            iconSize = [90, 28];
+          }
+
+          var icon = L.divIcon({
+            html: html,
+            className: iconClass,
+            iconSize: iconSize,
+            iconAnchor: iconAnchor
+          });
+
+          var marker = L.marker([m.lat, m.lon], { icon: icon }).addTo(map);
+
+          if (m.title || m.description) {
+            var popupContent = '<div style="padding:4px; font-family:-apple-system,sans-serif; min-width:120px;">' +
+              '<div style="font-weight:700; font-size:12px; color:#0F172A; margin-bottom:2px;">' + (m.title || '') + '</div>' +
+              (m.description ? '<div style="font-size:11px; color:#475569; line-height:1.35;">' + m.description + '</div>' : '') +
+              '</div>';
+            marker.bindPopup(popupContent);
+          }
+
+          marker.on('click', function(ev) {
+            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'markerPress',
+                index: m.idx,
+                title: m.title,
+                lat: m.lat,
+                lon: m.lon
+              }));
             }
           });
-        }
-      } catch (e) {}
-      purgeAllAttributionNodes();
-    });
-    setInterval(purgeAllAttributionNodes, 200);
-
-    map.on('load', function() {
-      purgeAllAttributionNodes();
-
-      // 2. Optimize Map Layers to Show Real Roads, Localities, and Small Businesses at Useful Zoom Levels
-      try {
-        // Major roads & highway names visible from zoom 8 with thick white halo
-        if (map.getLayer('highway-name-major')) {
-          map.setLayerZoomRange('highway-name-major', 8, 24);
-          map.setPaintProperty('highway-name-major', 'text-halo-color', '#FFFFFF');
-          map.setPaintProperty('highway-name-major', 'text-halo-width', 2.5);
-          map.setLayoutProperty('highway-name-major', 'text-size', 13);
-        }
-        // Minor roads & streets visible from zoom 11 with white halo
-        if (map.getLayer('highway-name-minor')) {
-          map.setLayerZoomRange('highway-name-minor', 11, 24);
-          map.setPaintProperty('highway-name-minor', 'text-halo-color', '#FFFFFF');
-          map.setPaintProperty('highway-name-minor', 'text-halo-width', 2.0);
-          map.setLayoutProperty('highway-name-minor', 'text-size', 11.5);
-        }
-        // Walkways and paths
-        if (map.getLayer('highway-name-path')) {
-          map.setLayerZoomRange('highway-name-path', 13, 24);
-        }
-        // Neighborhoods, suburbs, localities
-        if (map.getLayer('label_other')) {
-          map.setLayerZoomRange('label_other', 8, 24);
-          map.setPaintProperty('label_other', 'text-halo-color', '#FFFFFF');
-          map.setPaintProperty('label_other', 'text-halo-width', 2.5);
-          map.setLayoutProperty('label_other', 'text-size', 13);
-        }
-        // Major POIs: Hospitals, Banks, Petrol Pumps, Railway stations
-        if (map.getLayer('poi_r1')) {
-          map.setLayerZoomRange('poi_r1', 11, 24);
-          map.setLayoutProperty('poi_r1', 'icon-allow-overlap', true);
-          map.setLayoutProperty('poi_r1', 'text-size', 11.5);
-          map.setPaintProperty('poi_r1', 'text-halo-color', '#FFFFFF');
-          map.setPaintProperty('poi_r1', 'text-halo-width', 2.0);
-        }
-        // Medium POIs: Restaurants, Clinics, Supermarkets, Pharmacies
-        if (map.getLayer('poi_r7')) {
-          map.setLayerZoomRange('poi_r7', 12, 24);
-          map.setLayoutProperty('poi_r7', 'text-size', 11);
-          map.setPaintProperty('poi_r7', 'text-halo-color', '#FFFFFF');
-          map.setPaintProperty('poi_r7', 'text-halo-width', 2.0);
-        }
-        // Small shops, retail businesses, commercial stores
-        if (map.getLayer('poi_r20')) {
-          map.setLayerZoomRange('poi_r20', 13, 24);
-          map.setLayoutProperty('poi_r20', 'text-size', 10.5);
-          map.setPaintProperty('poi_r20', 'text-halo-color', '#FFFFFF');
-          map.setPaintProperty('poi_r20', 'text-halo-width', 1.5);
-        }
-        // Building 3D outlines & footprints
-        if (map.getLayer('building')) {
-          map.setLayerZoomRange('building', 13, 24);
-        }
-        if (map.getLayer('building-3d')) {
-          map.setLayerZoomRange('building-3d', 13.5, 24);
-        }
-      } catch (e) {
-        console.warn('[Mappls Layers] Customization notice:', e);
-      }
-
-      // 3. Circles (e.g. Geofence perimeter)
-      circlesData.forEach(function(c, idx) {
-        var circleGeo = createCircleGeoJSON([c.lon, c.lat], c.radius);
-        map.addSource('circle-source-' + idx, { type: 'geojson', data: circleGeo });
-        map.addLayer({
-          id: 'circle-fill-' + idx,
-          type: 'fill',
-          source: 'circle-source-' + idx,
-          paint: {
-            'fill-color': c.fillColor || 'rgba(16, 185, 129, 0.2)',
-            'fill-opacity': 0.8
-          }
         });
-        map.addLayer({
-          id: 'circle-line-' + idx,
-          type: 'line',
-          source: 'circle-source-' + idx,
-          paint: {
-            'line-color': c.strokeColor || '#10B981',
-            'line-width': c.strokeWidth || 2
-          }
-        });
-      });
 
-      // 4. Polylines (e.g. Road routes)
-      polylinesData.forEach(function(p, idx) {
-        if (!p.coordinates || p.coordinates.length < 2) return;
-        var lineGeo = {
-          type: 'Feature',
-          geometry: {
-            type: 'LineString',
-            coordinates: p.coordinates
-          }
-        };
-        map.addSource('poly-source-' + idx, { type: 'geojson', data: lineGeo });
-        map.addLayer({
-          id: 'poly-line-' + idx,
-          type: 'line',
-          source: 'poly-source-' + idx,
-          paint: {
-            'line-color': p.color || '#1E63F0',
-            'line-width': p.width || 4
-          },
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          }
-        });
-      });
-
-      // 5. Distinct, Clear Markers (Site, User GPS, Distance, POIs, Technicians)
-      markersData.forEach(function(m) {
-        var titleLower = (m.title || '').toLowerCase();
-        var isSite = titleLower.indexOf('site') !== -1 || titleLower.indexOf('substation') !== -1;
-        var isUser = titleLower.indexOf('device') !== -1 || titleLower.indexOf('my location') !== -1 || titleLower.indexOf('my') !== -1;
-        var isDist = /^\d+(\.\d+)?\s*(m|km)$/i.test(m.title || '') || titleLower.indexOf('away') !== -1;
-
-        var el = document.createElement('div');
-
-        if (isSite) {
-          el.className = 'site-marker-pin';
-          var cleanName = (m.title || 'Site').replace(/^Site:\s*/i, '');
-          el.innerHTML = '<div class="site-marker-box"><span>⚡</span><span>' + cleanName + '</span></div><div class="site-marker-stem"></div>';
-        } else if (isUser) {
-          el.className = 'user-marker-pin';
-          el.innerHTML = '<div class="user-pulse-ring"></div><div class="user-center-dot"></div><div class="user-badge-label">📍 My Location</div>';
-        } else if (isDist) {
-          el.className = 'dist-marker-tag';
-          el.innerText = '⤹ ' + m.title;
-        } else {
-          // Employee / Technician / POI Marker
-          el.className = 'poi-marker-pin';
-          var dotColor = m.color || '#10B981';
-          el.style.borderColor = dotColor;
-          el.innerHTML = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:' + dotColor + '; margin-right:4px;"></span><span>' + (m.title || 'Personnel') + '</span>';
-        }
-
-        var marker = new maplibregl.Marker({ element: el, anchor: (isUser || isDist) ? 'center' : 'bottom' })
-          .setLngLat([m.lon, m.lat]);
-
-        if (m.title || m.description) {
-          var popupContent = '<div style="padding:6px 8px; font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif; min-width:130px;">' +
-            '<div style="font-weight:700; font-size:12px; color:#0F172A; margin-bottom:2px;">' + (m.title || '') + '</div>' +
-            (m.description ? '<div style="font-size:11px; color:#475569; line-height:1.35;">' + m.description + '</div>' : '') +
-            '</div>';
-          var popup = new maplibregl.Popup({ offset: 25, closeButton: true }).setHTML(popupContent);
-          marker.setPopup(popup);
-        }
-
-        el.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          if (window.ReactNativeWebView) {
+        // 4. Map Press Event Listener
+        map.on('click', function(e) {
+          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'markerPress',
-              index: m.idx,
-              title: m.title,
-              lat: m.lat,
-              lon: m.lon
+              type: 'mapPress',
+              coordinate: { latitude: e.latlng.lat, longitude: e.latlng.lng }
             }));
           }
         });
 
-        marker.addTo(map);
-      });
+        // 5. Floating Button Event Listeners
+        document.getElementById('btnZoomIn').addEventListener('click', function(e) {
+          e.stopPropagation();
+          map.zoomIn();
+        });
+        document.getElementById('btnZoomOut').addEventListener('click', function(e) {
+          e.stopPropagation();
+          map.zoomOut();
+        });
+        document.getElementById('btnRecenter').addEventListener('click', function(e) {
+          e.stopPropagation();
+          map.setView([${activeCenter.latitude}, ${activeCenter.longitude}], ${initialZoom});
+        });
 
-      // Map Click Dispatcher
-      map.on('click', function(e) {
-        if (window.ReactNativeWebView) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'mapPress',
-            coordinate: { latitude: e.lngLat.lat, longitude: e.lngLat.lng }
-          }));
-        }
-      });
-    });
+        // Auto-resize map after initial render
+        setTimeout(function() { try { map.invalidateSize(); } catch(e){} }, 200);
+        setTimeout(function() { try { map.invalidateSize(); } catch(e){} }, 600);
+
       } catch (err) {
-        console.warn('[AppMapView startMap err]', err);
+        console.warn('[AppMapView initMap err]', err);
       }
     }
-    startMap();
+
+    initMap();
   </script>
 </body>
 </html>
@@ -1100,19 +874,17 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       <View style={[styles.container, style]}>
         <WebViewComponent
           ref={webViewRef}
-          source={{ html }}
+          source={{ html, baseUrl: 'https://localhost' }}
           style={StyleSheet.absoluteFill}
           javaScriptEnabled={true}
           domStorageEnabled={true}
-          scrollEnabled={true}
-          nestedScrollEnabled={true}
+          scrollEnabled={false}
           overScrollMode="never"
           bounces={false}
           originWhitelist={['*']}
           mixedContentMode="always"
           allowFileAccess={true}
           allowUniversalAccessFromFileURLs={true}
-          androidLayerType="software"
           onMessage={(event: any) => {
             try {
               const raw = event.nativeEvent?.data;
