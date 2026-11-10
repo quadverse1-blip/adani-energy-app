@@ -3,7 +3,7 @@ import json
 import logging
 import threading
 from datetime import datetime, date, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Set
 import requests
 from app.core.config import settings
 
@@ -618,8 +618,8 @@ class DatabaseManager:
 
         if sa_path and os.path.exists(sa_path):
             try:
-                import firebase_admin
-                from firebase_admin import credentials, firestore
+                import firebase_admin  # type: ignore
+                from firebase_admin import credentials, firestore  # type: ignore
                 cred = credentials.Certificate(sa_path)
                 try:
                     app = firebase_admin.get_app()
