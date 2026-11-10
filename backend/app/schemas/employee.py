@@ -8,6 +8,7 @@ class EmployeeCreate(BaseModel):
     password: str
     role: str = "technician"  # technician, supervisor, admin
     designation: Optional[str] = "Field Technician"
+    assignedSiteId: Optional[str] = None
     assignedSiteIds: List[str] = []
     email: Optional[str] = None
     department: Optional[str] = None

@@ -96,8 +96,22 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
   }, [user]);
 
   // Prompt and verify GPS location permissions & device location services
-  const requestGpsAndLocation = useCallback(async () => {
+  const requestGpsAndLocation = useCallback(async (manual = false) => {
     try {
+      // 1. Check and request location permission
+      const { status } = await Location.requestForegroundPermissionsAsync().catch(() => ({ status: 'undetermined' } as any));
+      if (status === 'granted') {
+        // Fast instant location from device cache
+        const lastKnown = await Location.getLastKnownPositionAsync().catch(() => null);
+        if (lastKnown?.coords && lastKnown.coords.latitude !== 0 && lastKnown.coords.longitude !== 0) {
+          setUserCoords({
+            latitude: lastKnown.coords.latitude,
+            longitude: lastKnown.coords.longitude,
+          });
+        }
+      }
+
+      // 2. Fetch high-precision real GPS coordinates
       await fetchRealDeviceLocation(
         {
           onCoordinatesAcquired: (coords) => {
@@ -109,7 +123,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
           onGpsDisabled: () => {},
           onPermissionDenied: () => {},
         },
-        false
+        manual
       );
     } catch (err: any) {
       console.warn('GPS location request error:', err);
@@ -597,7 +611,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
         <AppCard style={styles.card}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>GEOFENCE RADAR & RADIAL BOUNDARY</Text>
-            {distanceInfo && (
+            {distanceInfo ? (
               <View
                 style={[
                   styles.inlineDistBadge,
@@ -614,6 +628,15 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
                   {distanceInfo.formattedDistance} away
                 </Text>
               </View>
+            ) : (
+              <TouchableOpacity
+                onPress={() => requestGpsAndLocation(true)}
+                style={styles.inlineLocateBtn}
+                activeOpacity={0.7}
+              >
+                <MapPin size={11} color="#2563EB" />
+                <Text style={styles.inlineLocateText}>Get Distance</Text>
+              </TouchableOpacity>
             )}
           </View>
 
@@ -1026,6 +1049,22 @@ const styles = StyleSheet.create({
   },
   inlineDistTextOutside: {
     color: '#1D4ED8',
+  },
+  inlineLocateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    gap: 4,
+  },
+  inlineLocateText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#2563EB',
   },
 
   // Manager Profile Section

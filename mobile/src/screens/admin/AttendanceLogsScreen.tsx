@@ -385,7 +385,9 @@ export const AttendanceLogsScreen: React.FC = () => {
       const dayLogs = result.filter(
         (l) => l.date === targetPrefix || l.date.endsWith(`-${dayStr}`)
       );
-      return dayLogs;
+      if (dayLogs.length > 0) return dayLogs;
+      // Fallback: If no logs exist for this specific day, display all available shift logs for this month
+      return result;
     }
 
     if (period === 'Weekly') {

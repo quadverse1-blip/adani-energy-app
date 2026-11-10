@@ -197,28 +197,39 @@ export const CompensationScreen: React.FC = () => {
             } catch {}
           }
         } else {
-          // Native Android & iOS in Expo SDK 58: read file bytes and convert to base64
+          // Native Android & iOS in Expo SDK 58: read file bytes/content:// URI directly to base64
           try {
-            const expoFile = new ExpoFile(file.uri);
-            let uint8: Uint8Array | null = null;
-            if (typeof (expoFile as any).bytes === 'function') {
-              uint8 = await (expoFile as any).bytes();
-            } else if (typeof expoFile.arrayBuffer === 'function') {
-              const buf = await expoFile.arrayBuffer();
-              uint8 = new Uint8Array(buf);
-            }
+            const FileSystemLegacy = require('expo-file-system/legacy');
+            base64Data = await FileSystemLegacy.readAsStringAsync(file.uri, {
+              encoding: FileSystemLegacy.EncodingType.Base64,
+            });
+          } catch (fsErr) {
+            console.log('Error reading base64 via FileSystemLegacy:', fsErr);
+          }
 
-            if (uint8 && uint8.length > 0) {
-              let binary = '';
-              const chunkSize = 8192;
-              for (let i = 0; i < uint8.length; i += chunkSize) {
-                const sub = uint8.subarray(i, Math.min(i + chunkSize, uint8.length));
-                binary += String.fromCharCode.apply(null, Array.from(sub));
+          if (!base64Data) {
+            try {
+              const expoFile = new ExpoFile(file.uri);
+              let uint8: Uint8Array | null = null;
+              if (typeof (expoFile as any).bytes === 'function') {
+                uint8 = await (expoFile as any).bytes();
+              } else if (typeof expoFile.arrayBuffer === 'function') {
+                const buf = await expoFile.arrayBuffer();
+                uint8 = new Uint8Array(buf);
               }
-              base64Data = typeof btoa === 'function' ? btoa(binary) : undefined;
+
+              if (uint8 && uint8.length > 0) {
+                let binary = '';
+                const chunkSize = 8192;
+                for (let i = 0; i < uint8.length; i += chunkSize) {
+                  const sub = uint8.subarray(i, Math.min(i + chunkSize, uint8.length));
+                  binary += String.fromCharCode.apply(null, Array.from(sub));
+                }
+                base64Data = typeof btoa === 'function' ? btoa(binary) : undefined;
+              }
+            } catch (err) {
+              console.log('Error reading native ExpoFile bytes:', err);
             }
-          } catch (err) {
-            console.log('Error reading native ExpoFile bytes:', err);
           }
 
           if (!base64Data) {

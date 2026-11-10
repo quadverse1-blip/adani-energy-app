@@ -151,7 +151,7 @@ export const SitesScreen: React.FC = () => {
   const fetchSites = async () => {
     setLoading(true);
     try {
-      const data = await siteService.getSites();
+      const data = await siteService.getSites(true);
       const activeSites = (data || []).filter((s: Substation) => s && (s as any).status !== 'deleted');
       setSites(activeSites);
     } catch (e) {
@@ -544,10 +544,12 @@ export const SitesScreen: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!name.trim() || !code.trim()) {
-      Alert.alert('Required Fields', 'Please enter Site Name and Site Code.');
+    if (!name.trim()) {
+      Alert.alert('Required Field', 'Please enter Site Name.');
       return;
     }
+
+    const safeCode = (code.trim() || `ADN-SITE-${Math.floor(100 + Math.random() * 900)}`).toUpperCase();
 
     const rad = parseFloat(radiusMeters);
     if (isNaN(rad) || rad < 50 || rad > 5000) {
@@ -567,7 +569,7 @@ export const SitesScreen: React.FC = () => {
       const hasManager = managerName.trim().length > 0 || managerPhone.trim().length > 0;
       const sitePayload = {
         name: name.trim(),
-        code: code.trim().toUpperCase(),
+        code: safeCode,
         address: address.trim() || undefined,
         latitude: latNum,
         longitude: lngNum,
@@ -590,7 +592,7 @@ export const SitesScreen: React.FC = () => {
         Alert.alert('Success', `New site "${name}" created successfully.`);
       }
       setShowModal(false);
-      fetchSites();
+      await fetchSites();
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to save site record.');
     } finally {

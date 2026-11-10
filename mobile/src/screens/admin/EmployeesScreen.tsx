@@ -720,6 +720,23 @@ export const EmployeesScreen: React.FC = () => {
                 </View>
               </View>
 
+              {/* Login Password Field */}
+              <View style={styles.formRow}>
+                <View style={[styles.formCol, { flex: 1 }]}>
+                  <Text style={styles.fieldLabel}>
+                    {editingEmp ? 'Change Login Password (optional)' : 'Login Password *'}
+                  </Text>
+                  <TextInput
+                    style={styles.inputBox}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder={editingEmp ? 'Leave blank to keep unchanged' : 'e.g. Adani@2026'}
+                    placeholderTextColor="#94A3B8"
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+
               {/* Row 3: Designation & System Role (Dropdown Selectors) */}
               <View style={styles.formRow}>
                 <View style={styles.formCol}>

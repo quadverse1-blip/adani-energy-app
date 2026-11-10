@@ -256,9 +256,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             <TouchableOpacity delayPressIn={0}
               style={[
                 styles.demoPill,
-                (username === 'SUPER01' || username === 'supervisor' || username === 'b4S/Adani/04' || username === 'b4S/Adani/05') && styles.demoPillActive,
+                (username === 'SUPER001' || username === 'SUPER01' || username === 'supervisor' || username === 'b4S/Adani/04' || username === 'b4S/Adani/05') && styles.demoPillActive,
               ]}
-              onPress={() => fillDemo('SUPER01')}
+              onPress={() => fillDemo('SUPER001')}
               activeOpacity={0.75}
             >
               <Text

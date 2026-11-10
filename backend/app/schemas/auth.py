@@ -17,6 +17,11 @@ class UserProfile(BaseModel):
     email: Optional[str] = None
     avatar: Optional[str] = None
     department: Optional[str] = None
+    circle: Optional[str] = None
+    division: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    locationName: Optional[str] = None
     assignedBy: Optional[str] = None
     assignedByPhone: Optional[str] = None
     assignedByRole: Optional[str] = None

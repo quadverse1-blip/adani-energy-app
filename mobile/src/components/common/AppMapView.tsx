@@ -241,8 +241,22 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       const parsedCircles: any[] = [];
       const parsedPolylines: any[] = [];
 
-      React.Children.forEach(children, (child) => {
-        if (!React.isValidElement(child)) return;
+      const flattenChildren = (ch: React.ReactNode): React.ReactElement[] => {
+        const result: React.ReactElement[] = [];
+        React.Children.forEach(ch, (child) => {
+          if (!React.isValidElement(child)) return;
+          if (child.type === React.Fragment) {
+            result.push(...flattenChildren((child.props as any)?.children));
+          } else {
+            result.push(child);
+          }
+        });
+        return result;
+      };
+
+      const allChildren = flattenChildren(children);
+
+      allChildren.forEach((child) => {
         const typeName = (child.type as any)?.name || (child.type as any)?.displayName || '';
         const props: any = child.props || {};
 
@@ -436,6 +450,12 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=10.0, minimum-scale=1.0, user-scalable=yes" />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script>
+    window.onerror = function(msg, url, line) {
+      console.warn('[AppMapView WebView JS]', msg, line);
+      return true;
+    };
+  </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #map {
@@ -689,20 +709,6 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     var circlesData = ${circlesJson};
     var polylinesData = ${polylinesJson};
 
-    // Permanently stub out AttributionControl to ensure 100% elimination of MapLibre/OpenStreetMap attributions
-    if (window.maplibregl && window.maplibregl.AttributionControl) {
-      window.maplibregl.AttributionControl = function() {
-        return {
-          onAdd: function() {
-            var el = document.createElement('div');
-            el.style.display = 'none';
-            return el;
-          },
-          onRemove: function() {}
-        };
-      };
-    }
-
     var rasterFallbackStyle = {
       version: 8,
       sources: {
@@ -729,49 +735,56 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       ]
     };
 
-    var map = new maplibregl.Map({
-      container: 'map',
-      style: 'https://tiles.openfreemap.org/styles/liberty',
-      center: [${activeCenter.longitude}, ${activeCenter.latitude}],
-      zoom: ${initialZoom},
-      minZoom: 4,
-      maxZoom: 20,
-      attributionControl: false,
-      customAttribution: [],
-      doubleClickZoom: true,
-      dragPan: true,
-      scrollZoom: true,
-      touchZoomRotate: true,
-      touchPitch: true,
-      cooperativeGestures: false
-    });
-
-    var isVectorStyleLoaded = false;
-    map.on('style.load', function() {
-      isVectorStyleLoaded = true;
-    });
-
-    // 1.5s watchdog fallback to guarantee map is NEVER blank or grey
-    setTimeout(function() {
-      if (!isVectorStyleLoaded) {
-        console.warn('[AppMapView] Switching to reliable raster tile fallback...');
-        try {
-          map.setStyle(rasterFallbackStyle);
-        } catch(e) {}
+    var attempts = 0;
+    function startMap() {
+      if (typeof window.maplibregl === 'undefined') {
+        attempts++;
+        if (attempts === 50) {
+          var fb = document.createElement('script');
+          fb.src = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+          document.head.appendChild(fb);
+        }
+        setTimeout(startMap, 40);
+        return;
       }
-    }, 1500);
 
-    map.on('error', function(e) {
-      if (!isVectorStyleLoaded && e && e.error) {
-        console.warn('[AppMapView] Map error detected, applying raster fallback:', e.error);
-        try {
-          map.setStyle(rasterFallbackStyle);
-        } catch(err) {}
-      }
-    });
+      try {
+        if (window.maplibregl && window.maplibregl.AttributionControl) {
+          window.maplibregl.AttributionControl = function() {
+            return {
+              onAdd: function() {
+                var el = document.createElement('div');
+                el.style.display = 'none';
+                return el;
+              },
+              onRemove: function() {}
+            };
+          };
+        }
 
-    window.map = map;
-    window.maplibregl = maplibregl;
+        var map = new maplibregl.Map({
+          container: 'map',
+          style: 'https://tiles.openfreemap.org/styles/liberty',
+          center: [${activeCenter.longitude}, ${activeCenter.latitude}],
+          zoom: ${initialZoom},
+          minZoom: 4,
+          maxZoom: 20,
+          attributionControl: false,
+          customAttribution: [],
+          doubleClickZoom: true,
+          dragPan: true,
+          scrollZoom: true,
+          touchZoomRotate: true,
+          touchPitch: true,
+          cooperativeGestures: false
+        });
+
+        window.map = map;
+        window.maplibregl = maplibregl;
+
+        // Auto-resize on mount to handle parent modal animations
+        setTimeout(function() { try { map.resize(); } catch(e){} }, 200);
+        setTimeout(function() { try { map.resize(); } catch(e){} }, 600);
 
     // Floating Button Event Listeners
     document.getElementById('btnZoomIn').addEventListener('click', function(e) {
@@ -1059,6 +1072,11 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
         }
       });
     });
+      } catch (err) {
+        console.warn('[AppMapView startMap err]', err);
+      }
+    }
+    startMap();
   </script>
 </body>
 </html>
@@ -1081,7 +1099,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
           mixedContentMode="always"
           allowFileAccess={true}
           allowUniversalAccessFromFileURLs={true}
-          androidLayerType="hardware"
+          androidLayerType="software"
           onMessage={(event: any) => {
             try {
               const raw = event.nativeEvent?.data;
@@ -1110,6 +1128,8 @@ const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
     backgroundColor: '#F8FAFC',
+    flex: 1,
+    minHeight: 120,
   },
   defaultPin: {
     width: 26,

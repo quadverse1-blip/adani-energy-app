@@ -62,7 +62,7 @@ export const holidayService = {
    */
   async downloadHolidaysPdf(year = 2026): Promise<void> {
     const token = await getStoredToken();
-    const filename = `Adani_Energy_Holidays_${year}.pdf`;
+    const filename = `Adani_Energy_Holidays_${year}_${Date.now()}.pdf`;
 
     if (Platform.OS === 'web') {
       try {
@@ -91,22 +91,36 @@ export const holidayService = {
     // Native Mobile download
     try {
       const downloadUrl = `${apiClient.defaults.baseURL}/dashboard/holidays/pdf?year=${year}`;
-      const destination = new ExpoFile(Paths.document, filename);
-      if (destination.exists) {
-        try {
-          await destination.delete();
-        } catch (_) {}
+      let fileUri = '';
+      try {
+        const destination = new ExpoFile(Paths.document, filename);
+        if (destination.exists) {
+          try {
+            await destination.delete();
+          } catch (_) {}
+        }
+
+        const downloadedFile = await ExpoFile.downloadFileAsync(downloadUrl, destination, {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : '',
+          },
+        });
+        fileUri = downloadedFile.uri;
+      } catch (fileErr) {
+        console.warn('ExpoFile holiday download failed, using FileSystemLegacy fallback:', fileErr);
+        const FileSystemLegacy = require('expo-file-system/legacy');
+        const dest = `${FileSystemLegacy.documentDirectory}${filename}`;
+        const res = await FileSystemLegacy.downloadAsync(downloadUrl, dest, {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : '',
+          },
+        });
+        fileUri = res.uri;
       }
 
-      const downloadedFile = await ExpoFile.downloadFileAsync(downloadUrl, destination, {
-        headers: {
-          Authorization: token ? `Bearer ${token}` : '',
-        },
-      });
-
       const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(downloadedFile.uri, {
+      if (canShare && fileUri) {
+        await Sharing.shareAsync(fileUri, {
           mimeType: 'application/pdf',
           dialogTitle: `Adani Gazetted Holidays ${year}`,
           UTI: 'com.adobe.pdf',

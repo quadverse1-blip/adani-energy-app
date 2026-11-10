@@ -265,23 +265,34 @@ export const reportService = {
       if (siteId && siteId !== 'all') downloadUrl += `&siteId=${encodeURIComponent(siteId)}`;
       if (token) downloadUrl += `&token=${encodeURIComponent(token)}`;
 
-      const destination = new ExpoFile(Paths.document, filename);
-      if (destination.exists) {
-        await destination.delete();
-      }
-      if (destination.exists) {
-        await destination.delete();
-      }
+      let fileUri = '';
+      try {
+        const destination = new ExpoFile(Paths.document, filename);
+        if (destination.exists) {
+          try { await destination.delete(); } catch (_) {}
+        }
 
-      const downloadedFile = await ExpoFile.downloadFileAsync(downloadUrl, destination, {
-        headers: {
-          Authorization: token ? `Bearer ${token}` : '',
-        },
-      });
+        const downloadedFile = await ExpoFile.downloadFileAsync(downloadUrl, destination, {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : '',
+          },
+        });
+        fileUri = downloadedFile.uri;
+      } catch (fileErr) {
+        console.warn('ExpoFile download failed, attempting FileSystemLegacy fallback:', fileErr);
+        const FileSystemLegacy = require('expo-file-system/legacy');
+        const dest = `${FileSystemLegacy.documentDirectory}${filename}`;
+        const res = await FileSystemLegacy.downloadAsync(downloadUrl, dest, {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : '',
+          },
+        });
+        fileUri = res.uri;
+      }
 
       const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(downloadedFile.uri, {
+      if (canShare && fileUri) {
+        await Sharing.shareAsync(fileUri, {
           mimeType: 'application/pdf',
           dialogTitle: `Export Adani Attendance Register (${monthName} ${y})`,
           UTI: 'com.adobe.pdf',
