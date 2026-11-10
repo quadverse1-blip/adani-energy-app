@@ -364,11 +364,11 @@ export const EmployeesScreen: React.FC = () => {
   };
 
   const toggleSiteAssignment = (siteId: string) => {
-    // Single-site assignment: select the site, or deselect if clicked again
+    // Multi-site assignment: toggle selected site in or out of the list
     if (assignedSiteIds.includes(siteId)) {
-      setAssignedSiteIds([]);
+      setAssignedSiteIds(assignedSiteIds.filter((id) => id !== siteId));
     } else {
-      setAssignedSiteIds([siteId]);
+      setAssignedSiteIds([...assignedSiteIds, siteId]);
     }
   };
 
@@ -757,9 +757,9 @@ export const EmployeesScreen: React.FC = () => {
               {/* SECTION: Assigned Substations & Sites */}
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionHeading}>
-                  Assigned Substation ({assignedSiteIds.length > 0 ? (sitesMap[assignedSiteIds[0]]?.name || '1 selected') : 'None'})
+                  Assigned Substations & Sites ({assignedSiteIds.length} selected)
                 </Text>
-                <Text style={styles.sectionSubHeading}>Select the primary substation assigned to this employee</Text>
+                <Text style={styles.sectionSubHeading}>Select one or more substations assigned to this employee</Text>
               </View>
 
               {/* Selected Sites Pills with ✕ button */}
