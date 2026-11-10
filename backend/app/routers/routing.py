@@ -318,7 +318,7 @@ async def get_maharashtra_info():
             {"name": "Jalgaon", "latitude": 21.0077, "longitude": 75.5626, "code": "JLG"}
         ],
         "tileProvider": "Mappls",
-        "styleUrl": "https://apis.mappls.com/maps/vector/style",
+        "styleUrl": "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
         "attribution": "Mappls ● MapmyIndia"
     }
 

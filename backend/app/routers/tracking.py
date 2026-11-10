@@ -388,7 +388,7 @@ async def get_live_fleet_radar(token_data: dict = Depends(get_current_user_token
             "maxZoom": 19
         },
         "mapProvider": "Mappls",
-        "mapStyle": "https://apis.mappls.com/maps/vector/style",
+        "mapStyle": "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
         "attribution": "Mappls ● MapmyIndia",
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
