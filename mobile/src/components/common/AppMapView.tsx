@@ -727,24 +727,13 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
 
         window.map = map;
 
-        // Primary High-Performance Road Tiles (Fast, 100% accessible CDN in India with Fallbacks)
-        var primaryTiles = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
-        var fallbackTiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
-        var fallbackTiles2 = 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
-
-        var tileLayer = L.tileLayer(primaryTiles, {
-          maxZoom: 20
+        // High-Quality Road & Landmark Tiles with Clear Streets, Highways & Settlement Names
+        // Free of Google, CartoDB, and ArcGIS fallback mixture
+        var streetTiles = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+        var tileLayer = L.tileLayer(streetTiles, {
+          maxZoom: 19,
+          subdomains: ['a', 'b', 'c']
         }).addTo(map);
-
-        tileLayer.on('tileerror', function(e) {
-          if (e && e.tile && !e.tile.getAttribute('data-fb')) {
-            e.tile.setAttribute('data-fb', '1');
-            e.tile.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/' + e.coords.z + '/' + e.coords.y + '/' + e.coords.x;
-          } else if (e && e.tile && e.tile.getAttribute('data-fb') === '1') {
-            e.tile.setAttribute('data-fb', '2');
-            e.tile.src = 'https://a.basemaps.cartocdn.com/rastertiles/voyager/' + e.coords.z + '/' + e.coords.x + '/' + e.coords.y + '.png';
-          }
-        });
 
         // 1. Render Circles (e.g. Geofence Perimeters)
         circlesData.forEach(function(c) {

@@ -399,7 +399,16 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
   const fitMapToBoth = useCallback(() => {
     if (mapRef.current && selectedSite) {
       if (latitude !== 0 && longitude !== 0) {
-        if (typeof mapRef.current.fitToCoordinates === 'function') {
+        const dist = calculateHaversineDistance(
+          latitude,
+          longitude,
+          selectedSite.latitude,
+          selectedSite.longitude
+        );
+
+        // Only fit bounding box if within reasonable range (<= 50km)
+        // Never zoom out to whole country if distance is far
+        if (dist <= 50000 && typeof mapRef.current.fitToCoordinates === 'function') {
           mapRef.current.fitToCoordinates(
             [
               { latitude, longitude },
@@ -411,16 +420,12 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
             }
           );
         } else if (typeof mapRef.current.animateToRegion === 'function') {
-          const midLat = (latitude + selectedSite.latitude) / 2;
-          const midLon = (longitude + selectedSite.longitude) / 2;
-          const latDelta = Math.max(Math.abs(latitude - selectedSite.latitude) * 1.8, 0.02);
-          const lonDelta = Math.max(Math.abs(longitude - selectedSite.longitude) * 1.8, 0.02);
           mapRef.current.animateToRegion(
             {
-              latitude: midLat,
-              longitude: midLon,
-              latitudeDelta: latDelta,
-              longitudeDelta: lonDelta,
+              latitude: selectedSite.latitude,
+              longitude: selectedSite.longitude,
+              latitudeDelta: 0.015,
+              longitudeDelta: 0.015,
             },
             600
           );
@@ -430,8 +435,8 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
           {
             latitude: selectedSite.latitude,
             longitude: selectedSite.longitude,
-            latitudeDelta: 0.02,
-            longitudeDelta: 0.02,
+            latitudeDelta: 0.015,
+            longitudeDelta: 0.015,
           },
           600
         );

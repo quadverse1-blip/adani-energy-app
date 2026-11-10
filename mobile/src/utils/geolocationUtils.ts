@@ -310,32 +310,13 @@ export const fetchRealDeviceLocation = async (
       return null;
     }
 
-    // 2c. Fetch REAL device coordinates from GPS hardware (No stale fake fallbacks)
+    // 2c. Fetch strictly FRESH live device coordinates from GPS hardware (Zero cached/approximate coordinates)
     let realCoords: DeviceCoordinates | null = null;
-
-    // Fast instant check: last known position from device hardware cache (only if fresh < 60s)
-    try {
-      const lastKnown = await Location.getLastKnownPositionAsync();
-      const now = Date.now();
-      const lastKnownTs = lastKnown?.timestamp || 0;
-      const isFresh = lastKnownTs > 0 && (now - lastKnownTs) < 60000;
-      if (lastKnown?.coords && lastKnown.coords.latitude !== 0 && lastKnown.coords.longitude !== 0 && isFresh) {
-        const acc = lastKnown.coords.accuracy || 25;
-        onCoordinatesAcquired({
-          latitude: lastKnown.coords.latitude,
-          longitude: lastKnown.coords.longitude,
-          accuracy: acc,
-          timestamp: lastKnownTs,
-          isStale: false,
-          isPoorAccuracy: acc > 100,
-        });
-      }
-    } catch (_) {}
 
     try {
       const fresh = await Promise.race([
         Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-        new Promise<null>((res) => setTimeout(() => res(null), 8000)),
+        new Promise<null>((res) => setTimeout(() => res(null), 10000)),
       ]);
 
       if (fresh?.coords && fresh.coords.latitude !== 0 && fresh.coords.longitude !== 0) {
