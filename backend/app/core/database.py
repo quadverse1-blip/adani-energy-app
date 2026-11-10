@@ -590,9 +590,9 @@ class DatabaseManager:
 
         # Optional firebase-admin client
         self.admin_db: Optional[Any] = None
-        self._deleted_site_ids: Set[str] = set()
-        self._missing_site_ids: Set[str] = set()
-        self._missing_employee_ids: Set[str] = set()
+        self._deleted_site_ids: set[str] = set()
+        self._missing_site_ids: set[str] = set()
+        self._missing_employee_ids: set[str] = set()
 
         # Collection dict wrappers used by all routers
         self.employees = FirestoreCollectionDictWrapper(self, "employees", self._raw_employees)
@@ -618,8 +618,10 @@ class DatabaseManager:
 
         if sa_path and os.path.exists(sa_path):
             try:
-                import firebase_admin  # type: ignore
-                from firebase_admin import credentials, firestore  # type: ignore
+                import importlib
+                firebase_admin = importlib.import_module("firebase_admin")
+                credentials = importlib.import_module("firebase_admin.credentials")
+                firestore = importlib.import_module("firebase_admin.firestore")
                 cred = credentials.Certificate(sa_path)
                 try:
                     app = firebase_admin.get_app()
