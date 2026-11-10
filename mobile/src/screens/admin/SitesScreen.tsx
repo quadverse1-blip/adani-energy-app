@@ -265,6 +265,16 @@ export const SitesScreen: React.FC = () => {
     setRegion(nextRegion);
 
     try {
+      const backendRev = await siteService.reverseGeocode(coord.latitude, coord.longitude);
+      if (backendRev?.address || backendRev?.display_name) {
+        const addr = backendRev.address || backendRev.display_name;
+        setAddress(addr);
+        setSearchLocation(addr);
+        return;
+      }
+    } catch (_) {}
+
+    try {
       const rev = await Location.reverseGeocodeAsync({
         latitude: coord.latitude,
         longitude: coord.longitude,
@@ -402,7 +412,26 @@ export const SitesScreen: React.FC = () => {
       try {
         const onlineSuggestions: LocationSuggestion[] = [];
 
-        // Real-time OpenStreetMap Nominatim search
+        // 1. High-speed backend places and landmark search
+        try {
+          const placeResults = await siteService.searchPlaces(text.trim(), region.latitude, region.longitude);
+          if (Array.isArray(placeResults) && placeResults.length > 0) {
+            for (const p of placeResults) {
+              const pLat = parseFloat(p.lat || p.latitude);
+              const pLng = parseFloat(p.lon || p.lng || p.longitude);
+              if (!isNaN(pLat) && !isNaN(pLng)) {
+                onlineSuggestions.push({
+                  title: p.name || p.title || text.trim(),
+                  subtitle: p.address || p.formatted_address || `${pLat.toFixed(4)}, ${pLng.toFixed(4)}`,
+                  lat: pLat,
+                  lng: pLng,
+                });
+              }
+            }
+          }
+        } catch (_) {}
+
+        // 2. Real-time OpenStreetMap Nominatim search
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 3000);

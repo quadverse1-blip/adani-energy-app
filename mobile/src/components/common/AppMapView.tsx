@@ -1,4 +1,4 @@
-import React, { useRef, useImperativeHandle, forwardRef, useMemo } from 'react';
+import React, { useRef, useImperativeHandle, forwardRef, useMemo, useEffect } from 'react';
 import { View, StyleSheet, Platform, UIManager } from 'react-native';
 import { WebView as RNWebView } from 'react-native-webview';
 
@@ -95,38 +95,15 @@ export interface MapViewRef {
 
 export type MapView = MapViewRef;
 
-function createCircleGeoJSON(center: [number, number], radiusInMeters: number, points = 64) {
-  const km = radiusInMeters / 1000;
-  const coords = { latitude: center[1], longitude: center[0] };
-  const ret: [number, number][] = [];
-  const distanceX = km / (111.32 * Math.cos((coords.latitude * Math.PI) / 180));
-  const distanceY = km / 110.574;
-  for (let i = 0; i < points; i++) {
-    const theta = (i / points) * (2 * Math.PI);
-    const x = distanceX * Math.cos(theta);
-    const y = distanceY * Math.sin(theta);
-    ret.push([coords.longitude + x, coords.latitude + y]);
-  }
-  ret.push(ret[0]);
-  return {
-    type: 'Feature' as const,
-    geometry: {
-      type: 'Polygon' as const,
-      coordinates: [ret],
-    },
-    properties: {},
-  };
-}
-
 const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
   (
     {
       style,
       initialRegion = {
-        latitude: 19.7515,
-        longitude: 75.7139,
-        latitudeDelta: 3.5,
-        longitudeDelta: 3.5,
+        latitude: 18.8524,
+        longitude: 73.8844,
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015,
       },
       region,
       children,
@@ -136,10 +113,9 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     ref
   ) => {
     const webViewRef = useRef<any>(null);
-    const cameraRef = useRef<any>(null);
+    const isMapLoadedRef = useRef<boolean>(false);
 
-    // Safely check if native MapplsGL view manager is registered in this runtime (e.g. native standalone APK)
-    // When running in Expo Go or Web, gracefully and stably fall back to the hardware-accelerated Mappls WebView map engine
+    // Safely check if native MapplsGL view manager is registered in this runtime (standalone APK with native modules)
     const isNativeMapplsAvailable = useMemo(() => {
       try {
         return (
@@ -156,98 +132,12 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       }
     }, []);
 
-    useImperativeHandle(ref, () => ({
-      zoomIn: () => {
-        if (isNativeMapplsAvailable && cameraRef.current) {
-          cameraRef.current.zoomTo(16, 250);
-        } else if (webViewRef.current) {
-          webViewRef.current.injectJavaScript('if (window.map) { window.map.zoomIn(); } true;');
-        }
-      },
-      zoomOut: () => {
-        if (isNativeMapplsAvailable && cameraRef.current) {
-          cameraRef.current.zoomTo(10, 250);
-        } else if (webViewRef.current) {
-          webViewRef.current.injectJavaScript('if (window.map) { window.map.zoomOut(); } true;');
-        }
-      },
-      recenter: (lat?: number, lon?: number) => {
-        const cLat = lat || (region || initialRegion).latitude;
-        const cLon = lon || (region || initialRegion).longitude;
-        if (isNativeMapplsAvailable && cameraRef.current) {
-          cameraRef.current.setCamera({
-            centerCoordinate: [cLon, cLat],
-            zoomLevel: 15,
-            animationDuration: 400,
-            animationMode: 'flyTo',
-          });
-        } else if (webViewRef.current) {
-          webViewRef.current.injectJavaScript(`if (window.map) { window.map.setView([${cLat}, ${cLon}], 15); } true;`);
-        }
-      },
-      animateToRegion: (targetRegion: Partial<Region>, duration = 500) => {
-        if (!targetRegion.latitude || !targetRegion.longitude) return;
-        const zoom = targetRegion.latitudeDelta
-          ? Math.max(Math.min(16 - Math.log2(targetRegion.latitudeDelta * 111), 18), 5)
-          : 15;
+    const activeCenter = region || initialRegion;
+    const initialZoom = activeCenter.latitudeDelta
+      ? Math.max(Math.min(16 - Math.log2(activeCenter.latitudeDelta * 111), 18), 5)
+      : 15;
 
-        if (isNativeMapplsAvailable && cameraRef.current) {
-          cameraRef.current.setCamera({
-            centerCoordinate: [targetRegion.longitude, targetRegion.latitude],
-            zoomLevel: zoom,
-            animationDuration: duration,
-            animationMode: 'flyTo',
-          });
-        } else if (webViewRef.current) {
-          const script = `if (window.map) { window.map.flyTo([${targetRegion.latitude}, ${targetRegion.longitude}], ${zoom}, { duration: ${duration / 1000} }); } true;`;
-          webViewRef.current.injectJavaScript(script);
-        }
-      },
-      fitToCoordinates: (coords: LatLng[], options?: any) => {
-        if (!coords || coords.length === 0) return;
-        if (coords.length === 1) {
-          const c = coords[0];
-          if (isNativeMapplsAvailable && cameraRef.current) {
-            cameraRef.current.setCamera({
-              centerCoordinate: [c.longitude, c.latitude],
-              zoomLevel: 15,
-              animationDuration: 500,
-              animationMode: 'flyTo',
-            });
-          } else if (webViewRef.current) {
-            const script = `if (window.map) { window.map.setView([${c.latitude}, ${c.longitude}], 15); } true;`;
-            webViewRef.current.injectJavaScript(script);
-          }
-          return;
-        }
-
-        const lats = coords.map((c) => c.latitude);
-        const lons = coords.map((c) => c.longitude);
-        const minLat = Math.min(...lats);
-        const maxLat = Math.max(...lats);
-        const minLon = Math.min(...lons);
-        const maxLon = Math.max(...lons);
-        const pad = options?.edgePadding?.top || 40;
-
-        if (isNativeMapplsAvailable && cameraRef.current) {
-          cameraRef.current.fitBounds(
-            [maxLon, maxLat],
-            [minLon, minLat],
-            [pad, pad, pad, pad],
-            500
-          );
-        } else if (webViewRef.current) {
-          const script = `
-            if (window.map) {
-              window.map.fitBounds([[${minLat}, ${minLon}], [${maxLat}, ${maxLon}]], { padding: [${pad}, ${pad}], maxZoom: 16 });
-            }
-            true;
-          `;
-          webViewRef.current.injectJavaScript(script);
-        }
-      },
-    }));
-
+    // Parse JSX children into structured data
     const { markers, circles, polylines } = useMemo(() => {
       const parsedMarkers: any[] = [];
       const parsedCircles: any[] = [];
@@ -280,8 +170,10 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
               title: props.title || '',
               description: props.description || '',
               color: props.pinColor || '#1E63F0',
+              draggable: Boolean(props.draggable),
               anchor: props.anchor,
               onPress: props.onPress,
+              onDragEnd: props.onDragEnd,
               children: props.children,
             });
           }
@@ -291,29 +183,17 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
               lat: props.center.latitude,
               lon: props.center.longitude,
               radius: props.radius || 500,
-              fillColor: props.fillColor || 'rgba(16, 185, 129, 0.2)',
+              fillColor: props.fillColor || 'rgba(16, 185, 129, 0.18)',
               strokeColor: props.strokeColor || '#10B981',
               strokeWidth: props.strokeWidth || 2,
-              geoJson: createCircleGeoJSON(
-                [props.center.longitude, props.center.latitude],
-                props.radius || 500
-              ),
             });
           }
         } else if (typeName === 'Polyline' || props.coordinates) {
           if (Array.isArray(props.coordinates) && props.coordinates.length > 0) {
             parsedPolylines.push({
-              coordinates: props.coordinates.map((c: any) => [c.longitude, c.latitude]),
-              strokeColor: props.strokeColor || '#1E63F0',
-              strokeWidth: props.strokeWidth || 4,
-              geoJson: {
-                type: 'Feature' as const,
-                properties: {},
-                geometry: {
-                  type: 'LineString' as const,
-                  coordinates: props.coordinates.map((c: any) => [c.longitude, c.latitude]),
-                },
-              },
+              coordinates: props.coordinates.map((c: any) => [c.latitude, c.longitude]),
+              color: props.strokeColor || '#1E63F0',
+              width: props.strokeWidth || 3.5,
             });
           }
         }
@@ -322,112 +202,62 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       return { markers: parsedMarkers, circles: parsedCircles, polylines: parsedPolylines };
     }, [children]);
 
-    const activeCenter = region || initialRegion;
-    const initialZoom = activeCenter.latitudeDelta
-      ? Math.max(Math.min(16 - Math.log2(activeCenter.latitudeDelta * 111), 18), 5)
-      : 14;
+    const markersRef = useRef(markers);
+    markersRef.current = markers;
 
-    // 1. Native Mappls GL rendering (for standalone APK runtime where RCTMGLCamera is registered)
-    if (isNativeMapplsAvailable && MapplsGL?.MapView && MapplsGL?.Camera) {
-      return (
-        <View style={[styles.container, style]}>
-          <MapplsGL.MapView
-            style={StyleSheet.absoluteFill}
-            compassEnabled={showsCompass !== false}
-            logoEnabled={true}
-            zoomEnabled={true}
-            scrollEnabled={true}
-            pitchEnabled={true}
-            rotateEnabled={true}
-            onPress={(feature: any) => {
-              if (onPress && feature?.geometry?.coordinates) {
-                const [lon, lat] = feature.geometry.coordinates;
-                onPress({ nativeEvent: { coordinate: { latitude: lat, longitude: lon } } });
-              }
-            }}
-          >
-            <MapplsGL.Camera
-              ref={cameraRef}
-              centerCoordinate={[activeCenter.longitude, activeCenter.latitude]}
-              zoomLevel={initialZoom}
-              minZoomLevel={5}
-              maxZoomLevel={20}
-              animationMode="flyTo"
-              animationDuration={500}
-            />
+    useImperativeHandle(ref, () => ({
+      zoomIn: () => {
+        webViewRef.current?.injectJavaScript('if (window.map) { window.map.zoomIn(); } true;');
+      },
+      zoomOut: () => {
+        webViewRef.current?.injectJavaScript('if (window.map) { window.map.zoomOut(); } true;');
+      },
+      recenter: (lat?: number, lon?: number) => {
+        const cLat = lat || (region || initialRegion).latitude;
+        const cLon = lon || (region || initialRegion).longitude;
+        webViewRef.current?.injectJavaScript(
+          `if (window.map) { window.map.flyTo([${cLat}, ${cLon}], 16, { duration: 0.5 }); } true;`
+        );
+      },
+      animateToRegion: (targetRegion: Partial<Region>, duration = 500) => {
+        if (!targetRegion.latitude || !targetRegion.longitude) return;
+        const zoom = targetRegion.latitudeDelta
+          ? Math.max(Math.min(16 - Math.log2(targetRegion.latitudeDelta * 111), 18), 5)
+          : 15;
+        const script = `if (window.map) { window.map.flyTo([${targetRegion.latitude}, ${targetRegion.longitude}], ${zoom}, { duration: ${duration / 1000} }); } true;`;
+        webViewRef.current?.injectJavaScript(script);
+      },
+      fitToCoordinates: (coords: LatLng[], options?: any) => {
+        if (!coords || coords.length === 0) return;
+        if (coords.length === 1) {
+          const c = coords[0];
+          const script = `if (window.map) { window.map.flyTo([${c.latitude}, ${c.longitude}], 16, { duration: 0.5 }); } true;`;
+          webViewRef.current?.injectJavaScript(script);
+          return;
+        }
 
-            {/* Geofence Perimeter Circles */}
-            {circles.map((c, i) => (
-              <MapplsGL.ShapeSource
-                key={`circle-source-${i}-${c.lat}-${c.lon}`}
-                id={`circle-source-${i}`}
-                shape={c.geoJson}
-              >
-                <MapplsGL.FillLayer
-                  id={`circle-fill-${i}`}
-                  style={{
-                    fillColor: c.fillColor,
-                    fillOpacity: 1,
-                  }}
-                />
-                <MapplsGL.LineLayer
-                  id={`circle-line-${i}`}
-                  style={{
-                    lineColor: c.strokeColor,
-                    lineWidth: c.strokeWidth,
-                  }}
-                />
-              </MapplsGL.ShapeSource>
-            ))}
+        const lats = coords.map((c) => c.latitude);
+        const lons = coords.map((c) => c.longitude);
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
+        const minLon = Math.min(...lons);
+        const maxLon = Math.max(...lons);
+        const pad = options?.edgePadding?.top || 40;
 
-            {/* Road / Route Polylines */}
-            {polylines.map((p, i) => (
-              <MapplsGL.ShapeSource
-                key={`poly-source-${i}`}
-                id={`poly-source-${i}`}
-                shape={p.geoJson}
-              >
-                <MapplsGL.LineLayer
-                  id={`poly-line-${i}`}
-                  style={{
-                    lineColor: p.strokeColor,
-                    lineWidth: p.strokeWidth,
-                    lineCap: 'round',
-                    lineJoin: 'round',
-                  }}
-                />
-              </MapplsGL.ShapeSource>
-            ))}
+        const script = `
+          if (window.map) {
+            window.map.fitBounds([[${minLat}, ${minLon}], [${maxLat}, ${maxLon}]], { padding: [${pad}, ${pad}], maxZoom: 16 });
+          }
+          true;
+        `;
+        webViewRef.current?.injectJavaScript(script);
+      },
+    }));
 
-            {/* Site, User Location, and Custom Markers */}
-            {markers.map((m, i) => (
-              <MapplsGL.PointAnnotation
-                key={`marker-${i}-${m.lat}-${m.lon}`}
-                id={`marker-${i}`}
-                coordinate={[m.lon, m.lat]}
-                title={m.title}
-                snippet={m.description}
-                anchor={m.anchor || { x: 0.5, y: 1.0 }}
-                onSelected={m.onPress}
-              >
-                {m.children ? (
-                  m.children
-                ) : (
-                  <View style={[styles.defaultPin, { backgroundColor: m.color }]}>
-                    <View style={styles.defaultPinDot} />
-                  </View>
-                )}
-              </MapplsGL.PointAnnotation>
-            ))}
-          </MapplsGL.MapView>
-        </View>
-      );
-    }
-
-    // 2. High-performance Mappls Map View with Full Gesture Support, Pinch Zoom, and Real Maharashtra POI/Road Labels
-    // Built on 100% reliable 2D Leaflet rendering that works on ALL Android devices, Web, and Expo Go without WebGL requirements
-    const html = useMemo(() => {
-      const markersJson = JSON.stringify(
+    // Perform seamless in-place layer updates without reloading the WebView (prevents marker drift and map flashing)
+    useEffect(() => {
+      if (!isMapLoadedRef.current) return;
+      const markersPayload = JSON.stringify(
         markers.map((m, idx) => ({
           idx,
           lat: m.lat,
@@ -435,28 +265,38 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
           title: m.title,
           description: m.description,
           color: m.color,
+          draggable: m.draggable,
         }))
       );
-      const circlesJson = JSON.stringify(
-        circles.map((c) => ({
-          lat: c.lat,
-          lon: c.lon,
-          radius: c.radius,
-          fillColor: c.fillColor,
-          strokeColor: c.strokeColor,
-          strokeWidth: c.strokeWidth,
-        }))
-      );
-      const polylinesJson = JSON.stringify(
-        polylines.map((p) => ({
-          coordinates: p.coordinates,
-          color: p.strokeColor,
-          width: p.strokeWidth,
-        }))
-      );
+      const circlesPayload = JSON.stringify(circles);
+      const polylinesPayload = JSON.stringify(polylines);
 
-      return `
-<!DOCTYPE html>
+      const script = `
+        if (window.updateMapLayers) {
+          window.updateMapLayers(${markersPayload}, ${circlesPayload}, ${polylinesPayload});
+        }
+        true;
+      `;
+      webViewRef.current?.injectJavaScript(script);
+    }, [markers, circles, polylines]);
+
+    // Initial HTML setup with Crisp Retina Mappls-style Road Tiles and Leaflet 2D
+    const html = useMemo(() => {
+      const initialMarkersJson = JSON.stringify(
+        markers.map((m, idx) => ({
+          idx,
+          lat: m.lat,
+          lon: m.lon,
+          title: m.title,
+          description: m.description,
+          color: m.color,
+          draggable: m.draggable,
+        }))
+      );
+      const initialCirclesJson = JSON.stringify(circles);
+      const initialPolylinesJson = JSON.stringify(polylines);
+
+      return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -470,7 +310,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #F1F5F9;
+      background: #F8FAFC;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       touch-action: pan-x pan-y pinch-zoom;
       -webkit-touch-callout: none;
@@ -491,7 +331,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       overflow: visible !important;
     }
 
-    /* Mappls Official Enterprise Brand Badge */
+    /* Official Mappls Brand Badge */
     .mappls-brand-badge {
       position: absolute !important;
       bottom: 10px !important;
@@ -540,8 +380,8 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       gap: 6px;
     }
     .map-control-btn {
-      width: 36px;
-      height: 36px;
+      width: 38px;
+      height: 38px;
       background: #FFFFFF;
       border: 1px solid #CBD5E1;
       border-radius: 8px;
@@ -550,7 +390,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       align-items: center;
       justify-content: center;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 18px;
+      font-size: 19px;
       font-weight: 700;
       color: #1E293B;
       cursor: pointer;
@@ -559,26 +399,27 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     }
     .map-control-btn:active {
       background: #F1F5F9;
-      transform: scale(0.96);
+      transform: scale(0.95);
     }
 
-    /* Substation Site Marker */
+    /* Site Marker (Stable geographic anchoring without double CSS transforms) */
     .site-marker-pin {
       display: flex;
       flex-direction: column;
       align-items: center;
       cursor: pointer;
-      z-index: 50;
-      transform: translate(-50%, -100%);
+      width: 100%;
+      height: 100%;
+      justify-content: flex-end;
     }
     .site-marker-box {
       background: #DC2626;
       color: #FFFFFF;
-      padding: 3px 8px;
+      padding: 4px 9px;
       border-radius: 8px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 800;
       box-shadow: 0 2px 6px rgba(220, 38, 38, 0.45);
       border: 1.5px solid #FFFFFF;
       white-space: nowrap;
@@ -589,29 +430,30 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     .site-marker-stem {
       width: 0;
       height: 0;
-      border-left: 5px solid transparent;
-      border-right: 5px solid transparent;
-      border-top: 6px solid #DC2626;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 7px solid #DC2626;
     }
 
-    /* Employee Device Location Marker with Radar Wave */
+    /* User Device Location Marker */
     .user-marker-pin {
       position: relative;
+      width: 36px;
+      height: 36px;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      z-index: 60;
-      transform: translate(-50%, -50%);
     }
     .user-pulse-ring {
       position: absolute;
-      width: 34px;
-      height: 34px;
+      top: 0;
+      left: 0;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
-      background: rgba(37, 99, 235, 0.25);
-      border: 1.5px solid rgba(37, 99, 235, 0.6);
+      background: rgba(37, 99, 235, 0.22);
+      border: 1.5px solid rgba(37, 99, 235, 0.55);
       animation: user-radar 2s infinite ease-out;
       pointer-events: none;
     }
@@ -620,16 +462,19 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       100% { transform: scale(1.6); opacity: 0; }
     }
     .user-center-dot {
-      width: 14px;
-      height: 14px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
       background: #2563EB;
-      border: 2.5px solid #FFFFFF;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      border: 3px solid #FFFFFF;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
       z-index: 2;
     }
     .user-badge-label {
-      margin-top: 3px;
+      position: absolute;
+      top: 38px;
+      left: 50%;
+      transform: translateX(-50%);
       background: #1E293B;
       color: #FFFFFF;
       padding: 2px 6px;
@@ -646,25 +491,29 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     .dist-marker-tag {
       background: #FFFFFF;
       color: #1E40AF;
-      padding: 2px 7px;
-      border-radius: 10px;
+      padding: 3px 8px;
+      border-radius: 12px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 10px;
+      font-size: 10.5px;
       font-weight: 800;
       border: 1.5px solid #93C5FD;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.18);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.18);
       white-space: nowrap;
-      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
     }
 
-    /* Technician / POI Marker */
+    /* Generic POI Pin */
     .poi-marker-pin {
       background: #FFFFFF;
       color: #0F172A;
-      padding: 3px 7px;
+      padding: 3px 8px;
       border-radius: 6px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 10px;
+      font-size: 10.5px;
       font-weight: 700;
       border: 1.5px solid #CBD5E1;
       box-shadow: 0 2px 4px rgba(0,0,0,0.18);
@@ -672,14 +521,8 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
       display: flex;
       align-items: center;
       gap: 3px;
-      transform: translate(-50%, -50%);
-    }
-
-    .leaflet-bar {
-      border: 1px solid #CBD5E1 !important;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.18) !important;
-      border-radius: 8px !important;
-      overflow: hidden;
+      width: 100%;
+      height: 100%;
     }
   </style>
 </head>
@@ -694,132 +537,167 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
   <div class="map-controls-group">
     <button class="map-control-btn" id="btnZoomIn" title="Zoom In">+</button>
     <button class="map-control-btn" id="btnZoomOut" title="Zoom Out">−</button>
-    <button class="map-control-btn" id="btnRecenter" title="Recenter" style="font-size: 15px;">⌖</button>
+    <button class="map-control-btn" id="btnRecenter" title="Recenter" style="font-size: 16px;">⌖</button>
   </div>
 
   <script>
-    var markersData = ${markersJson};
-    var circlesData = ${circlesJson};
-    var polylinesData = ${polylinesJson};
+    var map;
+    var markersGroup;
+    var circlesGroup;
+    var polylinesGroup;
 
-    var attempts = 0;
+    function renderMarkers(items) {
+      if (!markersGroup) return;
+      markersGroup.clearLayers();
+      items.forEach(function(m) {
+        var titleLower = (m.title || '').toLowerCase();
+        var isSite = titleLower.indexOf('site') !== -1 || titleLower.indexOf('substation') !== -1 || titleLower.indexOf('facility') !== -1 || titleLower.indexOf('bazar') !== -1 || titleLower.indexOf('pimpri') !== -1;
+        var isUser = titleLower.indexOf('device') !== -1 || titleLower.indexOf('my location') !== -1 || titleLower.indexOf('punch') !== -1 || titleLower.indexOf('your location') !== -1;
+        var isDist = /^\\d+(\\.\\d+)?\\s*(m|km)$/i.test(m.title || '') || titleLower.indexOf('away') !== -1 || titleLower.indexOf('km') !== -1 || titleLower.indexOf(' m') !== -1 || titleLower.indexOf('dist') !== -1;
+
+        var html = '';
+        var iconSize = [36, 36];
+        var iconAnchor = [18, 18];
+
+        if (isSite) {
+          var cleanName = (m.title || 'Site').replace(/^Site:\\s*/i, '');
+          html = '<div class="site-marker-pin"><div class="site-marker-box"><span>⚡</span><span>' + cleanName + '</span></div><div class="site-marker-stem"></div></div>';
+          iconSize = [130, 36];
+          iconAnchor = [65, 36]; // Exact tip of stem at bottom center
+        } else if (isUser) {
+          html = '<div class="user-marker-pin"><div class="user-pulse-ring"></div><div class="user-center-dot"></div><div class="user-badge-label">📍 Your Location</div></div>';
+          iconSize = [36, 36];
+          iconAnchor = [18, 18]; // Exact center of dot
+        } else if (isDist) {
+          html = '<div class="dist-marker-tag">⤹ ' + m.title + '</div>';
+          iconSize = [76, 24];
+          iconAnchor = [38, 12];
+        } else {
+          var dotColor = m.color || '#10B981';
+          html = '<div class="poi-marker-pin" style="border-color:' + dotColor + ';"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:' + dotColor + '; margin-right:4px;"></span><span>' + (m.title || 'Location') + '</span></div>';
+          iconSize = [110, 28];
+          iconAnchor = [55, 28];
+        }
+
+        var icon = L.divIcon({
+          html: html,
+          className: 'custom-map-marker',
+          iconSize: iconSize,
+          iconAnchor: iconAnchor
+        });
+
+        var marker = L.marker([m.lat, m.lon], {
+          icon: icon,
+          draggable: Boolean(m.draggable)
+        }).addTo(markersGroup);
+
+        if (m.title || m.description) {
+          var popupHtml = '<div style="padding:4px; font-family:-apple-system,sans-serif; min-width:120px;">' +
+            '<div style="font-weight:700; font-size:12px; color:#0F172A; margin-bottom:2px;">' + (m.title || '') + '</div>' +
+            (m.description ? '<div style="font-size:11px; color:#475569; line-height:1.35;">' + m.description + '</div>' : '') +
+            '</div>';
+          marker.bindPopup(popupHtml);
+        }
+
+        marker.on('click', function(e) {
+          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'markerPress',
+              index: m.idx,
+              title: m.title,
+              lat: m.lat,
+              lon: m.lon
+            }));
+          }
+        });
+
+        if (m.draggable) {
+          marker.on('dragend', function(e) {
+            var pos = marker.getLatLng();
+            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'markerDragEnd',
+                index: m.idx,
+                coordinate: { latitude: pos.lat, longitude: pos.lng }
+              }));
+            }
+          });
+        }
+      });
+    }
+
+    function renderCircles(items) {
+      if (!circlesGroup) return;
+      circlesGroup.clearLayers();
+      items.forEach(function(c) {
+        L.circle([c.lat, c.lon], {
+          radius: c.radius || 500,
+          color: c.strokeColor || '#10B981',
+          fillColor: c.fillColor || 'rgba(16, 185, 129, 0.18)',
+          fillOpacity: 0.22,
+          weight: c.strokeWidth || 2
+        }).addTo(circlesGroup);
+      });
+    }
+
+    function renderPolylines(items) {
+      if (!polylinesGroup) return;
+      polylinesGroup.clearLayers();
+      items.forEach(function(p) {
+        if (!p.coordinates || p.coordinates.length < 2) return;
+        L.polyline(p.coordinates, {
+          color: p.color || '#2563EB',
+          weight: p.width || 3.5,
+          dashArray: '6, 6'
+        }).addTo(polylinesGroup);
+      });
+    }
+
+    window.updateMapLayers = function(newMarkers, newCircles, newPolylines) {
+      if (Array.isArray(newMarkers)) renderMarkers(newMarkers);
+      if (Array.isArray(newCircles)) renderCircles(newCircles);
+      if (Array.isArray(newPolylines)) renderPolylines(newPolylines);
+    };
+
     function initMap() {
       if (typeof window.L === 'undefined') {
-        attempts++;
-        if (attempts === 25) {
-          var fb = document.createElement('script');
-          fb.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
-          document.head.appendChild(fb);
-        }
         setTimeout(initMap, 50);
         return;
       }
 
       try {
-        var map = L.map('map', {
+        map = L.map('map', {
           center: [${activeCenter.latitude}, ${activeCenter.longitude}],
           zoom: ${initialZoom},
           minZoom: 4,
-          maxZoom: 19,
+          maxZoom: 20,
           zoomControl: false,
           attributionControl: false
         });
 
         window.map = map;
 
-        // High-Quality Road & Landmark Tiles with Clear Streets, Highways & Settlement Names
-        // Free of Google, CartoDB, and ArcGIS fallback mixture
-        var streetTiles = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-        var tileLayer = L.tileLayer(streetTiles, {
-          maxZoom: 19,
-          subdomains: ['a', 'b', 'c']
+        // High-DPI Retina Road Map Tiles with Full Street, Road, and Landmark Labels (Matches Mappls Style)
+        L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&scale=2', {
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+          minZoom: 4,
+          tileSize: 256,
+          zoomOffset: 0,
+          detectRetina: true,
+          crossOrigin: true
         }).addTo(map);
 
-        // 1. Render Circles (e.g. Geofence Perimeters)
-        circlesData.forEach(function(c) {
-          L.circle([c.lat, c.lon], {
-            radius: c.radius || 500,
-            color: c.strokeColor || '#1E40AF',
-            fillColor: c.fillColor || 'rgba(30, 64, 175, 0.15)',
-            fillOpacity: 0.22,
-            weight: c.strokeWidth || 2
-          }).addTo(map);
-        });
+        markersGroup = L.layerGroup().addTo(map);
+        circlesGroup = L.layerGroup().addTo(map);
+        polylinesGroup = L.layerGroup().addTo(map);
 
-        // 2. Render Polylines (e.g. Connecting Routes)
-        polylinesData.forEach(function(p) {
-          if (!p.coordinates || p.coordinates.length < 2) return;
-          var latLngs = p.coordinates.map(function(pt) { return [pt[1], pt[0]]; });
-          L.polyline(latLngs, {
-            color: p.color || '#2563EB',
-            weight: p.width || 3.5,
-            dashArray: '6, 6'
-          }).addTo(map);
-        });
+        // Initial layer population
+        renderMarkers(${initialMarkersJson});
+        renderCircles(${initialCirclesJson});
+        renderPolylines(${initialPolylinesJson});
 
-        // 3. Render Custom Markers
-        markersData.forEach(function(m) {
-          var titleLower = (m.title || '').toLowerCase();
-          var isSite = titleLower.indexOf('site') !== -1 || titleLower.indexOf('substation') !== -1;
-          var isUser = titleLower.indexOf('device') !== -1 || titleLower.indexOf('my location') !== -1 || titleLower.indexOf('punch') !== -1 || titleLower.indexOf('your location') !== -1;
-          var isDist = /^\\d+(\\.\\d+)?\\s*(m|km)$/i.test(m.title || '') || titleLower.indexOf('away') !== -1;
-
-          var html = '';
-          var iconClass = 'custom-map-marker';
-          var iconSize = [30, 30];
-          var iconAnchor = [15, 15];
-
-          if (isSite) {
-            var cleanName = (m.title || 'Site').replace(/^Site:\\s*/i, '');
-            html = '<div class="site-marker-pin"><div class="site-marker-box"><span>⚡</span><span>' + cleanName + '</span></div><div class="site-marker-stem"></div></div>';
-            iconAnchor = [60, 35];
-            iconSize = [120, 40];
-          } else if (isUser) {
-            html = '<div class="user-marker-pin"><div class="user-pulse-ring"></div><div class="user-center-dot"></div><div class="user-badge-label">📍 My Location</div></div>';
-            iconAnchor = [40, 20];
-            iconSize = [80, 45];
-          } else if (isDist) {
-            html = '<div class="dist-marker-tag">⤹ ' + m.title + '</div>';
-            iconAnchor = [35, 12];
-            iconSize = [70, 24];
-          } else {
-            var dotColor = m.color || '#10B981';
-            html = '<div class="poi-marker-pin" style="border-color:' + dotColor + ';"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:' + dotColor + '; margin-right:4px;"></span><span>' + (m.title || 'Personnel') + '</span></div>';
-            iconAnchor = [45, 14];
-            iconSize = [90, 28];
-          }
-
-          var icon = L.divIcon({
-            html: html,
-            className: iconClass,
-            iconSize: iconSize,
-            iconAnchor: iconAnchor
-          });
-
-          var marker = L.marker([m.lat, m.lon], { icon: icon }).addTo(map);
-
-          if (m.title || m.description) {
-            var popupContent = '<div style="padding:4px; font-family:-apple-system,sans-serif; min-width:120px;">' +
-              '<div style="font-weight:700; font-size:12px; color:#0F172A; margin-bottom:2px;">' + (m.title || '') + '</div>' +
-              (m.description ? '<div style="font-size:11px; color:#475569; line-height:1.35;">' + m.description + '</div>' : '') +
-              '</div>';
-            marker.bindPopup(popupContent);
-          }
-
-          marker.on('click', function(ev) {
-            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'markerPress',
-                index: m.idx,
-                title: m.title,
-                lat: m.lat,
-                lon: m.lon
-              }));
-            }
-          });
-        });
-
-        // 4. Map Press Event Listener
+        // Map Click Listener (Interactive Tap to Pin)
         map.on('click', function(e) {
           if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -829,7 +707,7 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
           }
         });
 
-        // 5. Floating Button Event Listeners
+        // Floating Control Handlers
         document.getElementById('btnZoomIn').addEventListener('click', function(e) {
           e.stopPropagation();
           map.zoomIn();
@@ -840,12 +718,16 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
         });
         document.getElementById('btnRecenter').addEventListener('click', function(e) {
           e.stopPropagation();
-          map.setView([${activeCenter.latitude}, ${activeCenter.longitude}], ${initialZoom});
+          map.flyTo([${activeCenter.latitude}, ${activeCenter.longitude}], 16, { duration: 0.5 });
         });
 
-        // Auto-resize map after initial render
-        setTimeout(function() { try { map.invalidateSize(); } catch(e){} }, 200);
-        setTimeout(function() { try { map.invalidateSize(); } catch(e){} }, 600);
+        // Notify React Native that map is ready for live dynamic updates
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'mapLoaded' }));
+        }
+
+        setTimeout(function() { try { map.invalidateSize(); } catch(e){} }, 250);
+        setTimeout(function() { try { map.invalidateSize(); } catch(e){} }, 700);
 
       } catch (err) {
         console.warn('[AppMapView initMap err]', err);
@@ -855,9 +737,8 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
     initMap();
   </script>
 </body>
-</html>
-      `;
-    }, [markers, circles, polylines, activeCenter, initialZoom]);
+</html>`;
+    }, [activeCenter.latitude, activeCenter.longitude, initialZoom]);
 
     return (
       <View style={[styles.container, style]}>
@@ -879,10 +760,17 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
               const raw = event.nativeEvent?.data;
               if (!raw) return;
               const msg = JSON.parse(raw);
-              if (msg.type === 'markerPress') {
-                const target = markers[msg.index];
+              if (msg.type === 'mapLoaded') {
+                isMapLoadedRef.current = true;
+              } else if (msg.type === 'markerPress') {
+                const target = markersRef.current[msg.index];
                 if (target && target.onPress) {
                   target.onPress();
+                }
+              } else if (msg.type === 'markerDragEnd') {
+                const target = markersRef.current[msg.index];
+                if (target && target.onDragEnd) {
+                  target.onDragEnd({ nativeEvent: { coordinate: msg.coordinate } });
                 }
               } else if (msg.type === 'mapPress' && onPress) {
                 onPress({ nativeEvent: { coordinate: msg.coordinate } });

@@ -55,7 +55,18 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
 
   const [allSites, setAllSites] = useState<Substation[]>([]);
   const [activeSiteId, setActiveSiteId] = useState<string>(route.params?.siteId || '');
-  const [userCoords, setUserCoords] = useState<DeviceCoordinates | null>(null);
+  const [userCoords, setUserCoords] = useState<DeviceCoordinates | null>(() => {
+    if (user?.latitude && user?.longitude && user.latitude !== 0 && user.longitude !== 0) {
+      return {
+        latitude: user.latitude,
+        longitude: user.longitude,
+        accuracy: (user as any).accuracyMeters || 10,
+        timestamp: Date.now(),
+        isStale: false,
+      };
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
 
   // Sync live coordinates and telemetry
@@ -260,9 +271,9 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
           site.latitude,
           site.longitude
         );
-        // Only fit bounds if distance is reasonable (<= 50km)
+        // Only fit bounds if distance is reasonable (<= 500km across Maharashtra)
         // Never zoom out to the entire subcontinent if employee is distant
-        if (dist <= 50000) {
+        if (dist <= 500000) {
           mapRef.current.fitToCoordinates(
             [
               { latitude: site.latitude, longitude: site.longitude },

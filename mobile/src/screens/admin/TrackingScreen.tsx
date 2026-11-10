@@ -41,7 +41,6 @@ import {
   PhoneCall,
 } from 'lucide-react-native';
 import MapView, { Marker, Circle } from '../../components/common/AppMapView';
-import { calculateHaversineDistance } from '../../utils/haversine';
 import { dashboardService, FleetRadarData } from '../../services/dashboardService';
 import { FleetTechnician, Substation } from '../../types';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
@@ -261,45 +260,9 @@ export const TrackingScreen: React.FC = () => {
     });
   }, [technicians, search, filterTab]);
 
-  // Smooth animate map camera to frame BOTH selected technician and assigned site
+  // Smooth animate map camera when selected technician changes (ONLY if technician has genuine GPS)
   useEffect(() => {
-    if (
-      selectedTech?.hasGps &&
-      selectedTech?.latitude !== null &&
-      selectedTech?.latitude !== undefined &&
-      selectedTech?.longitude !== null &&
-      selectedTech?.longitude !== undefined &&
-      mapRef.current
-    ) {
-      if (
-        selectedTech.assignedSiteLatitude &&
-        selectedTech.assignedSiteLongitude &&
-        typeof mapRef.current.fitToCoordinates === 'function'
-      ) {
-        const dist = calculateHaversineDistance(
-          selectedTech.latitude,
-          selectedTech.longitude,
-          selectedTech.assignedSiteLatitude,
-          selectedTech.assignedSiteLongitude
-        );
-        if (dist <= 50000) {
-          mapRef.current.fitToCoordinates(
-            [
-              { latitude: selectedTech.latitude, longitude: selectedTech.longitude },
-              {
-                latitude: selectedTech.assignedSiteLatitude,
-                longitude: selectedTech.assignedSiteLongitude,
-              },
-            ],
-            {
-              edgePadding: { top: 70, right: 70, bottom: 70, left: 70 },
-              animated: true,
-            }
-          );
-          return;
-        }
-      }
-
+    if (selectedTech?.hasGps && selectedTech?.latitude !== null && selectedTech?.latitude !== undefined && selectedTech?.longitude !== null && selectedTech?.longitude !== undefined && mapRef.current) {
       mapRef.current.animateToRegion(
         {
           latitude: selectedTech.latitude,
@@ -310,13 +273,7 @@ export const TrackingScreen: React.FC = () => {
         500
       );
     }
-  }, [
-    selectedTech?.id,
-    selectedTech?.latitude,
-    selectedTech?.longitude,
-    selectedTech?.assignedSiteLatitude,
-    selectedTech?.assignedSiteLongitude,
-  ]);
+  }, [selectedTech?.id, selectedTech?.latitude, selectedTech?.longitude]);
 
   const handleCopyGPS = () => {
     const lat = selectedTech?.latitude ?? userLocation?.latitude ?? substations[0]?.latitude ?? 18.852362;
