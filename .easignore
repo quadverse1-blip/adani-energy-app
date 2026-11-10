@@ -1,0 +1,55 @@
+# Required EAS Ignore Paths
+node_modules/
+.git/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/ios/Pods/
+
+# Contents from .gitignore
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+__pycache__/
+*.py[cod]
+backend/venv/
+backend/uploads/
+
+# Native artifacts & keys
+.kotlin/
+*.orig.*
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro & Package Manager debug logs
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS & Environment
+.DS_Store
+*.pem
+.env*.local
+*.tsbuildinfo
+/ios
+mobile/ios
+
+# Local Android developer properties
+mobile/android/local.properties
+mobile/android/.idea/
+mobile/android/.cxx/
+mobile/android/*.iml
+
+# CRITICAL: Explicitly ensure Mappls offline license (.olf) and configuration (.conf) files are NEVER excluded
+!*.a.olf
+!*.a.conf
+!mobile/assets/*.a.olf
+!mobile/assets/*.a.conf
+!mobile/android/app/src/main/assets/*.a.olf
+!mobile/android/app/src/main/assets/*.a.conf
+!mobile/android/app/*.a.olf
+!mobile/android/app/*.a.conf
