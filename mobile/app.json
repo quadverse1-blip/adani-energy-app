@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Adani Smart Meter Workforce",
-    "slug": "adani-smart-meter-workforce",
+    "slug": "adani-workforce-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -65,7 +65,8 @@
       ],
       "expo-secure-store",
       "expo-sqlite",
-      "expo-sharing"
+      "expo-sharing",
+      "./plugins/withMappls"
     ],
     "extra": {
       "eas": {

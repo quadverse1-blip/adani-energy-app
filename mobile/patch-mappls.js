@@ -5,10 +5,36 @@ const path = require('path');
 const gradleTarget = path.join(__dirname, 'node_modules', 'mappls-map-react-native', 'android', 'build.gradle');
 if (fs.existsSync(gradleTarget)) {
   let content = fs.readFileSync(gradleTarget, 'utf8');
+  let modified = false;
+
   if (content.includes("'proguard-android.txt'")) {
     content = content.replace("'proguard-android.txt'", "'proguard-android-optimize.txt'");
-    fs.writeFileSync(gradleTarget, content, 'utf8');
+    modified = true;
     console.log('[patch-mappls] Successfully patched proguard configuration in mappls-map-react-native.');
+  }
+
+  // 1b. Ensure Mappls Maven repository is defined directly in mappls-map-react-native module
+  if (!content.includes('maven.mappls.com/repository/mappls')) {
+    const repoBlock = `
+repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://www.jitpack.io' }
+    maven { url 'https://maven.mappls.com/repository/mappls/' }
+}
+`;
+    if (content.includes("apply plugin: 'com.android.library'")) {
+      content = content.replace(
+        "apply plugin: 'com.android.library'",
+        "apply plugin: 'com.android.library'\n" + repoBlock
+      );
+      modified = true;
+      console.log('[patch-mappls] Successfully injected Mappls Maven repository into mappls-map-react-native/android/build.gradle.');
+    }
+  }
+
+  if (modified) {
+    fs.writeFileSync(gradleTarget, content, 'utf8');
   }
 }
 
