@@ -1,14 +1,26 @@
 const fs = require('fs');
 const path = require('path');
 
-// 1. Patch proguard in android/build.gradle
+// 1. Patch proguard & maven repository in android/build.gradle
 const gradleTarget = path.join(__dirname, 'node_modules', 'mappls-map-react-native', 'android', 'build.gradle');
 if (fs.existsSync(gradleTarget)) {
   let content = fs.readFileSync(gradleTarget, 'utf8');
+  let changed = false;
   if (content.includes("'proguard-android.txt'")) {
     content = content.replace("'proguard-android.txt'", "'proguard-android-optimize.txt'");
-    fs.writeFileSync(gradleTarget, content, 'utf8');
+    changed = true;
     console.log('[patch-mappls] Successfully patched proguard configuration in mappls-map-react-native.');
+  }
+  if (!content.includes('https://maven.mappls.com/repository/mappls/')) {
+    content = content.replace(
+      /repositories\s*\{/,
+      "repositories {\n    maven { url 'https://maven.mappls.com/repository/mappls/' }"
+    );
+    changed = true;
+    console.log('[patch-mappls] Successfully patched maven repository in mappls-map-react-native.');
+  }
+  if (changed) {
+    fs.writeFileSync(gradleTarget, content, 'utf8');
   }
 }
 
