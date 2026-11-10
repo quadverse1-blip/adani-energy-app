@@ -32,6 +32,7 @@ import {
   RotateCcw,
   CheckCircle2,
   AlertTriangle,
+  ShieldAlert,
   ShieldCheck,
   Building2,
   Lock,
@@ -756,76 +757,88 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
           </View>
 
           {/* Substation Chips */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipsScroll}
-          >
-            {displayedSites.map((site) => {
-              const isSelected = selectedSite?.id === site.id || isAlreadyCheckedIn;
-              const dist = calculateHaversineDistance(
-                latitude,
-                longitude,
-                site.latitude,
-                site.longitude
-              );
-              const chipDistStr = formatDistance(dist);
-              const chipInside = dist <= (site.radiusMeters || 500);
+          {displayedSites.length === 0 ? (
+            <View style={{ padding: 14, backgroundColor: '#FEF2F2', borderRadius: 10, borderWidth: 1, borderColor: '#FCA5A5', flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+              <ShieldAlert size={20} color="#DC2626" style={{ marginRight: 10 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#991B1B' }}>No Substation Assigned</Text>
+                <Text style={{ fontSize: 11, color: '#B91C1C', marginTop: 2 }}>
+                  Your profile currently has no active substation assignment. Contact your Area Supervisor to assign your work site.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipsScroll}
+            >
+              {displayedSites.map((site) => {
+                const isSelected = selectedSite?.id === site.id || isAlreadyCheckedIn;
+                const dist = calculateHaversineDistance(
+                  latitude,
+                  longitude,
+                  site.latitude,
+                  site.longitude
+                );
+                const chipDistStr = formatDistance(dist);
+                const chipInside = dist <= (site.radiusMeters || 500);
 
-              return (
-                <TouchableOpacity delayPressIn={0}
-                  key={site.id}
-                  style={[
-                    styles.substationChip,
-                    isSelected && styles.substationChipActive,
-                  ]}
-                  onPress={() => {
-                    setSelectedSite(site);
-                    triggerHaptic('light');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View
+                return (
+                  <TouchableOpacity delayPressIn={0}
+                    key={site.id}
                     style={[
-                      styles.chipDot,
-                      { backgroundColor: isAlreadyCheckedIn ? '#10B981' : chipInside ? '#10B981' : isSelected ? '#FFFFFF' : '#EF4444' },
+                      styles.substationChip,
+                      isSelected && styles.substationChipActive,
                     ]}
-                  />
-                  <Text
-                    style={[
-                      styles.chipSiteName,
-                      isSelected && styles.chipSiteNameActive,
-                    ]}
+                    onPress={() => {
+                      setSelectedSite(site);
+                      triggerHaptic('light');
+                    }}
+                    activeOpacity={0.8}
                   >
-                    {site.name}
-                  </Text>
-                  <View
-                    style={[
-                      styles.chipCodeBadge,
-                      isSelected && styles.chipCodeBadgeActive,
-                    ]}
-                  >
+                    <View
+                      style={[
+                        styles.chipDot,
+                        { backgroundColor: isAlreadyCheckedIn ? '#10B981' : chipInside ? '#10B981' : isSelected ? '#FFFFFF' : '#EF4444' },
+                      ]}
+                    />
                     <Text
                       style={[
-                        styles.chipCodeBadgeText,
-                        isSelected && styles.chipCodeBadgeTextActive,
+                        styles.chipSiteName,
+                        isSelected && styles.chipSiteNameActive,
                       ]}
                     >
-                      {site.code}
+                      {site.name}
                     </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.chipDistanceText,
-                      isSelected && styles.chipDistanceTextActive,
-                    ]}
-                  >
-                    {isAlreadyCheckedIn ? '(Checked In)' : `(${chipDistStr})`}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                    <View
+                      style={[
+                        styles.chipCodeBadge,
+                        isSelected && styles.chipCodeBadgeActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.chipCodeBadgeText,
+                          isSelected && styles.chipCodeBadgeTextActive,
+                        ]}
+                      >
+                        {site.code}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.chipDistanceText,
+                        isSelected && styles.chipDistanceTextActive,
+                      ]}
+                    >
+                      {isAlreadyCheckedIn ? '(Checked In)' : `(${chipDistStr})`}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
         </View>
 
         {/* ============================================================== */}
@@ -964,7 +977,7 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
               onTouchEnd={() => setIsMapInteracting(false)}
               onTouchCancel={() => setIsMapInteracting(false)}
             >
-              {selectedSite && (
+              {selectedSite ? (
                 <MapView
                   ref={mapRef}
                   style={StyleSheet.absoluteFill}
@@ -1055,6 +1068,14 @@ export const CheckInScreen: React.FC<{ navigation: any; route?: any }> = ({ navi
                     />
                   )}
                 </MapView>
+              ) : (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#F8FAFC' }}>
+                  <Building2 size={42} color="#94A3B8" />
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#334155', marginTop: 10 }}>No Substation Assigned</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center', marginTop: 6, lineHeight: 18 }}>
+                    Map and geofence radar will activate once your Area Supervisor assigns your work site.
+                  </Text>
+                </View>
               )}
 
               {/* Floating Distance Badge on Map */}

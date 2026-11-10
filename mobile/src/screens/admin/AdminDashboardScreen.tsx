@@ -954,7 +954,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
       {/* ============================================================ */}
       <Modal visible={!!mapModalRecord} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalContainer, { maxHeight: '92%', padding: 0, overflow: 'hidden' }]}>
+          <View style={[styles.modalContainer, { maxHeight: '92%', padding: 0, overflow: 'visible', backgroundColor: '#FFFFFF' }]}>
             {/* Modal Top Bar */}
             <View style={styles.mapModalHeader}>
               <View style={{ flex: 1, paddingRight: 8 }}>

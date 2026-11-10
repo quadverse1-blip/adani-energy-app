@@ -164,8 +164,10 @@ async def create_site(
         "status": site_in.status or "active"
     }
     db.sites[site_id] = new_site
+    db._raw_sites[site_id] = new_site
     db.set_firestore_document("sites", site_id, new_site)
-    return SiteResponse(id=site_id, **new_site)
+    clean_new = {k: v for k, v in new_site.items() if k != "id"}
+    return SiteResponse(id=site_id, **clean_new)
 
 @router.put("/{siteId}", response_model=SiteResponse)
 async def update_site(
@@ -184,7 +186,10 @@ async def update_site(
     s.update(update_data)
     db.sites[s["_id"]] = s
     db.set_firestore_document("sites", s["_id"], s)
-    return SiteResponse(id=s["_id"], **s)
+    # Clean dictionary to avoid passing duplicate 'id' keyword argument
+    clean_s = {k: v for k, v in s.items() if k != "id"}
+    target_id = str(s.get("_id") or s.get("id") or siteId)
+    return SiteResponse(id=target_id, **clean_s)
 
 def _cascade_unlink_deleted_site(doc_id: str, site_id: str):
     try:

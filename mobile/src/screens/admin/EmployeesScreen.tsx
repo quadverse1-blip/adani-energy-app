@@ -458,6 +458,11 @@ export const EmployeesScreen: React.FC = () => {
     }
     setSaving(true);
     try {
+      const latParsed = parseFloat(latitude);
+      const lngParsed = parseFloat(longitude);
+      const safeLat = (!isNaN(latParsed) && isFinite(latParsed)) ? latParsed : undefined;
+      const safeLng = (!isNaN(lngParsed) && isFinite(lngParsed)) ? lngParsed : undefined;
+
       const payload: Partial<User> = {
         name: name.trim(),
         employeeId: employeeId.trim(),
@@ -469,8 +474,8 @@ export const EmployeesScreen: React.FC = () => {
         division: division.trim() || undefined,
         assignedSiteIds,
         assignedSiteId: assignedSiteIds[0] || undefined,
-        latitude: parseFloat(latitude) || undefined,
-        longitude: parseFloat(longitude) || undefined,
+        latitude: safeLat,
+        longitude: safeLng,
         locationName: locationName.trim() || undefined,
         shiftStatus,
       };

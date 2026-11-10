@@ -171,8 +171,40 @@ export const TrackingScreen: React.FC = () => {
         const updated = res.technicians.find((t) => t.id === currentSelectedId);
         if (updated) setSelectedTech(updated);
       }
-    } catch {
-      // Silently swallow fetch errors
+    } catch (err) {
+      console.warn('Live tracking fetch error, using fallback roster:', err);
+      // Fallback: build offline radar data from cached employees and sites
+      try {
+        const cachedEmps = require('../../services/employeeService').employeeService.getCachedEmployees();
+        const cachedSites = require('../../services/siteService').siteService.getCachedSites();
+        if (cachedEmps && cachedEmps.length > 0) {
+          setData((prev) => prev || {
+            timestamp: new Date().toISOString(),
+            totalTechnicians: cachedEmps.length,
+            onlineCount: 0,
+            insideGeofenceCount: 0,
+            technicians: cachedEmps.map((e: any) => ({
+              id: e.id || e._id,
+              employeeId: e.employeeId,
+              name: e.name,
+              phone: e.phone,
+              designation: e.designation || 'Field Technician',
+              assignedSiteId: e.assignedSiteId || (e.assignedSiteIds && e.assignedSiteIds[0]),
+              assignedSiteName: e.assignedSiteName || 'Assigned Site',
+              latitude: e.latitude || null,
+              longitude: e.longitude || null,
+              hasGps: Boolean(e.latitude && e.longitude),
+              isLive: false,
+              isOnline: false,
+              status: e.status || 'offline',
+              isInsideGeofence: false,
+              batteryLevel: 100,
+              lastSeen: 'Offline / Cached',
+            })),
+            substations: cachedSites || [],
+          } as any);
+        }
+      } catch (_) {}
     } finally {
       setLoading(false);
       setRefreshing(false);
