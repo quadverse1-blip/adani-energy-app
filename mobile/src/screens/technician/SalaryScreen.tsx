@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
-import { Paths, File as ExpoFile } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -123,30 +123,14 @@ export const SalaryScreen: React.FC = () => {
       }
 
       const url = salaryService.getDownloadUrl(targetEmpId, selectedMonth, selectedYear, token || undefined);
-      let downloadedUri: string | null = null;
-      try {
-        const destination = new ExpoFile(Paths.document, filename);
-        const downloadedFile = await ExpoFile.downloadFileAsync(url, destination, {
-          headers: {
-            Authorization: token ? `Bearer ${token}` : '',
-          },
-        });
-        downloadedUri = downloadedFile.uri;
-      } catch (expoErr) {
-        // Fallback to legacy FileSystem download
-        try {
-          const FileSystemLegacy = require('expo-file-system/legacy');
-          const destUri = `${FileSystemLegacy.documentDirectory}${filename}`;
-          const res = await FileSystemLegacy.downloadAsync(url, destUri, {
-            headers: {
-              Authorization: token ? `Bearer ${token}` : '',
-            },
-          });
-          downloadedUri = res.uri;
-        } catch {
-          throw expoErr;
-        }
-      }
+      const docDir = (FileSystem as any).documentDirectory || '';
+      const destUri = `${docDir}${filename}`;
+      const res = await FileSystem.downloadAsync(url, destUri, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+      });
+      const downloadedUri = res.uri;
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare && downloadedUri) {

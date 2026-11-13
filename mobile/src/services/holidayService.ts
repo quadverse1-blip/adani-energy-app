@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { Paths, File as ExpoFile } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { apiClient, getStoredToken } from './api';
 
@@ -91,32 +91,14 @@ export const holidayService = {
     // Native Mobile download
     try {
       const downloadUrl = `${apiClient.defaults.baseURL}/dashboard/holidays/pdf?year=${year}`;
-      let fileUri = '';
-      try {
-        const destination = new ExpoFile(Paths.document, filename);
-        if (destination.exists) {
-          try {
-            await destination.delete();
-          } catch (_) {}
-        }
-
-        const downloadedFile = await ExpoFile.downloadFileAsync(downloadUrl, destination, {
-          headers: {
-            Authorization: token ? `Bearer ${token}` : '',
-          },
-        });
-        fileUri = downloadedFile.uri;
-      } catch (fileErr) {
-        console.warn('ExpoFile holiday download failed, using FileSystemLegacy fallback:', fileErr);
-        const FileSystemLegacy = require('expo-file-system/legacy');
-        const dest = `${FileSystemLegacy.documentDirectory}${filename}`;
-        const res = await FileSystemLegacy.downloadAsync(downloadUrl, dest, {
-          headers: {
-            Authorization: token ? `Bearer ${token}` : '',
-          },
-        });
-        fileUri = res.uri;
-      }
+      const docDir = (FileSystem as any).documentDirectory || '';
+      const destUri = `${docDir}${filename}`;
+      const res = await FileSystem.downloadAsync(downloadUrl, destUri, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+      });
+      const fileUri = res.uri;
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare && fileUri) {

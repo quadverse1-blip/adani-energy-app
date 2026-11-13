@@ -110,9 +110,13 @@ export const TechnicianDrawerModal: React.FC = () => {
 
   const handleNavigate = (screenName: string) => {
     closeDrawer();
-    requestAnimationFrame(() => {
-      navigation.navigate(screenName);
-    });
+    setTimeout(() => {
+      try {
+        navigation.navigate(screenName);
+      } catch (err) {
+        console.warn('Technician navigation error:', err);
+      }
+    }, 60);
   };
 
   const handleSignOut = () => {

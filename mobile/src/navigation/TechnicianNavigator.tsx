@@ -9,6 +9,7 @@ import { HistoryScreen } from '../screens/technician/HistoryScreen';
 import { SalaryScreen } from '../screens/technician/SalaryScreen';
 import { SiteDetailsScreen } from '../screens/technician/SiteDetailsScreen';
 import { SupervisorTeamScreen } from '../screens/supervisor/SupervisorTeamScreen';
+import { ProfileScreen } from '../screens/common/ProfileScreen';
 import { useAuthStore } from '../store/useAuthStore';
 
 const Stack = createNativeStackNavigator();
@@ -43,6 +44,11 @@ export const TechnicianNavigator: React.FC = () => {
       <Stack.Screen
         name="SiteManagement"
         component={SiteDetailsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Profile"
+        component={ProfileScreen}
         options={{ headerShown: false }}
       />
       {isSupervisor && (

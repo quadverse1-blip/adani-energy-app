@@ -17,9 +17,13 @@
 -keep class org.maplibre.** { *; }
 -dontwarn org.maplibre.**
 
-# react-native-screens & safe-area
+# react-native-screens & safe-area & AndroidX
+-keep class com.swmansion.** { *; }
+-keep interface com.swmansion.** { *; }
 -keep class com.swmansion.rnscreens.** { *; }
 -keep class com.th3rdwave.safeareacontext.** { *; }
+-keep class androidx.fragment.app.** { *; }
+-keep class androidx.appcompat.** { *; }
 
 # react-native-webview
 -keep class com.reactnativecommunity.webview.** { *; }

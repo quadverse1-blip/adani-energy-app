@@ -10,6 +10,11 @@ import { SupervisorSiteManagementScreen } from '../screens/supervisor/Supervisor
 import { TrackingScreen } from '../screens/admin/TrackingScreen';
 import { SalaryScreen } from '../screens/technician/SalaryScreen';
 import { ReportsScreen } from '../screens/admin/ReportsScreen';
+import { ProfileScreen } from '../screens/common/ProfileScreen';
+import { SiteDetailsScreen } from '../screens/technician/SiteDetailsScreen';
+import { TodayAttendanceScreen } from '../screens/technician/TodayAttendanceScreen';
+import { HistoryScreen } from '../screens/technician/HistoryScreen';
+import { CheckInScreen } from '../screens/technician/CheckInScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -40,6 +45,11 @@ export const SupervisorNavigator: React.FC = () => {
         options={{ headerShown: false }}
       />
       <Stack.Screen name="Reports" component={ReportsScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="SiteDetails" component={SiteDetailsScreen} />
+      <Stack.Screen name="Today" component={TodayAttendanceScreen} />
+      <Stack.Screen name="History" component={HistoryScreen} />
+      <Stack.Screen name="CheckIn" component={CheckInScreen} />
     </Stack.Navigator>
   );
 };

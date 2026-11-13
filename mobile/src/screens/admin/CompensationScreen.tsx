@@ -33,7 +33,7 @@ import {
 } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
-import { Paths, File as ExpoFile } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system';
 import { useAdminDrawerStore } from '../../store/useAdminDrawerStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { salaryService } from '../../services/salaryService';
@@ -197,39 +197,13 @@ export const CompensationScreen: React.FC = () => {
             } catch {}
           }
         } else {
-          // Native Android & iOS in Expo SDK 58: read file bytes/content:// URI directly to base64
+          // Native Android & iOS in Expo: read file bytes/content:// URI directly to base64
           try {
-            const FileSystemLegacy = require('expo-file-system/legacy');
-            base64Data = await FileSystemLegacy.readAsStringAsync(file.uri, {
-              encoding: FileSystemLegacy.EncodingType.Base64,
+            base64Data = await (FileSystem as any).readAsStringAsync(file.uri, {
+              encoding: (FileSystem as any).EncodingType?.Base64 || 'base64',
             });
           } catch (fsErr) {
-            console.log('Error reading base64 via FileSystemLegacy:', fsErr);
-          }
-
-          if (!base64Data) {
-            try {
-              const expoFile = new ExpoFile(file.uri);
-              let uint8: Uint8Array | null = null;
-              if (typeof (expoFile as any).bytes === 'function') {
-                uint8 = await (expoFile as any).bytes();
-              } else if (typeof expoFile.arrayBuffer === 'function') {
-                const buf = await expoFile.arrayBuffer();
-                uint8 = new Uint8Array(buf);
-              }
-
-              if (uint8 && uint8.length > 0) {
-                let binary = '';
-                const chunkSize = 8192;
-                for (let i = 0; i < uint8.length; i += chunkSize) {
-                  const sub = uint8.subarray(i, Math.min(i + chunkSize, uint8.length));
-                  binary += String.fromCharCode.apply(null, Array.from(sub));
-                }
-                base64Data = typeof btoa === 'function' ? btoa(binary) : undefined;
-              }
-            } catch (err) {
-              console.log('Error reading native ExpoFile bytes:', err);
-            }
+            console.log('Error reading base64 via FileSystem:', fsErr);
           }
 
           if (!base64Data) {
@@ -330,29 +304,14 @@ export const CompensationScreen: React.FC = () => {
       }
 
       const url = salaryService.getDownloadUrl(empId, selectedMonth, selectedYear, token || undefined);
-      let downloadedUri: string | null = null;
-      try {
-        const destination = new ExpoFile(Paths.document, filename);
-        const downloadedFile = await ExpoFile.downloadFileAsync(url, destination, {
-          headers: {
-            Authorization: token ? `Bearer ${token}` : '',
-          },
-        });
-        downloadedUri = downloadedFile.uri;
-      } catch (expoErr) {
-        try {
-          const FileSystemLegacy = require('expo-file-system/legacy');
-          const destUri = `${FileSystemLegacy.documentDirectory}${filename}`;
-          const res = await FileSystemLegacy.downloadAsync(url, destUri, {
-            headers: {
-              Authorization: token ? `Bearer ${token}` : '',
-            },
-          });
-          downloadedUri = res.uri;
-        } catch {
-          throw expoErr;
-        }
-      }
+      const docDir = (FileSystem as any).documentDirectory || '';
+      const destUri = `${docDir}${filename}`;
+      const res = await FileSystem.downloadAsync(url, destUri, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+      });
+      const downloadedUri = res.uri;
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare && downloadedUri) {

@@ -1534,8 +1534,7 @@ Synchronized across all dashboards and muster reports.`,
       </Modal>
 
       {/* Drawer Modals */}
-      <AdminDrawerModal />
-      <SupervisorDrawerModal />
+      {user?.role === 'supervisor' ? <SupervisorDrawerModal /> : <AdminDrawerModal />}
     </View>
   );
 };

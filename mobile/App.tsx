@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { LogBox, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { AppErrorBoundary } from './src/components/common/AppErrorBoundary';
 
 LogBox.ignoreLogs([
   'Current location is unavailable',
@@ -32,7 +33,9 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <RootNavigator />
+      <AppErrorBoundary>
+        <RootNavigator />
+      </AppErrorBoundary>
     </SafeAreaProvider>
   );
 }

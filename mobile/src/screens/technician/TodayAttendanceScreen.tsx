@@ -33,7 +33,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { resolvePhotoUrl } from '../../utils/imageUrl';
 import * as Sharing from 'expo-sharing';
-import { Paths, File as ExpoFile } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system';
 import { Linking } from 'react-native';
 import { apiClient } from '../../services/api';
 import { holidayService, HolidayItem } from '../../services/holidayService';
@@ -96,11 +96,12 @@ export const TodayAttendanceScreen: React.FC<TodayAttendanceScreenProps> = ({ na
         return;
       }
       const filename = 'Adani_Energy_Holidays_2026.pdf';
-      const destination = new ExpoFile(Paths.document, filename);
-      const downloadedFile = await ExpoFile.downloadFileAsync(url, destination);
+      const docDir = (FileSystem as any).documentDirectory || '';
+      const destUri = `${docDir}${filename}`;
+      const res = await FileSystem.downloadAsync(url, destUri);
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(downloadedFile.uri, {
+        await Sharing.shareAsync(res.uri, {
           mimeType: 'application/pdf',
           dialogTitle: 'Adani Energy Holidays 2026 Calendar',
           UTI: 'com.adobe.pdf',
