@@ -94,10 +94,43 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
     [activeSiteId]
   );
 
+  // Prompt and verify GPS location permissions & device location services
+  const requestGpsAndLocation = useCallback(
+    async (manual = false) => {
+      try {
+        await fetchRealDeviceLocation(
+          {
+            onCoordinatesAcquired: handleCoordsReceived,
+            onGpsDisabled: () => {},
+            onPermissionDenied: () => {},
+          },
+          manual
+        );
+      } catch (err: any) {
+        console.warn('GPS location request error:', err);
+      }
+    },
+    [handleCoordsReceived]
+  );
+
   // Load all sites and set initial active site
   useEffect(() => {
     let isMounted = true;
     (async () => {
+      // Fast instant retrieval: check OS last known coordinates on mount
+      try {
+        const last = await Location.getLastKnownPositionAsync();
+        if (isMounted && last?.coords && last.coords.latitude !== 0 && last.coords.longitude !== 0) {
+          handleCoordsReceived({
+            latitude: last.coords.latitude,
+            longitude: last.coords.longitude,
+            accuracy: last.coords.accuracy || 20,
+            timestamp: last.timestamp || Date.now(),
+            isStale: false,
+          });
+        }
+      } catch (_) {}
+
       setLoading(true);
       try {
         const sites = await siteService.getSites();
@@ -131,7 +164,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
     return () => {
       isMounted = false;
     };
-  }, [user]);
+  }, [user, handleCoordsReceived, requestGpsAndLocation, route.params?.siteId]);
 
   // Subscribe to real-time continuous GPS hardware watcher while viewing site specifications
   useEffect(() => {
@@ -145,25 +178,6 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
       if (unsub) unsub();
     };
   }, [handleCoordsReceived]);
-
-  // Prompt and verify GPS location permissions & device location services
-  const requestGpsAndLocation = useCallback(
-    async (manual = false) => {
-      try {
-        await fetchRealDeviceLocation(
-          {
-            onCoordinatesAcquired: handleCoordsReceived,
-            onGpsDisabled: () => {},
-            onPermissionDenied: () => {},
-          },
-          manual
-        );
-      } catch (err: any) {
-        console.warn('GPS location request error:', err);
-      }
-    },
-    [handleCoordsReceived]
-  );
 
   useFocusEffect(
     useCallback(() => {
@@ -771,9 +785,14 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
                 <Marker
                   coordinate={distanceInfo.midCoord}
                   title={distanceInfo.formattedDistance}
-                  description={`Direct distance between your location and ${site.name}`}
+                  description={`Direct distance between your location and ${site.name}: ${distanceInfo.formattedDistance}`}
                   zIndex={12}
-                />
+                >
+                  <View style={styles.midpointDistPill}>
+                    <Navigation size={10} color="#FFFFFF" />
+                    <Text style={styles.midpointDistText}>{distanceInfo.formattedDistance}</Text>
+                  </View>
+                </Marker>
               )}
 
               {/* Site Marker */}
@@ -819,7 +838,11 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
               <View
                 style={[
                   styles.pulseDot,
-                  distanceInfo?.isInside ? { backgroundColor: '#10B981' } : { backgroundColor: '#38BDF8' },
+                  distanceInfo
+                    ? distanceInfo.isInside
+                      ? { backgroundColor: '#10B981' }
+                      : { backgroundColor: '#38BDF8' }
+                    : { backgroundColor: '#F59E0B' },
                 ]}
               />
               <Text style={styles.geofenceOverlayText}>
@@ -827,7 +850,7 @@ export const SiteDetailsScreen: React.FC<SiteDetailsScreenProps> = ({ route, nav
                   ? `Distance: ${distanceInfo.formattedDistance} • ${
                       distanceInfo.isInside ? 'Inside Geofence' : 'Outside Geofence'
                     }`
-                  : `${site.radiusMeters || 500}m Geofence Perimeter Active`}
+                  : 'Acquiring GPS Distance...'}
               </Text>
             </View>
           </View>
@@ -1326,6 +1349,27 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 9,
     fontWeight: '700',
+  },
+  midpointDistPill: {
+    backgroundColor: '#0F172A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#38BDF8',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 3,
+  },
+  midpointDistText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '800',
   },
 
   // Map Telemetry Bar

@@ -489,15 +489,15 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
 
     /* Midpoint Route Distance Tag */
     .dist-marker-tag {
-      background: #FFFFFF;
-      color: #1E40AF;
+      background: #0F172A;
+      color: #FFFFFF;
       padding: 3px 8px;
       border-radius: 12px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 10.5px;
+      font-size: 11px;
       font-weight: 800;
-      border: 1.5px solid #93C5FD;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+      border: 1.5px solid #38BDF8;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
       white-space: nowrap;
       display: flex;
       align-items: center;
@@ -569,9 +569,9 @@ const MapViewComponent = forwardRef<MapViewRef, MapViewProps>(
           iconSize = [36, 36];
           iconAnchor = [18, 18]; // Exact center of dot
         } else if (isDist) {
-          html = '<div class="dist-marker-tag">⤹ ' + m.title + '</div>';
-          iconSize = [76, 24];
-          iconAnchor = [38, 12];
+          html = '<div class="dist-marker-tag">📍 ' + m.title + '</div>';
+          iconSize = [96, 26];
+          iconAnchor = [48, 13];
         } else {
           var dotColor = m.color || '#10B981';
           html = '<div class="poi-marker-pin" style="border-color:' + dotColor + ';"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:' + dotColor + '; margin-right:4px;"></span><span>' + (m.title || 'Location') + '</span></div>';

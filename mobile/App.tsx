@@ -10,24 +10,26 @@ LogBox.ignoreLogs([
   'new NativeEventEmitter()',
 ]);
 
-// Initialize Mappls SDK with cluster ID from app1794051151341i9612916.a.conf / .olf
-if (Platform.OS !== 'web') {
-  try {
-    const MapplsModule = require('mappls-map-react-native');
-    const MapplsGL = MapplsModule.default || MapplsModule;
-    if (MapplsGL) {
-      if (typeof MapplsGL.setClusterId === 'function') {
-        MapplsGL.setClusterId('1794051151341i9612916');
-      } else if (typeof MapplsGL.settingClusterId === 'function') {
-        MapplsGL.settingClusterId('1794051151341i9612916', null);
+export default function App() {
+  useEffect(() => {
+    // Initialize Mappls SDK with cluster ID from app1794051151341i9612916.a.conf / .olf
+    if (Platform.OS !== 'web') {
+      try {
+        const MapplsModule = require('mappls-map-react-native');
+        const MapplsGL = MapplsModule?.default || MapplsModule;
+        if (MapplsGL) {
+          if (typeof MapplsGL.setClusterId === 'function') {
+            MapplsGL.setClusterId('1794051151341i9612916');
+          } else if (typeof MapplsGL.settingClusterId === 'function') {
+            MapplsGL.settingClusterId('1794051151341i9612916', null);
+          }
+        }
+      } catch (err) {
+        // Silently handled: native map will use resilient Web/Leaflet engine if native module is absent
       }
     }
-  } catch (err) {
-    // Native module unavailable in web / dev client without native links
-  }
-}
+  }, []);
 
-export default function App() {
   return (
     <SafeAreaProvider>
       <RootNavigator />

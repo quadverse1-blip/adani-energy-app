@@ -192,3 +192,23 @@ if (fs.existsSync(mapplsPkgDir)) {
     }
   }
 }
+
+// 5. Patch MapplsGLModule.ts to prevent startup crash on Object.create(undefined)
+const mapplsModuleTsPath = path.join(
+  __dirname,
+  'node_modules',
+  'mappls-map-react-native',
+  'src',
+  'MapplsGLModule.ts'
+);
+if (fs.existsSync(mapplsModuleTsPath)) {
+  let content = fs.readFileSync(mapplsModuleTsPath, 'utf8');
+  if (content.includes('Object.create(NativeModules.MGLModule)')) {
+    content = content.replace(
+      'NativeRCTMGLModule == null ? Object.create(NativeModules.MGLModule): NativeRCTMGLModule;',
+      'NativeRCTMGLModule == null ? (NativeModules.MGLModule ? Object.create(NativeModules.MGLModule) : ({} as any)) : NativeRCTMGLModule;'
+    );
+    fs.writeFileSync(mapplsModuleTsPath, content, 'utf8');
+    console.log('[patch-mappls] Successfully patched MapplsGLModule.ts with safe fallback.');
+  }
+}
